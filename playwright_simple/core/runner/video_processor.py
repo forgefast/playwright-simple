@@ -223,7 +223,7 @@ class VideoProcessor:
                     f"fontsize=72:"
                     f"fontcolor=white:"
                     f"x=(w-text_w)/2:"
-                    f"y=(h-text_h)/2-50:"
+                    f"y=(h-text_h)/2-50,"
                     f"drawtext=text='Gravando vídeo de teste...':"
                     f"fontsize=36:"
                     f"fontcolor=white:"
@@ -246,10 +246,30 @@ class VideoProcessor:
             )
             
             if result.returncode == 0 and intro_path.exists():
-                logger.info(f"Tela inicial criada: {intro_path}")
+                size_kb = intro_path.stat().st_size / 1024
+                logger.info(f"Tela inicial criada: {intro_path} ({size_kb:.1f}KB)")
                 return intro_path
             else:
-                logger.warning(f"Erro ao criar tela inicial: {result.stderr[:200]}")
+                # Log full error, but skip version info at the start
+                stderr_lines = result.stderr.split('\n')
+                # Skip FFmpeg version info (first few lines)
+                error_lines = [line for line in stderr_lines if line.strip() and 
+                              not line.startswith('ffmpeg version') and
+                              not line.startswith('built with') and
+                              not line.startswith('configuration:') and
+                              not line.startswith('libav') and
+                              ('error' in line.lower() or 'failed' in line.lower() or 'invalid' in line.lower() or 'No such file' in line)]
+                if error_lines:
+                    logger.error(f"Erro ao criar tela inicial: {error_lines[0]}")
+                elif result.returncode != 0:
+                    # Show last few non-empty lines if no error found
+                    last_lines = [line for line in stderr_lines[-5:] if line.strip() and not line.startswith('ffmpeg version')]
+                    if last_lines:
+                        logger.error(f"Erro ao criar tela inicial (código {result.returncode}): {last_lines[-1]}")
+                    else:
+                        logger.error(f"Erro ao criar tela inicial (código {result.returncode})")
+                else:
+                    logger.warning(f"Tela inicial não foi criada (código {result.returncode}, arquivo existe: {intro_path.exists()})")
                 return None
                     
         except Exception as e:
