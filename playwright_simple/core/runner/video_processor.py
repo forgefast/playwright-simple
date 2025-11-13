@@ -568,8 +568,8 @@ class VideoProcessor:
             # Remove any -t or -to flags that might limit duration
             
             # Log command for debugging
-            logger.debug(f"FFmpeg command: {' '.join(cmd)}")
             logger.info(f"Processando vídeo: {video_path.name} -> {output_path.name}")
+            logger.debug(f"FFmpeg command: {' '.join(cmd)}")
             if intro_video and intro_video.exists():
                 logger.info(f"Tela inicial incluída: {intro_video.name} ({intro_video.stat().st_size / 1024:.1f}KB)")
             
@@ -586,13 +586,31 @@ class VideoProcessor:
             except subprocess.TimeoutExpired as e:
                 logger.error(f"Timeout no processamento FFmpeg após 600s")
                 logger.error(f"Comando que causou timeout: {' '.join(cmd[:10])}...")
-                raise
+                raise VideoProcessingError(f"Video processing timeout: {e}") from e
             
             # Log ffmpeg output for debugging
             if result.returncode != 0:
                 logger.error(f"FFmpeg falhou com código {result.returncode}")
-                logger.error(f"FFmpeg stderr (primeiros 1000 chars): {result.stderr[:1000]}")
-                logger.error(f"FFmpeg stdout (primeiros 500 chars): {result.stdout[:500]}")
+                # Extract actual error (skip version info)
+                stderr_lines = result.stderr.split('\n') if result.stderr else []
+                error_lines = [line for line in stderr_lines if line.strip() and 
+                              not line.startswith('ffmpeg version') and
+                              not line.startswith('built with') and
+                              not line.startswith('configuration:') and
+                              not line.startswith('libav') and
+                              ('error' in line.lower() or 'failed' in line.lower() or 'invalid' in line.lower())]
+                if error_lines:
+                    logger.error(f"FFmpeg error: {error_lines[0]}")
+                    # Show more context if available
+                    if len(error_lines) > 1:
+                        logger.error(f"FFmpeg errors: {error_lines[:3]}")
+                else:
+                    # Show last few non-empty lines
+                    last_lines = [line for line in stderr_lines[-10:] if line.strip() and not line.startswith('ffmpeg version')]
+                    if last_lines:
+                        logger.error(f"FFmpeg stderr (últimas linhas): {last_lines[-3:]}")
+                    else:
+                        logger.error(f"FFmpeg stderr (primeiros 500 chars): {result.stderr[:500] if result.stderr else 'N/A'}")
             else:
                 logger.info("FFmpeg processou com sucesso")
                 if result.stderr:
@@ -664,7 +682,9 @@ class VideoProcessor:
                     output_path.unlink()
                 # If MP4 was requested, this is a critical failure
                 if self.config.video.codec == "mp4":
-                    raise RuntimeError(f"Falha ao processar vídeo para MP4: {error_msg}")
+                    raise VideoProcessingError(f"Falha ao processar vídeo para MP4: {error_msg}")
+                # Return original video if processing failed but MP4 not required
+                logger.warning(f"Processamento falhou, retornando vídeo original: {video_path}")
                 return video_path
                 
         except subprocess.TimeoutExpired as e:

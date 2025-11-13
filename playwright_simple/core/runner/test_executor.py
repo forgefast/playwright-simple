@@ -559,15 +559,22 @@ class TestExecutor:
                         video_to_process = found_video if needs_conversion else expected_path
                         # Use video_start_time for subtitle timing if available
                         subtitle_reference_time = video_start_time if video_start_time else start_time
-                        final_path = await self.video_processor.process_all_in_one(
-                            video_to_process,
-                            test_steps,
-                            subtitle_reference_time,
-                            self.subtitle_generator,
-                            self.audio_processor,
-                            narration_audio=narration_audio,
-                            test_name=test_name
-                        )
+                        try:
+                            final_path = await self.video_processor.process_all_in_one(
+                                video_to_process,
+                                test_steps,
+                                subtitle_reference_time,
+                                self.subtitle_generator,
+                                self.audio_processor,
+                                narration_audio=narration_audio,
+                                test_name=test_name
+                            )
+                        except VideoProcessingError as e:
+                            logger.error(f"Erro ao processar vídeo: {e}")
+                            if self.config.video.codec == "mp4":
+                                raise RuntimeError(f"Falha ao processar vídeo para MP4: {e}") from e
+                            # If not MP4, use original video
+                            final_path = video_to_process
                         if final_path and final_path.exists():
                             # If we converted, rename to expected mp4 name
                             if needs_conversion and final_path.suffix == ".mp4":
