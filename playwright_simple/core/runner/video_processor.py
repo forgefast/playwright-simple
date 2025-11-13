@@ -301,9 +301,11 @@ class VideoProcessor:
         Returns:
             Path to processed video, or None if processing failed
         """
+        logger.info(f"process_all_in_one chamado: video={video_path.name}, test_name={test_name}, subtitles={self.config.video.subtitles}, steps={len(test_steps) if test_steps else 0}")
         try:
             # Check if ffmpeg is available
             subprocess.run(['ffmpeg', '-version'], capture_output=True, check=True, timeout=5)
+            logger.debug("FFmpeg disponível")
         except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
             logger.warning("ffmpeg não encontrado. Vídeo não será processado.")
             return video_path
