@@ -135,48 +135,63 @@ class OdooTestBase(SimpleTestBase):
         Returns:
             Self for method chaining
         """
+        print(f"🔐 DEBUG login: Starting login for user '{username}'")
+        
         # Ensure cursor is injected and visible
         await self._ensure_cursor()
+        print(f"🔐 DEBUG login: Cursor ensured")
         
         # Navigate to login page
         base_url = self.config.base_url.rstrip('/')
-        await self.go_to(f"{base_url}/web/login")
+        login_url = f"{base_url}/web/login"
+        print(f"🔐 DEBUG login: Navigating to {login_url}")
+        await self.go_to(login_url)
         await asyncio.sleep(1)  # Wait for page to fully load
         
         # Re-inject cursor after navigation to ensure it's visible
+        print(f"🔐 DEBUG login: Re-injecting cursor after navigation")
         await self.cursor_manager.inject(force=True)
         await asyncio.sleep(0.5)
         
         # Fill database if needed (with cursor movement)
         if database:
+            print(f"🔐 DEBUG login: Filling database field with '{database}'")
             db_input = self.page.locator('input[name="db"]').first
             if await db_input.count() > 0:
                 await self.type('input[name="db"]', database, "Campo Database")
                 await asyncio.sleep(0.3)
+            else:
+                print(f"🔐 DEBUG login: Database field not found")
         
         # Fill login (with cursor movement)
+        print(f"🔐 DEBUG login: Filling login field with '{username}'")
         await self.type('input[name="login"]', username, "Campo Login")
         await asyncio.sleep(0.3)
         
         # Fill password (with cursor movement)
+        print(f"🔐 DEBUG login: Filling password field")
         await self.type('input[name="password"]', password, "Campo Senha")
         await asyncio.sleep(0.3)
         
         # Click submit (with cursor movement)
+        print(f"🔐 DEBUG login: Clicking submit button")
         await self.click('button[type="submit"], button:has-text("Entrar"), button:has-text("Log in")', "Botão Entrar")
         await asyncio.sleep(1)
         
         # Wait for page to load
+        print(f"🔐 DEBUG login: Waiting for page to load")
         await self.page.wait_for_load_state("networkidle", timeout=30000)
         await asyncio.sleep(0.5)
         
         # Re-inject cursor after login to ensure it's visible on dashboard
+        print(f"🔐 DEBUG login: Re-injecting cursor after login")
         await self.cursor_manager.inject(force=True)
         await asyncio.sleep(0.3)
         
         # Detect version after login
         await self.detect_odoo_version()
         
+        print(f"🔐 DEBUG login: Login complete")
         return self
     
     async def logout(self) -> 'OdooTestBase':
