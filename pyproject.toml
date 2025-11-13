@@ -49,6 +49,11 @@ forgeerp = [
     # No additional Python dependencies required
     # ForgeERP is a web application, accessed via Playwright
 ]
+tts = [
+    "gtts>=2.3.0",  # Google Text-to-Speech for natural voice narration
+    "edge-tts>=6.1.0",  # Microsoft Edge TTS (lightweight, performatic, recommended)
+    "pyttsx3>=2.90",  # Offline TTS alternative (optional)
+]
 
 [project.urls]
 Documentation = "https://github.com/forgeerp/playwright-simple/blob/main/docs/README.md"
@@ -69,5 +74,16 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+addopts = [
+    "-v",
+    "--cov=playwright_simple",
+    "--cov-report=html",
+    "--cov-report=term",
+    "--cov-report=xml",
+    "--cov-fail-under=80",
+]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
 
 

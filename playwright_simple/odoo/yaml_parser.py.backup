@@ -1,0 +1,949 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+YAML parser for Odoo tests - User-friendly version.
+
+Supports simple, intuitive YAML syntax for QAs without programming experience.
+"""
+
+import asyncio
+import logging
+from typing import Dict, Any, Callable, TYPE_CHECKING, Optional, List
+from datetime import datetime
+from pathlib import Path
+from playwright.async_api import Page
+
+from ..core.yaml_parser import YAMLParser
+from ..core.step import TestStep
+from ..core.cursor_transition import CursorTransitionManager
+
+logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from .base import OdooTestBase
+
+
+class OdooYAMLParser(YAMLParser):
+    """YAML parser with Odoo-specific actions - User-friendly syntax."""
+    
+    @staticmethod
+    async def _validate_element_before_action(action: Dict[str, Any], test: 'OdooTestBase', step: TestStep) -> None:
+        """
+        Validate that required elements exist before executing action.
+        
+        Args:
+            action: Action dictionary
+            test: OdooTestBase instance
+            step: TestStep instance to record validation results
+        """
+        # Check for click actions
+        if "click" in action:
+            button_text = action["click"]
+            context = action.get("context")
+            
+            # Try to find button
+            button_selectors = [
+                f'button:has-text("{button_text}")',
+                f'a:has-text("{button_text}")',
+                f'button[title*="{button_text}"]',
+                f'[role="button"]:has-text("{button_text}")',
+            ]
+            
+            element_found = False
+            for selector in button_selectors:
+                try:
+                    if context == "wizard":
+                        wizard_loc = await test.wizard.get_wizard_locator()
+                        if wizard_loc:
+                            btn = wizard_loc.locator(selector).first
+                        else:
+                            continue
+                    else:
+                        btn = test.page.locator(selector).first
+                    
+                    if await btn.count() > 0 and await btn.is_visible():
+                        element_found = True
+                        step.element_found = True
+                        step.action_details['element_selector'] = selector
+                        logger.info(f"Step {step.step_number}: Element found for click '{button_text}': {selector}")
+                        break
+                except Exception:
+                    continue
+            
+            if not element_found:
+                step.element_found = False
+                step.warnings.append(f"Elemento não encontrado para click '{button_text}'")
+                logger.warning(f"Step {step.step_number}: Elemento não encontrado para click '{button_text}'")
+                # Don't fail yet - let the action try and fail naturally
+        
+        # Check for fill actions
+        elif "fill" in action:
+            fill_value = action["fill"]
+            context = action.get("context")
+            
+            # Parse field label
+            if isinstance(fill_value, str) and '=' in fill_value:
+                label = fill_value.split('=', 1)[0].strip()
+            else:
+                label = fill_value if isinstance(fill_value, str) else action.get("label", "")
+            
+            # Try to find field
+            try:
+                field_locator, field_name, field_type = await test.field.find_field_by_label(label, context)
+                if field_locator:
+                    step.element_found = True
+                    step.action_details['field_name'] = field_name
+                    step.action_details['field_type'] = field_type
+                    logger.info(f"Step {step.step_number}: Campo encontrado para fill '{label}': {field_name} ({field_type})")
+                else:
+                    step.element_found = False
+                    step.warnings.append(f"Campo não encontrado para fill '{label}'")
+                    logger.warning(f"Step {step.step_number}: Campo não encontrado para fill '{label}'")
+            except Exception as e:
+                step.element_found = False
+                step.warnings.append(f"Erro ao buscar campo '{label}': {str(e)}")
+                logger.warning(f"Step {step.step_number}: Erro ao buscar campo '{label}': {e}")
+        
+        # Check for go_to actions (menu navigation)
+        elif "go_to" in action:
+            menu_path = action["go_to"]
+            # For go_to, we can try to check if we're already on the target
+            # This helps avoid false warnings
+            try:
+                menu_parts = menu_path.split('>')
+                app_name = menu_parts[0].strip() if menu_parts else menu_path.strip()
+                
+                # Check if we're already in the target app
+                if hasattr(test, 'menu') and hasattr(test.menu, '_is_current_app'):
+                    is_current = await test.menu._is_current_app(app_name)
+                    if is_current:
+                        step.element_found = True  # We're already there
+                        step.action_details['already_in_app'] = True
+                        logger.info(f"Step {step.step_number}: Já está no app '{app_name}'")
+            except Exception:
+                pass
+            
+            step.action_details['menu_path'] = menu_path
+        
+        # Check for open_record actions
+        elif "open_record" in action:
+            search_text = action["open_record"]
+            # Try to find record
+            try:
+                records = await test.view.search_records(search_text)
+                if records:
+                    step.element_found = True
+                    step.action_details['records_found'] = len(records)
+                    logger.info(f"Step {step.step_number}: {len(records)} registro(s) encontrado(s) para '{search_text}'")
+                else:
+                    step.element_found = False
+                    step.warnings.append(f"Nenhum registro encontrado para '{search_text}'")
+                    logger.warning(f"Step {step.step_number}: Nenhum registro encontrado para '{search_text}'")
+            except Exception as e:
+                step.element_found = False
+                step.warnings.append(f"Erro ao buscar registro '{search_text}': {str(e)}")
+                logger.warning(f"Step {step.step_number}: Erro ao buscar registro '{search_text}': {e}")
+    
+    @staticmethod
+    async def _capture_action_state(action: Dict[str, Any], test: 'OdooTestBase') -> Dict[str, Any]:
+        """
+        Capture page state before action for validation.
+        
+        Args:
+            action: Action dictionary
+            test: OdooTestBase instance
+            
+        Returns:
+            Dictionary with state information
+        """
+        state = {}
+        try:
+            state['url'] = test.page.url
+            state['title'] = await test.page.title()
+        except Exception:
+            pass
+        return state
+    
+    @staticmethod
+    async def _validate_action_succeeded(action: Dict[str, Any], test: 'OdooTestBase', step: TestStep, state_before: Dict[str, Any]) -> None:
+        """
+        Validate that action succeeded by checking if page state changed.
+        
+        Args:
+            action: Action dictionary
+            test: OdooTestBase instance
+            step: TestStep instance to record validation results
+            state_before: State before action
+        """
+        try:
+            state_after = await OdooYAMLParser._capture_action_state(action, test)
+            step.action_details['state_after'] = state_after
+            
+            # For go_to actions, check if navigation succeeded by multiple means
+            if "go_to" in action:
+                url_before = state_before.get('url', '')
+                url_after = state_after.get('url', '')
+                menu_path = action.get("go_to", "")
+                
+                # Odoo is a SPA - URL might not change even when navigation works
+                # So we need to verify navigation by checking page content
+                navigation_succeeded = False
+                verification_method = None
+                
+                try:
+                    # Method 1: Check if URL changed (most reliable)
+                    if url_before and url_after and url_before != url_after:
+                        navigation_succeeded = True
+                        verification_method = "URL changed"
+                        logger.info(f"Step {step.step_number}: Navegação bem-sucedida (URL mudou): {url_before} -> {url_after}")
+                    
+                    # Method 2: Check if we're on Dashboard and menu was "Dashboard"
+                    elif menu_path.lower() in ["dashboard", "menu principal", "home"]:
+                        # Check for dashboard-specific indicators
+                        dashboard_indicators = [
+                            '.o_menu_apps',
+                            '.o_main_navbar',
+                            '.o_action_manager',
+                            '[data-menu-xmlid="base.menu_administration"]',  # Admin menu visible
+                            '.o_web_client',
+                        ]
+                        for indicator in dashboard_indicators:
+                            count = await test.page.locator(indicator).count()
+                            if count > 0:
+                                navigation_succeeded = True
+                                verification_method = "Dashboard indicators found"
+                                logger.info(f"Step {step.step_number}: Dashboard verificado (indicadores encontrados)")
+                                break
+                        
+                        if not navigation_succeeded:
+                            # Check if we can find the menu item that was clicked
+                            # If menu item is visible/active, navigation likely worked
+                            menu_item = test.page.locator('a:has-text("Dashboard"), .o_menu_item:has-text("Dashboard")').first
+                            if await menu_item.count() > 0:
+                                navigation_succeeded = True
+                                verification_method = "Dashboard menu item found"
+                                logger.info(f"Step {step.step_number}: Dashboard menu item encontrado")
+                    
+                    # Method 3: Check if we're already in the target app (from validation before)
+                    elif step.action_details.get('already_in_app'):
+                        navigation_succeeded = True
+                        verification_method = "Already in target app"
+                        logger.info(f"Step {step.step_number}: Já estava no app '{menu_path}'")
+                    
+                    # Method 4: For other menus, check if menu item is active/visible
+                    else:
+                        # Parse menu path to get app name
+                        menu_parts = menu_path.split('>')
+                        app_name = menu_parts[0].strip() if menu_parts else menu_path.strip()
+                        
+                        # First, check if we're already in the app using menu navigator
+                        try:
+                            if hasattr(test, 'menu') and hasattr(test.menu, '_is_current_app'):
+                                is_current = await test.menu._is_current_app(app_name)
+                                if is_current:
+                                    navigation_succeeded = True
+                                    verification_method = f"Already in app '{app_name}'"
+                                    logger.info(f"Step {step.step_number}: Já está no app '{app_name}'")
+                        except Exception:
+                            pass
+                        
+                        if not navigation_succeeded:
+                            # Check if menu item for this app is visible/active
+                            menu_selectors = [
+                                f'a:has-text("{app_name}")',
+                                f'.o_menu_item:has-text("{app_name}")',
+                                f'[data-menu-xmlid*="{app_name.lower()}"]',
+                                f'.o_app[data-menu-xmlid*="{app_name.lower()}"]',
+                            ]
+                            
+                            for selector in menu_selectors:
+                                try:
+                                    menu_item = test.page.locator(selector).first
+                                    if await menu_item.count() > 0:
+                                        # Check if it's visible or has active class
+                                        is_visible = await menu_item.is_visible()
+                                        classes = await menu_item.get_attribute('class') or ''
+                                        is_active = 'active' in classes or 'o_menu_item_active' in classes
+                                        
+                                        if is_visible or is_active:
+                                            navigation_succeeded = True
+                                            verification_method = f"Menu item '{app_name}' found and active"
+                                            logger.info(f"Step {step.step_number}: Menu '{app_name}' encontrado e ativo")
+                                            break
+                                except Exception:
+                                    continue
+                            
+                            # Method 5: Check if page content changed (heuristic)
+                            # If we can't verify by menu, check if action manager content changed
+                            if not navigation_succeeded:
+                                try:
+                                    # Check if action manager has content (indicates a view loaded)
+                                    action_manager = test.page.locator('.o_action_manager, .o_view_manager')
+                                    if await action_manager.count() > 0:
+                                        # Check if it has visible content
+                                        children = action_manager.locator('> *').first
+                                        if await children.count() > 0:
+                                            navigation_succeeded = True
+                                            verification_method = "Action manager has content"
+                                            logger.info(f"Step {step.step_number}: Action manager tem conteúdo (navegação provavelmente funcionou)")
+                                except Exception:
+                                    pass
+                    
+                    # Set result
+                    step.action_succeeded = navigation_succeeded
+                    
+                    if navigation_succeeded:
+                        # Only log info, don't add warning if navigation succeeded
+                        # URL not changing is normal in Odoo SPA
+                        logger.info(f"Step {step.step_number}: Navegação verificada por {verification_method}")
+                    else:
+                        # Navigation verification failed - this is a real warning
+                        step.warnings.append(f"Navegação pode ter falhado: não foi possível verificar se '{menu_path}' foi acessado")
+                        logger.warning(f"Step {step.step_number}: Navegação não verificada para '{menu_path}'")
+                        
+                except Exception as e:
+                    # If verification fails, assume it might have worked (don't fail test)
+                    step.action_succeeded = True
+                    step.warnings.append(f"Não foi possível verificar navegação para '{menu_path}': {str(e)} (assumindo sucesso)")
+                    logger.warning(f"Step {step.step_number}: Erro ao verificar navegação: {e}")
+            
+            # For click actions, check if something visible changed (heuristic)
+            elif "click" in action:
+                # For now, assume click succeeded if no exception was raised
+                # In the future, we could check for specific UI changes
+                if step.element_found is not False:  # If element was found or not checked
+                    step.action_succeeded = True
+                    logger.info(f"Step {step.step_number}: Click executado (elemento encontrado)")
+                else:
+                    step.action_succeeded = False
+                    step.warnings.append("Click pode ter falhado: elemento não foi encontrado antes da ação")
+                    logger.warning(f"Step {step.step_number}: Click pode ter falhado: elemento não encontrado")
+            
+            # For fill actions, verify field was filled
+            elif "fill" in action:
+                if step.element_found is not False:
+                    step.action_succeeded = True
+                    logger.info(f"Step {step.step_number}: Fill executado (campo encontrado)")
+                else:
+                    step.action_succeeded = False
+                    step.warnings.append("Fill pode ter falhado: campo não foi encontrado antes da ação")
+                    logger.warning(f"Step {step.step_number}: Fill pode ter falhado: campo não encontrado")
+            
+            # For open_record, check if form view opened
+            elif "open_record" in action:
+                if step.element_found is not False:
+                    step.action_succeeded = True
+                    logger.info(f"Step {step.step_number}: Open record executado (registro encontrado)")
+                else:
+                    step.action_succeeded = False
+                    step.warnings.append("Open record pode ter falhado: registro não foi encontrado antes da ação")
+                    logger.warning(f"Step {step.step_number}: Open record pode ter falhado: registro não encontrado")
+            
+            # For other actions, assume success if no exception
+            else:
+                step.action_succeeded = True
+                
+        except Exception as e:
+            step.action_succeeded = False
+            step.warnings.append(f"Erro ao validar ação: {str(e)}")
+            logger.warning(f"Step {step.step_number}: Erro ao validar ação: {e}")
+    
+    @staticmethod
+    def parse_odoo_action(action: Dict[str, Any], test: 'OdooTestBase', step: Optional[TestStep] = None) -> Callable:
+        """
+        Parse an Odoo-specific action from YAML (user-friendly syntax).
+        
+        Supports actions like:
+        - login: admin
+        - go_to: "Vendas > Pedidos"
+        - click: "Criar"
+        - fill: "Cliente = João Silva"
+        - add_line: "Adicionar linha"
+        - open_record: "João Silva"
+        
+        Args:
+            action: Action dictionary from YAML
+            test: OdooTestBase instance
+            
+        Returns:
+            Async function to execute the action
+        """
+        async def execute_action():
+            # Login action
+            if "login" in action:
+                username = action["login"]
+                password = action.get("password", "")
+                database = action.get("database")
+                await test.login(username, password, database)
+            
+            # Logout action
+            elif "logout" in action:
+                await test.logout()
+            
+            # Go to menu (user-friendly format)
+            elif "go_to" in action:
+                menu_path = action["go_to"]
+                await test.go_to(menu_path)
+            
+            # Click button (user-friendly - just text)
+            elif "click" in action:
+                button_text = action["click"]
+                context = action.get("context")  # "wizard" or "form"
+                
+                # Special handling for "Apps" button - use menu navigator
+                if button_text.lower() in ["apps", "aplicativos", "aplicações"]:
+                    await test.menu.open_apps_menu()
+                else:
+                    await test.click_button(button_text, context)
+                
+                # Check if wizard section follows
+                if "wizard" in action:
+                    wizard_steps = action["wizard"]
+                    for wizard_step in wizard_steps:
+                        wizard_action_func = OdooYAMLParser.parse_odoo_action(wizard_step, test)
+                        await wizard_action_func()
+            
+            # Fill field (user-friendly format)
+            elif "fill" in action:
+                fill_value = action["fill"]
+                context = action.get("context")
+                
+                # Support both formats: "Cliente = João" or separate label/value
+                if isinstance(fill_value, str) and '=' in fill_value:
+                    await test.fill(fill_value, context=context)
+                else:
+                    # Assume it's a dict with label and value
+                    label = fill_value if isinstance(fill_value, str) else action.get("label", "")
+                    value = action.get("value", "")
+                    await test.fill(label, value, context)
+            
+            # Add line to One2many table
+            elif "add_line" in action:
+                button_text = action.get("add_line")
+                await test.add_line(button_text)
+            
+            # Open record by search
+            elif "open_record" in action:
+                search_text = action["open_record"]
+                position = action.get("position")  # "primeiro", "segundo", "último"
+                await test.open_record(search_text, position)
+            
+            # Search records
+            elif "search" in action:
+                search_text = action["search"]
+                records = await test.view.search_records(search_text)
+                # Search is complete, wait_until_ready will be called automatically
+            
+            # Filter records (using Odoo filters menu)
+            elif "filter_by" in action:
+                filter_name = action["filter_by"]
+                await test.view.filter_records(filter_name)
+            
+            # Screenshot
+            elif "screenshot" in action:
+                name = action["screenshot"]
+                description = action.get("description", name)
+                await test.screenshot(name, description=description)
+            
+            # Wait - Converted to minimal visual delay only
+            # Waits are now automatic based on page readiness
+            # This is kept only for minimal visual pauses (e.g., 0.1s max)
+            elif "wait" in action:
+                seconds = action.get("wait", 0.1)
+                if isinstance(seconds, (int, float)):
+                    # Cap wait at 0.2s - anything longer is unnecessary
+                    # The automatic wait_until_ready handles actual readiness
+                    max_wait = min(float(seconds), 0.2)
+                    await asyncio.sleep(max_wait)
+                else:
+                    await asyncio.sleep(0.1)  # Minimal default
+            
+            # Scroll
+            elif "scroll" in action:
+                scroll_value = action["scroll"]
+                if isinstance(scroll_value, str):
+                    if scroll_value.lower() in ["down", "baixo"]:
+                        await test.scroll_down()
+                    elif scroll_value.lower() in ["up", "cima"]:
+                        await test.scroll_up()
+                else:
+                    # Assume it's a dict with direction and amount
+                    direction = action.get("direction", "down")
+                    amount = action.get("amount", 500)
+                    if direction.lower() in ["down", "baixo"]:
+                        await test.scroll_down(amount)
+                    elif direction.lower() in ["up", "cima"]:
+                        await test.scroll_up(amount)
+            
+            # Hover
+            elif "hover" in action:
+                text = action["hover"]
+                context = action.get("context")
+                await test.hover(text, context)
+            
+            # Double click
+            elif "double_click" in action:
+                text = action["double_click"]
+                context = action.get("context")
+                await test.double_click(text, context)
+            
+            # Right click
+            elif "right_click" in action:
+                text = action["right_click"]
+                context = action.get("context")
+                await test.right_click(text, context)
+            
+            # Drag and drop
+            elif "drag" in action:
+                drag_data = action["drag"]
+                if isinstance(drag_data, dict):
+                    from_text = drag_data.get("from")
+                    to_text = drag_data.get("to")
+                    if from_text and to_text:
+                        await test.drag_and_drop(from_text, to_text)
+                else:
+                    # Assume it's a string with "from > to" format
+                    if ">" in str(drag_data):
+                        parts = str(drag_data).split(">")
+                        from_text = parts[0].strip()
+                        to_text = parts[1].strip() if len(parts) > 1 else ""
+                        if from_text and to_text:
+                            await test.drag_and_drop(from_text, to_text)
+            
+            # Legacy actions (for backward compatibility)
+            elif "action" in action:
+                action_type = action["action"]
+                
+                if action_type == "login":
+                    await test.login(
+                        action["username"],
+                        action["password"],
+                        action.get("database")
+                    )
+                elif action_type == "go_to_menu":
+                    await test.go_to_menu(
+                        action["menu"],
+                        action.get("submenu")
+                    )
+                elif action_type == "fill_field":
+                    field_type = action.get("type", "char")
+                    field_name = action["field"]
+                    value = action["value"]
+                    
+                    if field_type == "many2one":
+                        await test.field.fill_many2one(field_name, value)
+                    elif field_type == "char":
+                        await test.field.fill_char(field_name, value)
+                    elif field_type == "integer":
+                        await test.field.fill_integer(field_name, value)
+                    elif field_type == "float":
+                        await test.field.fill_float(field_name, value)
+                    elif field_type == "boolean":
+                        await test.field.toggle_boolean(field_name)
+                    elif field_type == "date":
+                        await test.field.fill_date(field_name, value)
+                    elif field_type == "datetime":
+                        await test.field.fill_datetime(field_name, value)
+        
+        return execute_action
+    
+    @classmethod
+    def to_python_function(cls, yaml_data: Dict[str, Any]) -> Callable:
+        """
+        Convert YAML test definition to Python function with Odoo support.
+        
+        Supports user-friendly YAML format with inheritance, composition, setup/teardown:
+        ```yaml
+        extends: common_login.yaml
+        setup:
+          - login: admin
+            password: admin
+        steps:
+          - go_to: "Vendas > Pedidos"
+          - click: "Criar"
+          - fill: "Cliente = João Silva"
+        teardown:
+          - logout:
+        save_session: true
+        ```
+        
+        Args:
+            yaml_data: YAML test data (already resolved for inheritance/includes)
+            
+        Returns:
+            Python test function
+        """
+        # Import here to avoid circular dependency
+        from .base import OdooTestBase
+        
+        # Get setup, steps, and teardown
+        setup_steps = yaml_data.get("setup", [])
+        steps = yaml_data.get("steps", [])
+        teardown_steps = yaml_data.get("teardown", [])
+        config_data = yaml_data.get("config", {})
+        save_session = yaml_data.get("save_session", False)
+        load_session = yaml_data.get("load_session")
+        
+        async def test_function(page: Page, test: 'OdooTestBase', test_steps: Optional[List[Dict[str, Any]]] = None, video_start_time: Optional[datetime] = None):
+            """Generated test function from user-friendly YAML."""
+            # Initialize test_steps if not provided
+            if test_steps is None:
+                test_steps = []
+            
+            # Store step count for duration estimation
+            total_steps = len(setup_steps) + len(steps) + len(teardown_steps)
+            test_function.yaml_steps_count = total_steps
+            test_function.yaml_main_steps_count = len(steps)
+            
+            # Use video_start_time if provided (when video recording actually started)
+            # Otherwise use current time (fallback for tests without video)
+            # IMPORTANT: video_start_time is when the context was created (when recording began)
+            # We need to account for any setup time that happened before the test function was called
+            test_start_time = video_start_time if video_start_time else datetime.now()
+            
+            # If video_start_time was provided, we need to ensure all steps use the same reference
+            # The video actually started recording when context was created, so we use that as reference
+            # No adjustment needed - video_start_time is already the correct reference point
+            # Apply configuration from YAML if provided
+            if config_data:
+                if 'cursor' in config_data:
+                    cursor_data = config_data['cursor']
+                    if 'style' in cursor_data:
+                        test.config.cursor.style = cursor_data['style']
+                    if 'color' in cursor_data:
+                        test.config.cursor.color = cursor_data['color']
+                    if 'size' in cursor_data:
+                        test.config.cursor.size = cursor_data['size']
+                    if 'click_effect' in cursor_data:
+                        test.config.cursor.click_effect = cursor_data['click_effect']
+                    if 'animation_speed' in cursor_data:
+                        test.config.cursor.animation_speed = cursor_data['animation_speed']
+                
+                if 'video' in config_data:
+                    video_data = config_data['video']
+                    if 'enabled' in video_data:
+                        test.config.video.enabled = video_data['enabled']
+                    if 'quality' in video_data:
+                        test.config.video.quality = video_data['quality']
+                    if 'codec' in video_data:
+                        test.config.video.codec = video_data['codec']
+                
+                if 'browser' in config_data:
+                    browser_data = config_data['browser']
+                    if 'headless' in browser_data:
+                        test.config.browser.headless = browser_data['headless']
+                    if 'slow_mo' in browser_data:
+                        test.config.browser.slow_mo = browser_data['slow_mo']
+            
+            # Execute setup steps first
+            if setup_steps:
+                print(f"  🔧 Executando {len(setup_steps)} passo(s) de setup...")
+                for i, step in enumerate(setup_steps, 1):
+                    try:
+                        print(f"    [{i}/{len(setup_steps)}] Setup: {str(step)[:80]}")
+                        action_func = OdooYAMLParser.parse_odoo_action(step, test, None)
+                        await action_func()
+                        
+                        # Automatically wait for Odoo to be ready after each setup action
+                        if "wait" not in step and "screenshot" not in step:
+                            await test.wait_until_ready()
+                        
+                        print(f"    ✅ Setup passo {i} concluído")
+                    except Exception as e:
+                        step_str = str(step)[:100]
+                        error_msg = str(e)
+                        
+                        # Log structured error
+                        logger.error(
+                            f"Setup step {i} failed",
+                            extra={
+                                "step_number": i,
+                                "step_type": "setup",
+                                "step_action": step_str,
+                                "error_type": type(e).__name__,
+                                "error_message": error_msg,
+                                "test_name": getattr(test, 'test_name', 'unknown')
+                            }
+                        )
+                        
+                        print(f"    ❌ Erro no setup passo {i}: {error_msg}")
+                        
+                        # Take debug screenshot
+                        try:
+                            debug_screenshot = test.screenshot_manager.test_dir / f"debug_error_setup_step_{i}.png"
+                            await test.page.screenshot(path=str(debug_screenshot), full_page=True)
+                            print(f"    📸 Screenshot de debug salvo: {debug_screenshot}")
+                            logger.error(
+                                f"Setup error screenshot captured",
+                                extra={
+                                    "step_number": i,
+                                    "screenshot_path": str(debug_screenshot)
+                                }
+                            )
+                        except Exception as screenshot_error:
+                            logger.warning(f"Failed to capture setup error screenshot: {screenshot_error}")
+                        
+                        raise RuntimeError(
+                            f"Erro ao executar setup passo {i}: {step_str}\n"
+                            f"Erro: {error_msg}"
+                        ) from e
+            
+            # Initialize cursor transition manager
+            cursor_transition = CursorTransitionManager(
+                transition_delay=test.config.cursor.transition_delay
+            )
+            if hasattr(test, 'cursor_manager'):
+                cursor_transition.set_cursor_manager(test.cursor_manager)
+            
+            # Process shared subtitles: subtitle in first step applies to following steps
+            # until next subtitle is found
+            current_subtitle: Optional[str] = None
+            
+            # Execute main steps
+            try:
+                print(f"  ▶️  Executando {len(steps)} passo(s) principal(is)...")
+                
+                for i, step_dict in enumerate(steps, 1):
+                    try:
+                        # Process shared subtitles
+                        # If this step has a subtitle, update current_subtitle
+                        # Otherwise, inherit from previous step
+                        if 'subtitle' in step_dict or 'legend' in step_dict:
+                            current_subtitle = step_dict.get('subtitle') or step_dict.get('legend')
+                        
+                        # Create TestStep object
+                        step = TestStep(
+                            step_number=i,
+                            action=step_dict,
+                            subtitle=current_subtitle,
+                            description=step_dict.get('description', current_subtitle),
+                            video_start_time=test_start_time
+                        )
+                        
+                        print(f"    [{i}/{len(steps)}] Passo: {str(step_dict)[:80]}")
+                        logger.info(f"Step {i}: Created TestStep object with subtitle='{current_subtitle}'")
+                        
+                        # Wait for cursor transition before starting (except first step)
+                        if i > 1:
+                            await cursor_transition.wait_before_step_start(i)
+                        
+                        # STATE: STARTING - Transition to starting state
+                        # This marks when step preparation begins
+                        step.start()
+                        
+                        # Parse action function BEFORE marking as executing
+                        # This ensures execute_time is set right before action runs
+                        action_func = cls.parse_odoo_action(step_dict, test, step)
+                        
+                        # STATE: EXECUTING - Mark as executing RIGHT BEFORE action runs
+                        # This ensures execute_time matches when action actually starts
+                        step.execute()
+                        
+                        # Validate element exists BEFORE executing action (for click, fill, etc.)
+                        await cls._validate_element_before_action(step_dict, test, step)
+                        
+                        # Capture state BEFORE action (for validation after)
+                        state_before = await cls._capture_action_state(step_dict, test)
+                        step.action_details['state_before'] = state_before
+                        
+                        # NOW execute the action - this is when it actually happens
+                        await action_func()
+                        
+                        # Validate action succeeded AFTER execution
+                        await cls._validate_action_succeeded(step_dict, test, step, state_before)
+                        
+                        # STATE: WAITING_FOR_LOAD - Wait for page to load
+                        # CRITICAL: Step can only be marked as TERMINADO when screen stops loading
+                        step.wait_load()
+                        if "wait" not in step_dict:
+                            # Wait until ready with appropriate timeout
+                            if "go_to" in step_dict or "login" in step_dict or "logout" in step_dict:
+                                await test.wait_until_ready(timeout=5000)  # Longer for navigation
+                            elif "open_record" in step_dict or "click" in step_dict:
+                                await test.wait_until_ready(timeout=3000)  # Medium for interactions
+                            else:
+                                await test.wait_until_ready(timeout=2000)  # Shorter for other actions
+                        
+                        # IMPORTANT: Wait a bit after screen loads to let user see the result
+                        # This ensures the subtitle stays visible while the screen is shown
+                        # The delay should be proportional to the action type
+                        post_load_delay = test.config.video.post_load_delay
+                        static_step_duration = test.config.video.static_step_duration
+                        
+                        # Check if this is a "static step" - a step that just shows/visualizes something
+                        # Static steps are identified by:
+                        # 1. Explicit "static: true" in YAML
+                        # 2. Subtitle starting with "Visualizando", "Mostrando", or "Exibindo"
+                        # 3. Screenshot actions (they just capture what's on screen)
+                        # 4. Steps with description but no action (just showing state)
+                        subtitle_text = step.subtitle or step_dict.get('subtitle', '') or step_dict.get('description', '')
+                        is_static_step = (
+                            step_dict.get('static', False) or  # Explicit static flag in YAML
+                            subtitle_text.lower().startswith('visualizando') or
+                            subtitle_text.lower().startswith('mostrando') or
+                            subtitle_text.lower().startswith('exibindo') or
+                            "screenshot" in step_dict or
+                            (not any(key in step_dict for key in ['go_to', 'click', 'fill', 'open_record', 'search', 'filter_by', 'login', 'logout', 'add_line']) and 'description' in step_dict)
+                        )
+                        
+                        if is_static_step:
+                            # Static steps should stay visible for a longer duration
+                            # This gives time to actually see and understand what's being shown
+                            await asyncio.sleep(static_step_duration)
+                        elif "screenshot" in step_dict:
+                            # Screenshots are instant, but we want to show the screen for a moment
+                            await asyncio.sleep(post_load_delay * 0.8)  # Slightly less for screenshots
+                        elif "go_to" in step_dict or "login" in step_dict:
+                            # Navigation actions - give more time to see the new page
+                            await asyncio.sleep(post_load_delay * 1.3)  # More time for navigation
+                        elif "open_record" in step_dict or "click" in step_dict:
+                            # Interactive actions - give time to see the result
+                            await asyncio.sleep(post_load_delay)  # Standard delay
+                        else:
+                            # Other actions - minimal delay
+                            await asyncio.sleep(post_load_delay * 0.7)  # Slightly less for other actions
+                        
+                        # STATE: COMPLETED - Mark step as completed AFTER screen is shown
+                        # This ensures the subtitle duration matches the time the screen is visible
+                        step.complete()
+                        
+                        # Add step to test_steps list
+                        test_steps.append(step)
+                        
+                        # Wait for cursor transition after completing
+                        await cursor_transition.wait_after_step_complete(i)
+                        
+                        # Build completion message with validation status
+                        status_parts = []
+                        if step.element_found is not None:
+                            status_parts.append(f"Elemento: {'✅' if step.element_found else '❌'}")
+                        if step.action_succeeded is not None:
+                            status_parts.append(f"Ação: {'✅' if step.action_succeeded else '❌'}")
+                        if step.warnings:
+                            status_parts.append(f"⚠️ {len(step.warnings)} aviso(s)")
+                        
+                        status_str = " | ".join(status_parts) if status_parts else ""
+                        completion_msg = f"    ✅ Passo {i} concluído (estado: {step.current_state.id})"
+                        if status_str:
+                            completion_msg += f" | {status_str}"
+                        print(completion_msg)
+                        
+                        # Print warnings if any
+                        if step.warnings:
+                            for warning in step.warnings:
+                                print(f"      ⚠️  {warning}")
+                        
+                        # Fail test if critical actions failed
+                        if step.element_found is False and step.action_succeeded is False:
+                            # Both element not found AND action failed - this is critical
+                            critical_actions = ["click", "fill", "open_record"]
+                            if any(key in step_dict for key in critical_actions):
+                                error_msg = (
+                                    f"Passo {i} falhou: elemento não encontrado E ação não surtiu efeito. "
+                                    f"Warnings: {', '.join(step.warnings)}"
+                                )
+                                logger.error(f"Step {i}: Critical failure - {error_msg}")
+                                raise RuntimeError(error_msg)
+                    except Exception as e:
+                        # Mark step as failed if it exists
+                        step_obj = None
+                        if 'step' in locals() and isinstance(step, TestStep):
+                            step_obj = step
+                            step_obj.fail_with_error(e)
+                            test_steps.append(step_obj)
+                        
+                        # Provide helpful error message
+                        step_str = str(step_dict)[:100]  # Limit length
+                        error_msg = str(e)
+                        
+                        # Log structured error
+                        logger.error(
+                            f"Step {i} failed",
+                            extra={
+                                "step_number": i,
+                                "step_action": step_str,
+                                "error_type": type(e).__name__,
+                                "error_message": error_msg,
+                                "test_name": getattr(test, 'test_name', 'unknown')
+                            }
+                        )
+                        
+                        print(f"    ❌ Erro no passo {i}: {error_msg}")
+                        
+                        # Take debug screenshot with detailed info
+                        try:
+                            debug_screenshot = test.screenshot_manager.test_dir / f"debug_error_step_{i}.png"
+                            await test.page.screenshot(path=str(debug_screenshot), full_page=True)
+                            print(f"    📸 Screenshot de debug salvo: {debug_screenshot}")
+                            
+                            # Also log screenshot path
+                            logger.error(
+                                f"Error screenshot captured for step {i}",
+                                extra={
+                                    "step_number": i,
+                                    "screenshot_path": str(debug_screenshot),
+                                    "error_type": type(e).__name__
+                                }
+                            )
+                        except Exception as screenshot_error:
+                            logger.warning(f"Failed to capture error screenshot: {screenshot_error}")
+                            print(f"    ⚠️  Erro ao capturar screenshot: {screenshot_error}")
+                        
+                        # Save HTML content of the page
+                        try:
+                            debug_html = test.screenshot_manager.test_dir / f"debug_error_step_{i}.html"
+                            html_content = await test.page.content()
+                            debug_html.write_text(html_content, encoding='utf-8')
+                            print(f"    📄 HTML da página salvo: {debug_html}")
+                            
+                            # Also log HTML path
+                            logger.error(
+                                f"Error HTML captured for step {i}",
+                                extra={
+                                    "step_number": i,
+                                    "html_path": str(debug_html),
+                                    "error_type": type(e).__name__
+                                }
+                            )
+                        except Exception as html_error:
+                            logger.warning(f"Failed to capture error HTML: {html_error}")
+                            print(f"    ⚠️  Erro ao capturar HTML: {html_error}")
+                        
+                        # Try to capture page state info for debugging
+                        try:
+                            current_url = test.page.url
+                            page_title = await test.page.title()
+                            logger.error(
+                                f"Page state at error",
+                                extra={
+                                    "step_number": i,
+                                    "url": current_url,
+                                    "title": page_title
+                                }
+                            )
+                        except Exception:
+                            pass
+                        
+                        raise RuntimeError(
+                            f"Erro ao executar passo {i}: {step_str}\n"
+                            f"Erro: {error_msg}"
+                        ) from e
+            finally:
+                # Execute teardown steps (always, even on error)
+                if teardown_steps:
+                    for step in teardown_steps:
+                        try:
+                            action_func = OdooYAMLParser.parse_odoo_action(step, test, None)
+                            await action_func()
+                        except Exception as e:
+                            # Log but don't fail on teardown errors
+                            print(f"  ⚠️  Teardown step failed: {e}")
+        
+        # Set function attributes for session management
+        test_function.save_session = save_session if save_session else None
+        test_function.load_session = load_session if load_session else None
+        
+        return test_function
+
+# Inherit parse_file to get inheritance/composition support
+OdooYAMLParser.parse_file = staticmethod(YAMLParser.parse_file)

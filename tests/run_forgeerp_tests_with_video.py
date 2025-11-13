@@ -191,7 +191,7 @@ async def main():
         video_enabled=True,
         video_quality="high",
         video_dir="videos",
-        browser_headless=False,
+        browser_headless=True,
         browser_slow_mo=500,
         screenshots_auto=True,
     )
@@ -203,7 +203,7 @@ async def main():
     print("=" * 60)
     
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=False, slow_mo=500)
+        browser = await p.chromium.launch(headless=True, slow_mo=500)
         
         # Run each test with its own context for video recording
         tests = [

@@ -360,7 +360,7 @@ class FieldHelper:
         """Fill Many2one field using locator."""
         try:
             await field_locator.fill(search_text)
-            await asyncio.sleep(0.7)
+            await asyncio.sleep(0.05)
             
             # Determine position index
             position_index = 0
@@ -401,7 +401,7 @@ class FieldHelper:
                         
                         if await option.count() > 0:
                             await option.click()
-                            await asyncio.sleep(0.4)
+                            await asyncio.sleep(0.02)
                             return True
                 except Exception:
                     continue
@@ -414,7 +414,7 @@ class FieldHelper:
         """Fill Char field using locator."""
         try:
             await field_locator.fill(value)
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(0.02)
             return True
         except Exception:
             return False
@@ -447,7 +447,7 @@ class FieldHelper:
         """Toggle Boolean field using locator."""
         try:
             await field_locator.click()
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(0.02)
             return True
         except Exception:
             return False
@@ -456,7 +456,7 @@ class FieldHelper:
         """Select dropdown option using locator."""
         try:
             await field_locator.select_option(label=option)
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(0.02)
             return True
         except Exception:
             return False
@@ -473,7 +473,7 @@ class FieldHelper:
                 body = iframe.locator('body')
                 if await body.count() > 0:
                     await body.fill(html)
-                    await asyncio.sleep(0.3)
+                    await asyncio.sleep(0.02)
                     return True
         except Exception:
             pass
@@ -492,7 +492,7 @@ class FieldHelper:
                 field = self.page.locator(selector).first
                 if await field.count() > 0:
                     await field.fill(value)
-                    await asyncio.sleep(0.2)
+                    await asyncio.sleep(0.02)
                     return True
             except Exception:
                 continue
@@ -536,7 +536,7 @@ class FieldHelper:
                 field = self.page.locator(selector).first
                 if await field.count() > 0:
                     await field.select_option(label=option)
-                    await asyncio.sleep(0.3)
+                    await asyncio.sleep(0.02)
                     return True
             except Exception:
                 continue
@@ -555,7 +555,7 @@ class FieldHelper:
                 checkbox = self.page.locator(selector).first
                 if await checkbox.count() > 0:
                     await checkbox.click()
-                    await asyncio.sleep(0.2)
+                    await asyncio.sleep(0.02)
                     return True
             except Exception:
                 continue
@@ -574,7 +574,7 @@ class FieldHelper:
             body = iframe.locator('body')
             if await body.count() > 0:
                 await body.fill(html)
-                await asyncio.sleep(0.3)
+                await asyncio.sleep(0.02)
                 return True
         except Exception:
             pass
@@ -591,10 +591,10 @@ class FieldHelper:
                 add_input = self.page.locator(add_sel).first
                 if await add_input.count() > 0:
                     await add_input.fill(value)
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep(0.05)
                     # Press Enter or click suggestion
                     await self.page.keyboard.press("Enter")
-                    await asyncio.sleep(0.3)
+                    await asyncio.sleep(0.02)
             except Exception:
                 continue
         
@@ -614,7 +614,7 @@ class FieldHelper:
                     add_btn = self.page.locator(selector).first
                     if await add_btn.count() > 0:
                         await add_btn.click()
-                        await asyncio.sleep(0.6)
+                        await asyncio.sleep(0.05)
                         break
                 except Exception:
                     continue
@@ -640,7 +640,7 @@ class FieldHelper:
                     # Default to char
                     await self.fill_char(field_name_inner, str(field_value))
             
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(0.02)
         
         return True
 

@@ -18,7 +18,7 @@ from playwright_simple.core.htmx import HTMXHelper
 async def test_forgeerp_base_initialization():
     """Test ForgeERPTestBase initialization."""
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=False)
+        browser = await p.chromium.launch(headless=True)
         context = await browser.new_context(
             viewport={"width": 1920, "height": 1080},
             record_video_dir="videos/test_forgeerp_base_initialization",
@@ -26,10 +26,10 @@ async def test_forgeerp_base_initialization():
         )
         page = await context.new_page()
         
-        config = TestConfig(
+        config = TestConfig.load(
             base_url="http://localhost:8000",
             video_enabled=True,
-            browser_headless=False,
+            browser_headless=True,
             browser_slow_mo=500
         )
         test = ForgeERPTestBase(page, config, "test_name")
@@ -58,7 +58,7 @@ async def test_forgeerp_base_initialization():
 async def test_forgeerp_base_cursor_adaptation():
     """Test cursor color adaptation to ForgeERP theme."""
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=False)
+        browser = await p.chromium.launch(headless=True)
         context = await browser.new_context(
             viewport={"width": 1920, "height": 1080},
             record_video_dir="videos/test_forgeerp_cursor_adaptation",
@@ -67,11 +67,11 @@ async def test_forgeerp_base_cursor_adaptation():
         page = await context.new_page()
         
         # Test with default blue color (should be adapted)
-        config = TestConfig(
+        config = TestConfig.load(
             base_url="http://localhost:8000",
             cursor_color="#007bff",
             video_enabled=True,
-            browser_headless=False,
+            browser_headless=True,
             browser_slow_mo=500
         )
         test = ForgeERPTestBase(page, config)
@@ -88,7 +88,7 @@ async def test_forgeerp_base_cursor_adaptation():
         await test.wait(1)
         
         # Test with custom color (should not be adapted)
-        config2 = TestConfig(base_url="http://localhost:8000", cursor_color="#ff0000")
+        config2 = TestConfig.load(base_url="http://localhost:8000", cursor_color="#ff0000")
         test2 = ForgeERPTestBase(page, config2)
         assert test2.config.cursor.color == "#ff0000"
         
@@ -239,7 +239,7 @@ def test_forgeerp_yaml_parser_method_signature():
 async def test_forgeerp_navigation_methods():
     """Test ForgeERP navigation methods."""
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=False)
+        browser = await p.chromium.launch(headless=True)
         context = await browser.new_context(
             viewport={"width": 1920, "height": 1080},
             record_video_dir="videos/test_forgeerp_navigation",
@@ -275,10 +275,10 @@ async def test_forgeerp_navigation_methods():
         
         page.goto = mock_goto
         
-        config = TestConfig(
+        config = TestConfig.load(
             base_url="http://localhost:8000",
             video_enabled=True,
-            browser_headless=False,
+            browser_headless=True,
             browser_slow_mo=500
         )
         test = ForgeERPTestBase(page, config)

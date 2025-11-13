@@ -7,11 +7,15 @@ Handles automatic and manual screenshots with smart organization.
 """
 
 import asyncio
+import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
 from playwright.async_api import Page
 
 from .config import ScreenshotConfig
+from .exceptions import ElementNotFoundError
+
+logger = logging.getLogger(__name__)
 
 
 class ScreenshotManager:
@@ -33,7 +37,7 @@ class ScreenshotManager:
         self._screenshot_metadata: Dict[str, Dict[str, Any]] = {}  # Store metadata for screenshots
         self._setup_directories()
     
-    def _setup_directories(self):
+    def _setup_directories(self) -> None:
         """Create screenshot directories if needed."""
         self.screenshot_dir = Path(self.config.dir)
         self.screenshot_dir.mkdir(parents=True, exist_ok=True)
@@ -99,8 +103,9 @@ class ScreenshotManager:
                 element_locator = self.page.locator(element).first
                 await element_locator.wait_for(state="visible", timeout=timeout)
                 await element_locator.screenshot(path=str(screenshot_path))
-            except Exception as e:
+            except (ElementNotFoundError, Exception) as e:
                 # Fallback to page screenshot if element not found
+                logger.warning(f"Element screenshot failed, falling back to page screenshot: {e}")
                 await self.page.screenshot(
                     path=str(screenshot_path),
                     full_page=use_full_page
@@ -155,7 +160,7 @@ class ScreenshotManager:
         name = f"failure_{error_name}_{self._screenshot_count + 1:03d}.{self.config.format}"
         return await self.capture(name=name, full_page=True)
     
-    def set_test_name(self, test_name: str):
+    def set_test_name(self, test_name: str) -> None:
         """
         Update test name for organization.
         
@@ -175,8 +180,57 @@ class ScreenshotManager:
         """
         return self._screenshot_metadata.copy()
     
-    def clear_metadata(self):
+    def clear_metadata(self) -> None:
         """Clear all screenshot metadata."""
         self._screenshot_metadata.clear()
+    
+    def validate_screenshots(self) -> Dict[str, Any]:
+        """
+        Validate all screenshots captured during test.
+        
+        Returns:
+            Dictionary with validation results
+        """
+        validation = {
+            'valid': True,
+            'total': len(self._screenshot_metadata),
+            'valid_count': 0,
+            'invalid_count': 0,
+            'errors': [],
+            'warnings': []
+        }
+        
+        if not self._screenshot_metadata:
+            validation['warnings'].append('No screenshots were captured')
+            return validation
+        
+        for screenshot_name, metadata in self._screenshot_metadata.items():
+            screenshot_path = Path(metadata.get('path', ''))
+            
+            if not screenshot_path.exists():
+                validation['invalid_count'] += 1
+                validation['valid'] = False
+                validation['errors'].append(f'Screenshot {screenshot_name} not found at {screenshot_path}')
+                continue
+            
+            # Check file size
+            try:
+                size = screenshot_path.stat().st_size
+                if size == 0:
+                    validation['invalid_count'] += 1
+                    validation['valid'] = False
+                    validation['errors'].append(f'Screenshot {screenshot_name} is empty (0 bytes)')
+                    continue
+                if size < 100:  # Less than 100 bytes is suspicious
+                    validation['warnings'].append(f'Screenshot {screenshot_name} is very small ({size} bytes)')
+            except Exception as e:
+                validation['invalid_count'] += 1
+                validation['valid'] = False
+                validation['errors'].append(f'Error checking screenshot {screenshot_name}: {e}')
+                continue
+            
+            validation['valid_count'] += 1
+        
+        return validation
 
 

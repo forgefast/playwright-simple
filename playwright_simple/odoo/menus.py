@@ -12,22 +12,26 @@ from playwright.async_api import Page
 
 from .selectors import get_menu_selectors, get_selector_list
 from .version_detector import detect_version, detect_edition
+from .specific.logo import LogoNavigator
+from ..core.constants import ACTION_DELAY
 
 
 class MenuNavigator:
     """Helper class for navigating Odoo menus."""
     
-    def __init__(self, page: Page, version: Optional[str] = None):
+    def __init__(self, page: Page, version: Optional[str] = None, cursor_manager=None):
         """
         Initialize menu navigator.
         
         Args:
             page: Playwright page instance
             version: Odoo version (auto-detected if None)
+            cursor_manager: Optional cursor manager for visual cursor movement
         """
         self.page = page
         self._version = version
         self._edition = None
+        self.cursor_manager = cursor_manager
     
     async def _get_version(self) -> str:
         """Get Odoo version (cached)."""
@@ -65,8 +69,21 @@ class MenuNavigator:
                 if await btn.count() > 0:
                     is_visible = await btn.is_visible()
                     if is_visible:
+                        # Move cursor to button if cursor_manager is available
+                        if self.cursor_manager:
+                            try:
+                                box = await btn.bounding_box()
+                                if box:
+                                    x = box['x'] + box['width'] / 2
+                                    y = box['y'] + box['height'] / 2
+                                    await self.cursor_manager.move_to(x, y)
+                                    await asyncio.sleep(ACTION_DELAY * 2)  # Minimal pause
+                                    await self.cursor_manager.show_click_effect(x, y)
+                                    await asyncio.sleep(0.05)  # Minimal pause
+                            except Exception:
+                                pass
                         await btn.click()
-                        await asyncio.sleep(0.8)
+                        await asyncio.sleep(ACTION_DELAY * 2)  # Minimal delay
                         return True
             except Exception:
                 continue
@@ -74,7 +91,7 @@ class MenuNavigator:
         # Try pressing Alt key (common shortcut for apps menu)
         try:
             await self.page.keyboard.press("Alt")
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(ACTION_DELAY * 2)  # Reduced from 0.5s
             # Check if menu opened
             menu_visible = await self.page.locator('.o_apps_menu, .o_main_navbar').is_visible()
             if menu_visible:
@@ -88,10 +105,87 @@ class MenuNavigator:
         """Close the Apps menu."""
         try:
             await self.page.keyboard.press("Escape")
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(ACTION_DELAY * 2)  # Reduced from 0.3s
             return True
         except Exception:
             return False
+    
+    async def _is_current_app(self, app_name: str) -> bool:
+        """
+        Check if already in the specified app.
+        
+        Args:
+            app_name: Name of the app to check
+            
+        Returns:
+            True if already in the app
+        """
+        try:
+            # Check URL for app indicators
+            current_url = self.page.url.lower()
+            app_name_lower = app_name.lower().strip()
+            
+            # Check if URL contains app name or related keywords
+            url_indicators = {
+                "vendas": ["sale", "sales"],
+                "contatos": ["contact", "partner", "res.partner"],
+                "crm": ["crm"],
+                "projetos": ["project"],
+                "inventário": ["stock", "inventory"],
+                "compras": ["purchase"],
+                "contabilidade": ["account"],
+                "recursos humanos": ["hr", "employee"],
+                "hr": ["hr", "employee"],
+                "website": ["website"],
+                "ecommerce": ["shop", "ecommerce"],
+            }
+            
+            if app_name_lower in url_indicators:
+                for indicator in url_indicators[app_name_lower]:
+                    if indicator in current_url:
+                        return True
+            
+            # Check breadcrumbs or menu title
+            breadcrumb_selectors = [
+                '.breadcrumb',
+                '.o_breadcrumb',
+                '[data-breadcrumb]',
+                '.o_main_navbar',
+            ]
+            
+            for selector in breadcrumb_selectors:
+                try:
+                    breadcrumb = self.page.locator(selector).first
+                    if await breadcrumb.count() > 0:
+                        text = await breadcrumb.text_content()
+                        if text and app_name_lower in text.lower():
+                            return True
+                except Exception:
+                    continue
+            
+            # Check if main menu button shows the app name
+            menu_button_selectors = [
+                'button.o_menu_toggle',
+                '.o_main_navbar .o_menu_toggle',
+                '[data-bs-toggle="offcanvas"]',
+            ]
+            
+            for selector in menu_button_selectors:
+                try:
+                    button = self.page.locator(selector).first
+                    if await button.count() > 0:
+                        # Check aria-label or title
+                        aria_label = await button.get_attribute('aria-label') or ''
+                        title = await button.get_attribute('title') or ''
+                        if app_name_lower in aria_label.lower() or app_name_lower in title.lower():
+                            return True
+                except Exception:
+                    continue
+                    
+        except Exception:
+            pass
+        
+        return False
     
     async def go_to_app(self, app_name: str) -> bool:
         """
@@ -103,57 +197,125 @@ class MenuNavigator:
         Returns:
             True if navigation was successful
         """
+        # Check if already in the app - if so, skip navigation
+        if await self._is_current_app(app_name):
+            return True
+        
+        # Translation mapping for common menu names (Portuguese -> English)
+        translations = {
+            "vendas": "Sales",
+            "contatos": "Contacts",
+            "crm": "CRM",
+            "projetos": "Project",
+            "inventário": "Inventory",
+            "compras": "Purchases",
+            "contabilidade": "Accounting",
+            "recursos humanos": "Human Resources",
+            "hr": "Human Resources",
+            "website": "Website",
+            "ecommerce": "eCommerce",
+            "vendas online": "Online Sales",
+        }
+        
+        # Try both original name and translation
+        names_to_try = [app_name]
+        app_name_lower = app_name.lower().strip()
+        if app_name_lower in translations:
+            names_to_try.append(translations[app_name_lower])
+        
         # Try to open apps menu first
         menu_opened = await self.open_apps_menu()
         
-        # Wait a bit for menu to appear
+        # Wait a bit for menu to appear (increased delay for visibility)
         if menu_opened:
-            await asyncio.sleep(1)
+            await asyncio.sleep(ACTION_DELAY * 2)  # Increased delay to show menu opening clearly
         else:
             # If menu didn't open, try searching in the page directly
             print(f"    ⚠️  Menu de apps não abriu, tentando buscar '{app_name}' diretamente na página...")
+            await asyncio.sleep(ACTION_DELAY * 1)  # Delay even if menu didn't open
         
-        # Try multiple selectors to find the app
-        app_selectors = [
-            f'a:has-text("{app_name}")',
-            f'a:has-text("{app_name}"):visible',
-            f'[data-menu-xmlid*="{app_name.lower()}"]',
-            f'a[title*="{app_name}"]',
-            f'.o_app[data-menu-xmlid*="{app_name.lower()}"]',
-            f'.o_menu_item:has-text("{app_name}")',
-            f'.o_apps_menu_item:has-text("{app_name}")',
-            f'.o_app:has-text("{app_name}")',
-            f'[aria-label*="{app_name}"]',
-            f'text="{app_name}"',
-        ]
-        
-        for selector in app_selectors:
-            try:
-                element = self.page.locator(selector).first
-                count = await element.count()
-                if count > 0:
-                    try:
-                        # Try to find visible element
-                        for i in range(count):
-                            elem = element.nth(i)
-                            if await elem.is_visible():
-                                await elem.click()
-                                await asyncio.sleep(1)
-                                await self.close_apps_menu()
-                                print(f"    ✅ App '{app_name}' encontrado e clicado")
-                                return True
-                    except Exception as e:
-                        # Try clicking first element anyway
+        # Try each name variant
+        for name_variant in names_to_try:
+            # Try multiple selectors to find the app
+            app_selectors = [
+                f'a:has-text("{name_variant}")',
+                f'a:has-text("{name_variant}"):visible',
+                f'[data-menu-xmlid*="{name_variant.lower()}"]',
+                f'a[title*="{name_variant}"]',
+                f'.o_app[data-menu-xmlid*="{name_variant.lower()}"]',
+                f'.o_menu_item:has-text("{name_variant}")',
+                f'.o_apps_menu_item:has-text("{name_variant}")',
+                f'.o_app:has-text("{name_variant}")',
+                f'[aria-label*="{name_variant}"]',
+                f'text="{name_variant}"',
+            ]
+            
+            for selector in app_selectors:
+                try:
+                    element = self.page.locator(selector).first
+                    count = await element.count()
+                    if count > 0:
                         try:
-                            await element.first.click()
-                            await asyncio.sleep(1)
-                            await self.close_apps_menu()
-                            print(f"    ✅ App '{app_name}' clicado (com exceção: {e})")
-                            return True
-                        except Exception:
-                            continue
-            except Exception:
-                continue
+                            # Try to find visible element
+                            for i in range(count):
+                                elem = element.nth(i)
+                                is_visible = await elem.is_visible()
+                                if is_visible:
+                                    try:
+                                        # Get element position for cursor movement
+                                        try:
+                                            box = await elem.bounding_box()
+                                            if box and self.cursor_manager:
+                                                x = box['x'] + box['width'] / 2
+                                                y = box['y'] + box['height'] / 2
+                                                
+                                                # Move cursor to element (with human-like speed - slower for visibility)
+                                                await self.cursor_manager.move_to(x, y)
+                                                await asyncio.sleep(ACTION_DELAY * 2)  # Increased pause after movement to show cursor position clearly
+                                                
+                                                # Show click effect BEFORE clicking (so it's visible)
+                                                await self.cursor_manager.show_click_effect(x, y)
+                                                await asyncio.sleep(0.05)  # Increased pause to show effect before click
+                                        except Exception:
+                                            pass
+                                        
+                                        await elem.click()
+                                        await asyncio.sleep(ACTION_DELAY * 2)  # Increased delay to show navigation result
+                                        await self.close_apps_menu()
+                                        await asyncio.sleep(ACTION_DELAY * 1)  # Increased delay after closing menu
+                                        return True
+                                    except Exception:
+                                        continue
+                        except Exception as e:
+                            # Try clicking first element anyway
+                            try:
+                                # Try to move cursor to element if cursor_manager is available
+                                try:
+                                    box = await element.first.bounding_box()
+                                    if box and self.cursor_manager:
+                                        x = box['x'] + box['width'] / 2
+                                        y = box['y'] + box['height'] / 2
+                                        
+                                        # Move cursor to element (with human-like speed - slower for visibility)
+                                        await self.cursor_manager.move_to(x, y)
+                                        await asyncio.sleep(ACTION_DELAY * 2)  # Increased pause after movement to show cursor position clearly
+                                        
+                                        # Show click effect BEFORE clicking (so it's visible)
+                                        await self.cursor_manager.show_click_effect(x, y)
+                                        await asyncio.sleep(0.05)  # Increased pause to show effect before click
+                                except Exception:
+                                    pass
+                                
+                                await element.first.click()
+                                await asyncio.sleep(ACTION_DELAY * 2)  # Increased delay to show navigation result
+                                await self.close_apps_menu()
+                                await asyncio.sleep(ACTION_DELAY * 1)  # Increased delay after closing menu
+                                print(f"    ✅ App '{name_variant}' clicado (com exceção: {e})")
+                                return True
+                            except Exception:
+                                continue
+                except Exception:
+                    continue
         
         # Close menu if opened
         if menu_opened:
@@ -225,7 +387,7 @@ class MenuNavigator:
         
         # If submenu is specified, navigate to it
         if submenu:
-            await asyncio.sleep(0.8)  # Wait for menu to load
+            await asyncio.sleep(ACTION_DELAY * 1)  # Wait for menu to load and show cursor position
             
             submenu_selectors = [
                 f'a:has-text("{submenu}")',
@@ -242,55 +404,74 @@ class MenuNavigator:
                     if await element.count() > 0:
                         try:
                             if await element.is_visible():
+                                # Get element position for cursor movement
+                                try:
+                                    box = await element.bounding_box()
+                                    if box:
+                                        x = box['x'] + box['width'] / 2
+                                        y = box['y'] + box['height'] / 2
+                                        
+                                        # Move cursor to element if cursor_manager is available (with human-like speed)
+                                        if self.cursor_manager:
+                                            await self.cursor_manager.move_to(x, y)
+                                            await asyncio.sleep(ACTION_DELAY * 2)  # Increased pause after movement to show cursor position clearly
+                                            
+                                            # Show click effect BEFORE clicking (so it's visible)
+                                            await self.cursor_manager.show_click_effect(x, y)
+                                            await asyncio.sleep(0.05)  # Increased pause to show effect before click
+                                        else:
+                                            # No cursor manager, just add delay
+                                            await asyncio.sleep(ACTION_DELAY * 2)
+                                except Exception:
+                                    pass
+                                
                                 await element.click()
-                                await asyncio.sleep(0.8)
+                                await asyncio.sleep(ACTION_DELAY * 2)  # Increased delay to show navigation result
                                 return True
                         except Exception:
                             await element.click()
-                            await asyncio.sleep(0.8)
+                            await asyncio.sleep(ACTION_DELAY * 2)  # Increased delay to show navigation result
                             return True
                 except Exception:
                     continue
             
-            # If submenu not found, try direct URL navigation
-            return await self._go_to_menu_by_url(menu, submenu)
+            # If submenu not found, try with translation (Portuguese -> English)
+            translations = {
+                "categorias": "Categories",
+                "pedidos": "Orders",
+                "clientes": "Customers",
+                "produtos": "Products",
+                "badges": "Badges",
+                "desafios": "Challenges",
+                "cursos": "Courses",
+            }
+            
+            submenu_lower = submenu.lower().strip()
+            if submenu_lower in translations:
+                translated_submenu = translations[submenu_lower]
+                # Try again with translated name
+                for selector in submenu_selectors:
+                    try:
+                        # Replace submenu in selector with translated version
+                        translated_selector = selector.replace(f'"{submenu}"', f'"{translated_submenu}"')
+                        element = self.page.locator(translated_selector).first
+                        if await element.count() > 0:
+                            try:
+                                if await element.is_visible():
+                                    await element.click()
+                                    await asyncio.sleep(ACTION_DELAY * 2)  # Increased delay to show navigation
+                                    return True
+                            except Exception:
+                                await element.click()
+                                await asyncio.sleep(ACTION_DELAY * 2)  # Increased delay to show navigation
+                                return True
+                    except Exception:
+                        continue
+            
+            # If still not found, return False (don't use URL navigation)
+            return False
         
         return True
-    
-    async def _go_to_menu_by_url(self, menu: str, submenu: Optional[str] = None) -> bool:
-        """
-        Navigate to menu by URL (fallback).
-        
-        Args:
-            menu: Main menu name
-            submenu: Submenu name (optional)
-            
-        Returns:
-            True if navigation was successful
-        """
-        # Common menu URLs (can be extended)
-        menu_urls = {
-            ("Vendas", "Pedidos"): "/web#action=sale.action_orders&model=sale.order&view_type=list",
-            ("Vendas", "Clientes"): "/web#action=sale.action_partner_form&model=res.partner&view_type=list",
-            ("Vendas", "Produtos"): "/web#action=product.action_product_template&model=product.template&view_type=list",
-            ("Contatos", "Clientes"): "/web#action=contacts.action_contacts&model=res.partner&view_type=list",
-            ("Contatos", "Categorias"): "/web#action=contacts.action_contacts_category&model=res.partner.category&view_type=list",
-            ("Website", "Cursos"): "/web#action=website_slides.slide_channel_action&model=slide.channel&view_type=list",
-            ("Gamificação", "Badges"): "/web#action=gamification.action_gamification_badge&model=gamification.badge&view_type=list",
-            ("Gamificação", "Desafios"): "/web#action=gamification.action_gamification_challenge&model=gamification.challenge&view_type=list",
-        }
-        
-        key = (menu, submenu) if submenu else (menu, None)
-        if key in menu_urls:
-            try:
-                base_url = self.page.url.split('/web')[0]
-                await self.page.goto(f"{base_url}{menu_urls[key]}", wait_until="networkidle", timeout=30000)
-                await asyncio.sleep(0.5)
-                return True
-            except Exception:
-                pass
-        
-        return False
     
     async def search_menu(self, search_text: str) -> bool:
         """
@@ -304,7 +485,7 @@ class MenuNavigator:
         """
         # Open apps menu first
         await self.open_apps_menu()
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(0.02)
         
         # Look for search input in apps menu
         search_selectors = [
@@ -318,7 +499,7 @@ class MenuNavigator:
                 search_input = self.page.locator(selector).first
                 if await search_input.count() > 0:
                     await search_input.fill(search_text)
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep(ACTION_DELAY * 2)  # Reduced from 0.5s
                     
                     # Try to click first result
                     result_selectors = [
@@ -331,7 +512,7 @@ class MenuNavigator:
                             result = self.page.locator(result_sel).first
                             if await result.count() > 0:
                                 await result.click()
-                                await asyncio.sleep(0.8)
+                                await asyncio.sleep(ACTION_DELAY * 2)  # Reduced from 0.8s
                                 await self.close_apps_menu()
                                 return True
                         except Exception:
@@ -347,26 +528,13 @@ class MenuNavigator:
         """
         Navigate to Odoo dashboard/home page.
         
+        Uses LogoNavigator to click the Odoo logo in the top-left corner.
+        
         Returns:
-            True if navigation was successful
+            True if navigation was successful, False otherwise
         """
-        try:
-            base_url = self.page.url.split('/web')[0]
-            # Try /web#home first (Odoo 14+)
-            url = f"{base_url}/web#home"
-            await self.page.goto(url, wait_until="networkidle", timeout=30000)
-            await asyncio.sleep(0.5)
-            return True
-        except Exception:
-            try:
-                # Fallback to /web
-                base_url = self.page.url.split('/web')[0]
-                url = f"{base_url}/web"
-                await self.page.goto(url, wait_until="networkidle", timeout=30000)
-                await asyncio.sleep(0.5)
-                return True
-            except Exception:
-                return False
+        logo_navigator = LogoNavigator(self.page, self.cursor_manager)
+        return await logo_navigator.click_logo()
     
     async def go_to_home(self) -> bool:
         """

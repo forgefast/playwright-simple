@@ -238,6 +238,8 @@ class ForgeERPTestBase(SimpleTestBase):
         """
         Submit a form and wait for HTMX response.
         
+        Uses cursor animation for visual feedback.
+        
         Args:
             button_selector: Selector for submit button
             wait_for_response: Whether to wait for HTMX response
@@ -246,7 +248,36 @@ class ForgeERPTestBase(SimpleTestBase):
         Returns:
             Self for method chaining
         """
-        await self.components.submit_form(button_selector, wait_for_response, container_selector)
+        if button_selector is None:
+            from .selectors import ForgeERPSelectors
+            button_selector = ForgeERPSelectors.BUTTON_SUBMIT
+        
+        # Use click() method which includes cursor animation
+        await self.click(button_selector, "Submit Button")
+        await asyncio.sleep(0.2)
+        
+        if wait_for_response:
+            # Try to detect container from current page context
+            if container_selector is None:
+                from .selectors import ForgeERPSelectors
+                # Check common result containers
+                common_containers = [
+                    ForgeERPSelectors.HTMX_PROVISION_RESULT,
+                    ForgeERPSelectors.HTMX_DEPLOY_RESULT,
+                    ForgeERPSelectors.HTMX_STATUS_RESULT,
+                    ForgeERPSelectors.HTMX_DIAGNOSTICS_SUMMARY,
+                    ForgeERPSelectors.HTMX_CLIENT_DIAGNOSTICS,
+                    ForgeERPSelectors.HTMX_SETUP_RESULT,
+                ]
+                
+                for container in common_containers:
+                    if await self.page.locator(container).count() > 0:
+                        container_selector = container
+                        break
+            
+            if container_selector:
+                await self.wait_for_htmx_response(container_selector)
+        
         return self
     
     async def wait_for_htmx_response(

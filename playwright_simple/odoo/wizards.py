@@ -115,7 +115,7 @@ class WizardHelper:
             else:
                 await field_helper.fill_char(field_name, str(value))
             
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(0.02)
         
         return True
     
@@ -151,7 +151,7 @@ class WizardHelper:
                 btn = self.page.locator(selector).first
                 if await btn.count() > 0:
                     await btn.click()
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep(0.05)
                     return True
             except Exception:
                 continue

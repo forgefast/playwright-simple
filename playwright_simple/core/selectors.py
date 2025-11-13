@@ -15,10 +15,23 @@ logger = logging.getLogger(__name__)
 
 
 class SelectorManager:
-    """Manages intelligent element selection with fallback strategies."""
+    """
+    Manages intelligent element selection with fallback strategies.
     
-    # Priority order for selector strategies
-    SELECTOR_PRIORITY = [
+    This class provides smart element finding with automatic fallback to
+    alternative selectors and retry logic with exponential backoff. It
+    prioritizes reliable selectors (data-testid, aria-label) over less
+    reliable ones (CSS, text).
+    
+    Attributes:
+        page: Playwright Page instance
+        timeout: Default timeout in milliseconds for element finding
+        retry_count: Number of retry attempts with exponential backoff
+        SELECTOR_PRIORITY: Priority order for selector strategies (class attribute)
+    """
+    
+    # Priority order for selector strategies (most reliable first)
+    SELECTOR_PRIORITY: List[str] = [
         'data-testid',
         'aria-label',
         'role',
@@ -27,14 +40,14 @@ class SelectorManager:
         'css',
     ]
     
-    def __init__(self, page: Page, timeout: int = 30000, retry_count: int = 3):
+    def __init__(self, page: Page, timeout: int = 30000, retry_count: int = 3) -> None:
         """
         Initialize selector manager.
         
         Args:
             page: Playwright page instance
-            timeout: Default timeout in milliseconds
-            retry_count: Number of retries with backoff
+            timeout: Default timeout in milliseconds (default: 30000)
+            retry_count: Number of retries with exponential backoff (default: 3)
         """
         self.page = page
         self.timeout = timeout
@@ -50,14 +63,29 @@ class SelectorManager:
         """
         Find element using intelligent fallback strategies.
         
+        Attempts to find an element using the primary selector. If that fails,
+        tries alternative selectors and retries with exponential backoff.
+        
         Args:
-            selector: Primary selector
-            description: Description for logging
-            timeout: Timeout in milliseconds (uses default if None)
-            state: Element state to wait for (visible, hidden, attached, detached)
+            selector: Primary CSS selector or text selector
+            description: Optional description for logging and error messages
+            timeout: Timeout in milliseconds (uses instance default if None)
+            state: Element state to wait for: "visible", "hidden", "attached",
+                  or "detached" (default: "visible")
             
         Returns:
-            Locator if found, None otherwise
+            Playwright Locator if element is found, None otherwise
+            
+        Example:
+            ```python
+            locator = await selector_manager.find_element(
+                'button.submit',
+                "Submit button",
+                timeout=5000
+            )
+            if locator:
+                await locator.click()
+            ```
         """
         timeout = timeout or self.timeout
         
@@ -80,7 +108,8 @@ class SelectorManager:
                 if await locator.count() > 0:
                     logger.info(f"Found element with alternative selector '{alt_selector}': {description}")
                     return locator
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Alternative selector '{alt_selector}' failed: {e}")
                 continue
         
         # Retry with exponential backoff
@@ -94,7 +123,8 @@ class SelectorManager:
                 if await locator.count() > 0:
                     logger.info(f"Found element on retry {attempt + 1}: {description}")
                     return locator
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Retry {attempt + 1} with selector '{selector}' failed: {e}")
                 continue
         
         logger.warning(f"Element not found after all attempts: {description or selector}")
@@ -104,11 +134,21 @@ class SelectorManager:
         """
         Generate alternative selectors based on primary selector.
         
+        Analyzes the primary selector and generates alternative selectors
+        that might match the same element. For example, if the selector
+        contains "button", it will also try role-based selectors.
+        
         Args:
-            selector: Primary selector
+            selector: Primary selector to analyze
             
         Returns:
-            List of alternative selectors
+            List of alternative selector strings to try
+            
+        Example:
+            ```python
+            alternatives = manager._generate_alternatives('button.submit')
+            # Might return: ['[role="button"]', 'text="Submit"']
+            ```
         """
         alternatives = []
         
@@ -138,12 +178,22 @@ class SelectorManager:
         """
         Create selector by text content.
         
+        Creates a Playwright text selector that matches elements containing
+        the specified text.
+        
         Args:
-            text: Text to match
-            exact: Whether to match exactly
+            text: Text content to match
+            exact: If True, matches exact text; if False, matches partial text
+                  (default: False)
             
         Returns:
-            Selector string
+            Selector string (e.g., 'text="Submit"' or 'text=Submit')
+            
+        Example:
+            ```python
+            selector = manager.by_text("Submit", exact=True)
+            # Returns: 'text="Submit"'
+            ```
         """
         if exact:
             return f'text="{text}"'
@@ -153,12 +203,21 @@ class SelectorManager:
         """
         Create selector by ARIA role.
         
+        Creates a Playwright role selector that matches elements with the
+        specified ARIA role, optionally filtered by accessible name.
+        
         Args:
-            role: ARIA role (button, link, textbox, etc.)
-            name: Optional name/accessible name
+            role: ARIA role (e.g., "button", "link", "textbox", "heading")
+            name: Optional accessible name to filter by (default: None)
             
         Returns:
-            Selector string
+            Selector string (e.g., 'role=button' or 'role=button[name="Submit"]')
+            
+        Example:
+            ```python
+            selector = manager.by_role("button", name="Submit")
+            # Returns: 'role=button[name="Submit"]'
+            ```
         """
         if name:
             return f'role={role}[name="{name}"]'
@@ -168,11 +227,21 @@ class SelectorManager:
         """
         Create selector by data-testid attribute.
         
+        Creates a selector for elements with a specific data-testid attribute.
+        This is the most reliable selector strategy as it's specifically
+        designed for testing.
+        
         Args:
-            test_id: Value of data-testid attribute
+            test_id: Value of the data-testid attribute
             
         Returns:
-            Selector string
+            Selector string (e.g., '[data-testid="submit-button"]')
+            
+        Example:
+            ```python
+            selector = manager.by_test_id("submit-button")
+            # Returns: '[data-testid="submit-button"]'
+            ```
         """
         return f'[data-testid="{test_id}"]'
     
@@ -180,11 +249,21 @@ class SelectorManager:
         """
         Create selector by label text.
         
+        Creates a selector that finds form fields by their associated label
+        text. Useful for form interactions where you know the label but not
+        the field's name or ID.
+        
         Args:
-            label_text: Label text
+            label_text: Text content of the label element
             
         Returns:
-            Selector string
+            Selector string (e.g., 'label:has-text("Email")')
+            
+        Example:
+            ```python
+            selector = manager.by_label("Email Address")
+            # Returns: 'label:has-text("Email Address")'
+            ```
         """
         return f'label:has-text("{label_text}")'
     
@@ -198,17 +277,35 @@ class SelectorManager:
         """
         Wait for element to appear with intelligent fallback.
         
+        Similar to find_element, but raises an exception if the element
+        is not found within the timeout. This is useful when the element
+        is required for the test to continue.
+        
         Args:
-            selector: Selector to wait for
-            description: Description for error messages
-            timeout: Timeout in milliseconds
-            state: Element state to wait for
+            selector: CSS selector or text selector to wait for
+            description: Optional description for error messages
+            timeout: Timeout in milliseconds (uses instance default if None)
+            state: Element state to wait for: "visible", "hidden", "attached",
+                  or "detached" (default: "visible")
             
         Returns:
-            Locator when found
+            Playwright Locator when element is found
             
         Raises:
-            TimeoutError: If element not found within timeout
+            PlaywrightTimeoutError: If element is not found within timeout
+            
+        Example:
+            ```python
+            try:
+                locator = await selector_manager.wait_for_element(
+                    'button.submit',
+                    "Submit button",
+                    timeout=10000
+                )
+                await locator.click()
+            except PlaywrightTimeoutError:
+                print("Submit button did not appear")
+            ```
         """
         locator = await self.find_element(selector, description, timeout, state)
         if locator is None:

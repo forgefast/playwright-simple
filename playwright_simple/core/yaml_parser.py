@@ -7,8 +7,9 @@ Converts YAML test definitions to executable Python functions.
 """
 
 import asyncio
+import logging
 from pathlib import Path
-from typing import Dict, Any, List, Callable, Optional
+from typing import Dict, Any, List, Callable, Optional, Tuple
 from playwright.async_api import Page
 
 try:
@@ -18,6 +19,9 @@ except ImportError:
     YAML_AVAILABLE = False
 
 from .base import SimpleTestBase
+from .exceptions import ElementNotFoundError, NavigationError
+
+logger = logging.getLogger(__name__)
 
 
 class YAMLParser:
@@ -185,7 +189,7 @@ class YAMLParser:
         return data
     
     @staticmethod
-    def to_python_function(yaml_data: Dict[str, Any]) -> Callable:
+    def to_python_function(yaml_data: Dict[str, Any]) -> Callable[..., Any]:
         """
         Convert YAML test definition to Python function.
         
@@ -231,6 +235,18 @@ class YAMLParser:
                         test.config.video.quality = video_data['quality']
                     if 'codec' in video_data:
                         test.config.video.codec = video_data['codec']
+                    if 'speed' in video_data:
+                        test.config.video.speed = float(video_data['speed'])
+                    if 'subtitles' in video_data:
+                        test.config.video.subtitles = bool(video_data['subtitles'])
+                    if 'narration' in video_data:
+                        test.config.video.narration = bool(video_data['narration'])
+                    if 'narration_lang' in video_data:
+                        test.config.video.narration_lang = video_data['narration_lang']
+                    if 'narration_engine' in video_data:
+                        test.config.video.narration_engine = video_data['narration_engine']
+                    if 'narration_slow' in video_data:
+                        test.config.video.narration_slow = bool(video_data['narration_slow'])
                 
                 if 'browser' in config_data:
                     browser_data = config_data['browser']
@@ -269,6 +285,7 @@ class YAMLParser:
                             await YAMLParser._execute_step(step, test)
                         except Exception as e:
                             # Log but don't fail on teardown errors
+                            logger.warning(f"Teardown step failed: {e}")
                             print(f"  ⚠️  Teardown step failed: {e}")
         
         # Set function attributes for session management
@@ -284,10 +301,28 @@ class YAMLParser:
         """
         Execute a single step from YAML.
         
+        Supports both standard actions (action: go_to) and direct method calls (go_to_setup:).
+        
         Args:
             step: Step dictionary
             test: Test base instance
         """
+        # Check if this is a direct method call (e.g., go_to_setup:)
+        # If step has only one key and it's not 'action', treat it as a method name
+        if len(step) == 1:
+            method_name = list(step.keys())[0]
+            if method_name != 'action' and hasattr(test, method_name):
+                # Direct method call (e.g., go_to_setup:)
+                method = getattr(test, method_name)
+                if callable(method):
+                    # Check if it's async
+                    if asyncio.iscoroutinefunction(method):
+                        await method()
+                    else:
+                        method()
+                    return
+        
+        # Standard action format
         action = step.get('action')
         if not action:
             return
@@ -408,7 +443,7 @@ class YAMLParser:
                 
     
     @staticmethod
-    def load_test(yaml_path: Path) -> tuple[str, Callable]:
+    def load_test(yaml_path: Path) -> Tuple[str, Callable[..., Any]]:
         """
         Load test from YAML file.
         
@@ -424,7 +459,7 @@ class YAMLParser:
         return (test_name, test_function)
     
     @staticmethod
-    def load_tests(yaml_dir: Path) -> List[tuple[str, Callable]]:
+    def load_tests(yaml_dir: Path) -> List[Tuple[str, Callable[..., Any]]]:
         """
         Load all tests from YAML directory.
         

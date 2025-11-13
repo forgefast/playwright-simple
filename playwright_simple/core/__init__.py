@@ -14,6 +14,15 @@ from .screenshot import ScreenshotManager
 from .video import VideoManager
 from .selectors import SelectorManager
 from .yaml_parser import YAMLParser
+from .tts import TTSManager
+from .exceptions import (
+    PlaywrightSimpleError,
+    ElementNotFoundError,
+    NavigationError,
+    VideoProcessingError,
+    ConfigurationError,
+    TTSGenerationError,
+)
 
 # Optional HTMX helper (for apps using HTMX)
 try:
@@ -27,7 +36,14 @@ try:
         "VideoManager",
         "SelectorManager",
         "YAMLParser",
+        "TTSManager",
         "HTMXHelper",
+        "PlaywrightSimpleError",
+        "ElementNotFoundError",
+        "NavigationError",
+        "VideoProcessingError",
+        "ConfigurationError",
+        "TTSGenerationError",
     ]
 except ImportError:
     __all__ = [
@@ -39,5 +55,12 @@ except ImportError:
         "VideoManager",
         "SelectorManager",
         "YAMLParser",
+        "TTSManager",
+        "PlaywrightSimpleError",
+        "ElementNotFoundError",
+        "NavigationError",
+        "VideoProcessingError",
+        "ConfigurationError",
+        "TTSGenerationError",
     ]
 

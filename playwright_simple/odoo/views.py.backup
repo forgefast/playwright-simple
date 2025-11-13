@@ -1,0 +1,657 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Odoo view interaction module.
+
+Handles interaction with different Odoo views (List, Kanban, Form, etc.).
+"""
+
+import asyncio
+from typing import Optional, List
+from playwright.async_api import Page
+
+from .selectors import get_view_selectors, get_button_selectors
+
+
+class ViewHelper:
+    """Helper class for interacting with Odoo views."""
+    
+    def __init__(self, page: Page):
+        """Initialize view helper."""
+        self.page = page
+    
+    async def switch_to_list_view(self) -> bool:
+        """Switch to List view."""
+        return await self._switch_view("list")
+    
+    async def switch_to_kanban_view(self) -> bool:
+        """Switch to Kanban view."""
+        return await self._switch_view("kanban")
+    
+    async def switch_to_form_view(self) -> bool:
+        """Switch to Form view."""
+        return await self._switch_view("form")
+    
+    async def switch_to_graph_view(self) -> bool:
+        """Switch to Graph view."""
+        return await self._switch_view("graph")
+    
+    async def switch_to_pivot_view(self) -> bool:
+        """Switch to Pivot view."""
+        return await self._switch_view("pivot")
+    
+    async def _switch_view(self, view_type: str) -> bool:
+        """Switch to a specific view type."""
+        # Special handling for list view: if we're in form view, try to go back first
+        if view_type == "list":
+            # Check if we're in form view
+            form_view = self.page.locator('.o_form_view, .o_form_editable')
+            if await form_view.count() > 0:
+                # Try to go back using breadcrumb or back button
+                back_selectors = [
+                    '.o_breadcrumb a:first-child',  # First breadcrumb item
+                    '.o_control_panel_breadcrumbs a',
+                    'button[title*="Voltar"], button[title*="Back"]',
+                    '.o_form_button_back',
+                ]
+                for selector in back_selectors:
+                    try:
+                        back_btn = self.page.locator(selector).first
+                        if await back_btn.count() > 0 and await back_btn.is_visible():
+                            await back_btn.click(timeout=5000)
+                            await asyncio.sleep(0.5)
+                            # After going back, we should be in list view
+                            return True
+                    except Exception:
+                        continue
+        
+        # Map view types to Portuguese/English button text
+        view_texts = {
+            "list": ["Lista", "List", "List View"],
+            "kanban": ["Kanban", "Kanban View"],
+            "form": ["Formulário", "Form", "Form View"],
+            "graph": ["Gráfico", "Graph", "Graph View"],
+            "pivot": ["Pivot", "Pivot View"],
+        }
+        
+        texts_to_try = view_texts.get(view_type, [view_type.title()])
+        
+        # Try multiple selector strategies
+        selectors = []
+        for text in texts_to_try:
+            selectors.extend([
+                f'button[data-view-type="{view_type}"]',
+                f'a[data-view-type="{view_type}"]',
+                f'.o_switch_view.o_{view_type}',  # Class-based selector for Odoo 18
+                f'.o_cp_switch_buttons .o_switch_view.o_{view_type}',
+                f'button:has-text("{text}")',
+                f'a:has-text("{text}")',
+                f'[role="button"]:has-text("{text}")',
+                f'.o_cp_switch_buttons button:has-text("{text}")',
+                f'.o_control_panel button:has-text("{text}")',
+                f'.o_view_controller button:has-text("{text}")',
+            ])
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_selectors = []
+        for selector in selectors:
+            if selector not in seen:
+                seen.add(selector)
+                unique_selectors.append(selector)
+        
+        for selector in unique_selectors:
+            try:
+                btn = self.page.locator(selector).first
+                if await btn.count() > 0 and await btn.is_visible():
+                    await btn.click(timeout=5000)
+                    await asyncio.sleep(0.5)  # Wait for view to switch
+                    return True
+            except Exception:
+                continue
+        
+        return False
+    
+    async def create_record(self) -> bool:
+        """Click the Create button to create a new record."""
+        button_sel = get_button_selectors().get("create", "")
+        selectors = button_sel.split(", ") if button_sel else []
+        
+        for selector in selectors:
+            try:
+                btn = self.page.locator(selector).first
+                if await btn.count() > 0 and await btn.is_visible():
+                    await btn.click()
+                    await asyncio.sleep(1)
+                    return True
+            except Exception:
+                continue
+        
+        return False
+    
+    async def open_record(self, index: int = 0) -> bool:
+        """Open a record from list/kanban view."""
+        selectors = [
+            f'tr.o_data_row:nth-child({index + 1})',
+            f'.o_kanban_record:nth-child({index + 1})',
+            f'tbody tr:nth-child({index + 1})',
+        ]
+        
+        for selector in selectors:
+            try:
+                row = self.page.locator(selector).first
+                if await row.count() > 0:
+                    await row.click()
+                    await asyncio.sleep(1)
+                    return True
+            except Exception:
+                continue
+        
+        return False
+    
+    async def delete_record(self, index: int = 0) -> bool:
+        """Delete a record."""
+        # First open the record
+        if not await self.open_record(index):
+            return False
+        
+        # Click delete button
+        button_sel = get_button_selectors().get("delete", "")
+        selectors = button_sel.split(", ") if button_sel else []
+        
+        for selector in selectors:
+            try:
+                btn = self.page.locator(selector).first
+                if await btn.count() > 0:
+                    await btn.click()
+                    await asyncio.sleep(0.05)
+                    # Confirm deletion if dialog appears
+                    await self.page.get_by_role("button", name="Ok").click()
+                    await asyncio.sleep(0.05)
+                    return True
+            except Exception:
+                continue
+        
+        return False
+    
+    async def search_records(self, search_text: str) -> List:
+        """
+        Search for records and return list of found records.
+        
+        Args:
+            search_text: Text to search for
+            
+        Returns:
+            List of record locators found
+        """
+        # Try multiple search input selectors
+        search_selectors = [
+            'input[placeholder*="Buscar"]',
+            '.o_searchview_input',
+            'input[placeholder*="Search"]',
+            'input.o_searchview_input',
+            '.o_cp_searchview input',
+            'input[type="search"]',
+        ]
+        
+        search_input = None
+        for selector in search_selectors:
+            try:
+                locator = self.page.locator(selector).first
+                if await locator.count() > 0 and await locator.is_visible():
+                    search_input = locator
+                    break
+            except Exception:
+                continue
+        
+        if not search_input:
+            # If no search input found, return empty list
+            return []
+        
+        try:
+            # Clear existing search first
+            await search_input.click()
+            await search_input.fill("")
+            await asyncio.sleep(0.1)
+            
+            # Type the search text
+            await search_input.fill(search_text)
+            await asyncio.sleep(0.2)  # Small delay for search to trigger
+            
+            # Press Enter to confirm search (Odoo sometimes needs this)
+            await search_input.press("Enter")
+            await asyncio.sleep(0.3)  # Wait for search results
+            
+            # Wait for loading to finish
+            try:
+                await self.page.wait_for_function("""
+                    () => {
+                        const loading = document.querySelector('.o_loading, .fa-spin');
+                        return !loading || loading.style.display === 'none';
+                    }
+                """, timeout=2000)
+            except Exception:
+                pass
+            
+            # Find all result records
+            record_selectors = [
+                'tr.o_data_row',
+                '.o_kanban_record',
+                'tbody tr',
+            ]
+            
+            found_records = []
+            for record_sel in record_selectors:
+                records = self.page.locator(record_sel)
+                count = await records.count()
+                if count > 0:
+                    for i in range(count):
+                        record = records.nth(i)
+                        if await record.is_visible():
+                            found_records.append(record)
+                    break
+            
+            return found_records
+        except Exception:
+            pass
+        
+        return []
+    
+    async def find_and_open_record(
+        self,
+        search_text: str,
+        position: Optional[str] = None
+    ) -> bool:
+        """
+        Search for records by text and open one based on position.
+        
+        Args:
+            search_text: Text to search for
+            position: Position to select ('primeiro', 'segundo', 'último', '1', '2', 'last').
+                     If None and multiple results, uses first. If single result, opens automatically.
+            
+        Returns:
+            True if record was found and opened
+            
+        Raises:
+            ValueError: If no records found or position invalid
+        """
+        # Search for records
+        records = await self.search_records(search_text)
+        
+        if not records:
+            raise ValueError(
+                f"Nenhum registro encontrado com '{search_text}'. "
+                f"Verifique se o texto está correto e se há registros na lista."
+            )
+        
+        # Determine which record to open
+        if len(records) == 1:
+            # Only one result, open it
+            record_index = 0
+        elif position:
+            # Parse position
+            position_lower = position.lower()
+            if position_lower in ['primeiro', 'first', '1']:
+                record_index = 0
+            elif position_lower in ['segundo', 'second', '2']:
+                record_index = 1
+            elif position_lower in ['último', 'last']:
+                record_index = len(records) - 1
+            else:
+                try:
+                    record_index = int(position) - 1
+                    if record_index < 0 or record_index >= len(records):
+                        raise ValueError(f"Posição '{position}' inválida. Encontrados {len(records)} registros.")
+                except ValueError as e:
+                    raise ValueError(
+                        f"Posição '{position}' inválida. "
+                        f"Use 'primeiro', 'segundo', 'último' ou um número (1, 2, etc.). "
+                        f"Encontrados {len(records)} registros."
+                    ) from e
+        else:
+            # Multiple results, no position specified, use first
+            record_index = 0
+        
+        # Open the selected record
+        record = records[record_index]
+        
+        # Try multiple strategies to click the record
+        click_strategies = [
+            # Strategy 1: Try to close any open dropdowns first, then click normally
+            lambda: self._click_record_safe(record, close_dropdowns=True),
+            # Strategy 2: Try clicking on a specific part of the record (name/link)
+            lambda: self._click_record_on_name(record),
+            # Strategy 3: Try clicking with force (bypasses actionability checks)
+            lambda: self._click_record_force(record),
+            # Strategy 4: Try clicking at a specific position (center of element)
+            lambda: self._click_record_at_position(record),
+        ]
+        
+        last_error = None
+        for strategy in click_strategies:
+            try:
+                await strategy()
+                await asyncio.sleep(1)
+                return True
+            except Exception as e:
+                last_error = e
+                continue
+        
+        # If all strategies failed, raise the last error with context
+        raise ValueError(
+            f"Erro ao abrir registro na posição {record_index + 1}. "
+            f"Total de registros encontrados: {len(records)}. "
+            f"Último erro: {str(last_error)}"
+        ) from last_error
+    
+    async def _click_record_safe(self, record, close_dropdowns: bool = False) -> None:
+        """Click record with safety checks."""
+        if close_dropdowns:
+            # Try to close any open dropdowns
+            try:
+                # Press Escape to close dropdowns
+                await self.page.keyboard.press("Escape")
+                await asyncio.sleep(0.2)
+            except Exception:
+                pass
+        
+        await record.click(timeout=10000)
+    
+    async def _click_record_on_name(self, record) -> None:
+        """Try clicking on the name/link part of the record."""
+        # Try to find a clickable element within the record (name, link, etc.)
+        name_selectors = [
+            "td.o_list_record_name a",
+            "td:first-child a",
+            ".o_field_name a",
+            "a",
+            "td:first-child",
+        ]
+        
+        for selector in name_selectors:
+            try:
+                name_element = record.locator(selector).first
+                if await name_element.count() > 0 and await name_element.is_visible():
+                    await name_element.click(timeout=10000)
+                    return
+            except Exception:
+                continue
+        
+        # If no name element found, try clicking the record itself
+        await record.click(timeout=10000)
+    
+    async def _click_record_force(self, record) -> None:
+        """Click record with force (bypasses actionability checks)."""
+        await record.click(force=True, timeout=10000)
+    
+    async def _click_record_at_position(self, record) -> None:
+        """Click record at a specific position (center)."""
+        box = await record.bounding_box()
+        if box:
+            x = box['x'] + box['width'] / 2
+            y = box['y'] + box['height'] / 2
+            await record.click(position={"x": box['width'] / 2, "y": box['height'] / 2}, timeout=10000)
+        else:
+            await record.click(force=True, timeout=10000)
+    
+    async def add_line(self, button_text: Optional[str] = None) -> bool:
+        """
+        Add a line to a One2many table.
+        
+        Args:
+            button_text: Optional button text to search for (e.g., "Adicionar linha", "Add a line").
+                        If not provided, auto-detects the add button.
+            
+        Returns:
+            True if line was added successfully
+            
+        Raises:
+            ValueError: If add button not found
+        """
+        # Common button texts for adding lines
+        if button_text:
+            button_texts = [button_text]
+        else:
+            # Try common texts in Portuguese and English
+            button_texts = [
+                "Adicionar linha",
+                "Add a line",
+                "Adicionar",
+                "Add",
+                "Adicionar uma linha",
+                "Add a new line",
+            ]
+        
+        # Selectors for add buttons in One2many fields
+        add_button_selectors = [
+            '.o_field_x2many_list_row_add a',
+            '.o_field_one2many .o_list_button_add',
+            'a:has-text("{}")',
+            'button:has-text("{}")',
+            '.o_field_one2many a[title*="Adicionar"]',
+            '.o_field_one2many a[title*="Add"]',
+        ]
+        
+        for btn_text in button_texts:
+            for selector_template in add_button_selectors:
+                try:
+                    if '{}' in selector_template:
+                        selector = selector_template.format(btn_text)
+                    else:
+                        selector = selector_template
+                    
+                    button = self.page.locator(selector).first
+                    if await button.count() > 0 and await button.is_visible():
+                        await button.click()
+                        await asyncio.sleep(0.05)
+                        return True
+                except Exception:
+                    continue
+        
+        # If not found with specific text, try generic selectors
+        generic_selectors = [
+            '.o_field_x2many_list_row_add a',
+            '.o_field_one2many .o_list_button_add',
+            '.o_field_one2many a[title*="Adicionar"]',
+            '.o_field_one2many a[title*="Add"]',
+        ]
+        
+        for selector in generic_selectors:
+            try:
+                button = self.page.locator(selector).first
+                if await button.count() > 0 and await button.is_visible():
+                    await button.click()
+                    await asyncio.sleep(0.05)
+                    return True
+            except Exception:
+                continue
+        
+        raise ValueError(
+            f"Botão para adicionar linha não encontrado. "
+            f"Verifique se está em uma tabela One2many e se o botão está visível."
+        )
+    
+    async def open_filter_menu(self) -> bool:
+        """
+        Open the Odoo filter dropdown menu by clicking on the filter dropdown arrow.
+        
+        Returns:
+            True if filter menu was opened successfully
+        """
+        # Try to find the filter dropdown button/arrow
+        # Odoo uses a dropdown toggle button with a caret/arrow icon
+        filter_dropdown_selectors = [
+            # Filter dropdown button with caret (most specific)
+            '.o_filters_menu .dropdown-toggle',
+            '.o_filters_menu button.dropdown-toggle',
+            'button.o_filters_menu_button.dropdown-toggle',
+            # Filter button with caret icon
+            '.o_filters_menu button:has(.fa-caret-down)',
+            '.o_filters_menu button:has(.fa-chevron-down)',
+            '.o_filters_menu button:has(.dropdown-caret)',
+            # Generic filter menu button
+            '.o_filters_menu button',
+            'button.o_filters_menu_button',
+            # Filter button in control panel
+            '.o_control_panel .o_filters_menu button',
+            '.o_control_panel button[title*="Filtros"]',
+            '.o_control_panel button[title*="Filters"]',
+            # Search view filter button
+            '.o_searchview .o_filters_menu button',
+            '.o_searchview_facet button',
+        ]
+        
+        for selector in filter_dropdown_selectors:
+            try:
+                filter_btn = self.page.locator(selector).first
+                if await filter_btn.count() > 0 and await filter_btn.is_visible():
+                    # Click the filter dropdown button
+                    await filter_btn.click()
+                    await asyncio.sleep(0.3)  # Wait for dropdown menu to open
+                    
+                    # Verify menu opened by checking if dropdown menu is visible
+                    dropdown_menu = self.page.locator('.o_filters_menu .dropdown-menu, .o_filters_menu_menu, .o_dropdown_menu').first
+                    if await dropdown_menu.count() > 0:
+                        is_visible = await dropdown_menu.is_visible()
+                        if is_visible:
+                            return True
+            except Exception:
+                continue
+        
+        # Fallback: try to find filter button by title/aria-label
+        filter_title_selectors = [
+            'button[title*="Filtros"]',
+            'button[title*="Filters"]',
+            'button[aria-label*="Filtros"]',
+            'button[aria-label*="Filters"]',
+        ]
+        
+        for selector in filter_title_selectors:
+            try:
+                filter_btn = self.page.locator(selector).first
+                if await filter_btn.count() > 0 and await filter_btn.is_visible():
+                    # Check if it's in the control panel/search area (not in a menu)
+                    is_in_control_panel = await filter_btn.evaluate("""
+                        (el) => {
+                            return el.closest('.o_control_panel, .o_searchview, .o_cp_searchview') !== null;
+                        }
+                    """)
+                    if is_in_control_panel:
+                        await filter_btn.click()
+                        await asyncio.sleep(0.3)
+                        return True
+            except Exception:
+                continue
+        
+        return False
+    
+    async def filter_records(self, filter_name: str, value: Optional[str] = None) -> bool:
+        """
+        Apply a filter using Odoo's filter menu.
+        
+        First opens the filter dropdown menu, then selects the filter option.
+        
+        Args:
+            filter_name: Name of the filter to apply (e.g., "Consumidor", "Revendedor")
+            value: Optional value for the filter
+            
+        Returns:
+            True if filter was applied successfully
+        """
+        # Step 1: Open the filter dropdown menu
+        menu_opened = await self.open_filter_menu()
+        
+        if not menu_opened:
+            # If menu didn't open, try the old method as fallback
+            filter_selectors = [
+                'button[title*="Filtros"]',
+                'button[title*="Filters"]',
+                '.o_filters_menu',
+                'button.o_filters_menu_button',
+                'button:has-text("Filtros")',
+                'button:has-text("Filters")'
+            ]
+            
+            filter_btn = None
+            for selector in filter_selectors:
+                locator = self.page.locator(selector).first
+                if await locator.count() > 0:
+                    filter_btn = locator
+                    break
+            
+            if filter_btn and await filter_btn.count() > 0:
+                await filter_btn.click()
+                await asyncio.sleep(0.3)  # Wait for filter menu to open
+            else:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Filter dropdown button not found. Cannot apply filter: {filter_name}")
+                return False
+        
+        # Step 2: Find and click the filter option in the dropdown menu
+            
+        # Try multiple strategies to find and click the filter option
+        filter_found = False
+        
+        # Strategy 1: Look in filter dropdown menu (most specific)
+        filter_dropdown_selectors = [
+            '.o_filters_menu .dropdown-menu',
+            '.o_filters_menu_menu',
+            '.o_dropdown_menu',
+            '.o_filters_menu ul',
+            '[role="menu"]',
+        ]
+        
+        for dropdown_selector in filter_dropdown_selectors:
+            try:
+                dropdown_menu = self.page.locator(dropdown_selector).first
+                if await dropdown_menu.count() > 0 and await dropdown_menu.is_visible():
+                    # Look for filter option within dropdown
+                    filter_option = dropdown_menu.locator(f'text={filter_name}').first
+                    if await filter_option.count() > 0:
+                        await filter_option.click()
+                        filter_found = True
+                        break
+                    
+                    # Try with partial match
+                    filter_option = dropdown_menu.locator(f'text=/{filter_name}/i').first
+                    if await filter_option.count() > 0:
+                        await filter_option.click()
+                        filter_found = True
+                        break
+                    
+                    # Try with contains
+                    filter_option = dropdown_menu.locator(f':has-text("{filter_name}")').first
+                    if await filter_option.count() > 0:
+                        await filter_option.click()
+                        filter_found = True
+                        break
+            except Exception:
+                continue
+        
+        # Strategy 2: Direct text match in page (fallback)
+        if not filter_found:
+            filter_option = self.page.locator(f'text={filter_name}').first
+            if await filter_option.count() > 0:
+                # Verify it's in a dropdown menu
+                is_in_dropdown = await filter_option.evaluate("""
+                    (el) => {
+                        return el.closest('.dropdown-menu, .o_filters_menu_menu, [role="menu"]') !== null;
+                    }
+                """)
+                if is_in_dropdown:
+                    await filter_option.click()
+                    filter_found = True
+        
+        if filter_found:
+            await asyncio.sleep(0.2)  # Wait for filter to be applied
+            return True
+        else:
+            # If filter not found, try to close the menu and return False
+            await self.page.keyboard.press('Escape')
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Filter '{filter_name}' not found in dropdown menu")
+            return False
+

@@ -72,7 +72,7 @@ class WorkflowHelper:
                 btn = self.page.locator(selector).first
                 if await btn.count() > 0:
                     await btn.click()
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep(0.05)
                     return True
             except Exception:
                 continue
