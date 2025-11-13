@@ -302,6 +302,7 @@ class VideoProcessor:
             Path to processed video, or None if processing failed
         """
         logger.info(f"process_all_in_one chamado: video={video_path.name}, test_name={test_name}, subtitles={self.config.video.subtitles}, steps={len(test_steps) if test_steps else 0}")
+        print(f"  🔍 DEBUG: process_all_in_one chamado: video={video_path.name}, test_name={test_name}")
         try:
             # Check if ffmpeg is available
             subprocess.run(['ffmpeg', '-version'], capture_output=True, check=True, timeout=5)

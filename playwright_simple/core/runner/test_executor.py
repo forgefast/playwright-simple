@@ -550,8 +550,10 @@ class TestExecutor:
                     )
                     
                     logger.info(f"needs_processing={needs_processing} (test_name={test_name is not None}, speed={self.config.video.speed}, subtitles={self.config.video.subtitles and bool(test_steps)}, audio_file={bool(self.config.video.audio_file)}, narration={bool(narration_audio)}, needs_conversion={needs_conversion})")
+                    print(f"  🔍 DEBUG: needs_processing={needs_processing}")
                     
                     if needs_processing:
+                        print(f"  🔍 DEBUG: Entrando no bloco de processamento")
                         _log_action("video_processing_started", test_name, {
                             "speed": self.config.video.speed,
                             "subtitles": self.config.video.subtitles,
@@ -564,6 +566,7 @@ class TestExecutor:
                         subtitle_reference_time = video_start_time if video_start_time else start_time
                         try:
                             logger.info(f"Chamando process_all_in_one: video={video_to_process.name}, test_name={test_name}")
+                            print(f"  🔍 DEBUG: Chamando process_all_in_one: video={video_to_process.name}, test_name={test_name}")
                             final_path = await self.video_processor.process_all_in_one(
                                 video_to_process,
                                 test_steps,
