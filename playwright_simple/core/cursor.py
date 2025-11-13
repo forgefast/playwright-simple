@@ -311,10 +311,8 @@ class CursorManager:
             x: X coordinate
             y: Y coordinate
         """
-        # Debug: Log movement
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.debug(f"Moving cursor to ({x}, {y})")
+        # Debug: Print movement
+        print(f"🖱️  DEBUG: move_to called with ({x}, {y})")
         
         # Ensure cursor exists before moving
         await self._ensure_cursor_exists()
@@ -328,16 +326,22 @@ class CursorManager:
         current_pos = await self.page.evaluate("""
             (function() {
                 const cursor = document.getElementById('playwright-cursor');
+                console.log('DEBUG: Checking cursor existence, found:', cursor ? 'YES' : 'NO');
                 if (cursor) {
                     const left = parseFloat(cursor.style.left) || 0;
                     const top = parseFloat(cursor.style.top) || 0;
+                    console.log('DEBUG: Current cursor position:', left, top);
                     return {x: left, y: top, exists: true};
                 }
+                console.error('DEBUG: Cursor not found in DOM!');
                 return {x: 0, y: 0, exists: false};
             })();
         """)
         
+        print(f"🖱️  DEBUG: Current cursor position: {current_pos}")
+        
         if not current_pos.get('exists'):
+            print("⚠️  DEBUG: Cursor doesn't exist, creating it...")
             # Cursor doesn't exist, create it first
             await self._ensure_cursor_exists()
             current_pos = {'x': default_x, 'y': default_y}
@@ -345,12 +349,16 @@ class CursorManager:
         current_x = current_pos.get('x', default_x) if current_pos.get('x', 0) > 0 else default_x
         current_y = current_pos.get('y', default_y) if current_pos.get('y', 0) > 0 else default_y
         
-        # Move cursor with smooth animation - use simpler approach for reliability
+        print(f"🖱️  DEBUG: Moving from ({current_x}, {current_y}) to ({x}, {y})")
+        
+        # Move cursor - use direct style update first to test
         result = await self.page.evaluate(f"""
             (function() {{
                 const cursor = document.getElementById('playwright-cursor');
+                console.log('DEBUG move_to: Looking for cursor, found:', cursor ? 'YES' : 'NO');
+                
                 if (!cursor) {{
-                    console.error('Cursor not found in move_to!');
+                    console.error('DEBUG move_to: Cursor not found in DOM!');
                     return {{success: false, error: 'Cursor not found'}};
                 }}
                 
@@ -359,7 +367,7 @@ class CursorManager:
                 const targetX = {x};
                 const targetY = {y};
                 
-                console.log('Moving cursor from (' + currentX + ', ' + currentY + ') to (' + targetX + ', ' + targetY + ')');
+                console.log('DEBUG move_to: Moving from (' + currentX + ', ' + currentY + ') to (' + targetX + ', ' + targetY + ')');
                 
                 // Ensure cursor is visible
                 cursor.style.display = 'block';
@@ -367,37 +375,52 @@ class CursorManager:
                 cursor.style.opacity = '1';
                 cursor.style.zIndex = '2147483647';
                 
-                // Animate movement with requestAnimationFrame
-                const duration = {self.config.animation_speed} * 1000;
-                const startTime = performance.now();
+                // First, move directly to test if it works
+                cursor.style.left = targetX + 'px';
+                cursor.style.top = targetY + 'px';
+                console.log('DEBUG move_to: Direct move applied, new position:', cursor.style.left, cursor.style.top);
                 
-                function animate() {{
-                    const elapsed = performance.now() - startTime;
-                    const progress = Math.min(elapsed / duration, 1);
+                // Then animate if needed
+                const duration = {self.config.animation_speed} * 1000;
+                if (duration > 0) {{
+                    const startTime = performance.now();
+                    const startX = currentX;
+                    const startY = currentY;
                     
-                    // Ease-out cubic
-                    const easeOut = 1 - Math.pow(1 - progress, 3);
-                    
-                    const posX = currentX + (targetX - currentX) * easeOut;
-                    const posY = currentY + (targetY - currentY) * easeOut;
-                    
-                    cursor.style.left = posX + 'px';
-                    cursor.style.top = posY + 'px';
-                    
-                    if (progress < 1) {{
-                        requestAnimationFrame(animate);
-                    }} else {{
-                        // Final position
-                        cursor.style.left = targetX + 'px';
-                        cursor.style.top = targetY + 'px';
-                        console.log('Cursor movement complete to (' + targetX + ', ' + targetY + ')');
+                    function animate() {{
+                        const elapsed = performance.now() - startTime;
+                        const progress = Math.min(elapsed / duration, 1);
+                        
+                        // Ease-out cubic
+                        const easeOut = 1 - Math.pow(1 - progress, 3);
+                        
+                        const posX = startX + (targetX - startX) * easeOut;
+                        const posY = startY + (targetY - startY) * easeOut;
+                        
+                        cursor.style.left = posX + 'px';
+                        cursor.style.top = posY + 'px';
+                        
+                        if (progress < 1) {{
+                            requestAnimationFrame(animate);
+                        }} else {{
+                            // Final position
+                            cursor.style.left = targetX + 'px';
+                            cursor.style.top = targetY + 'px';
+                            console.log('DEBUG move_to: Animation complete');
+                        }}
                     }}
+                    
+                    // Reset to start position and animate
+                    cursor.style.left = startX + 'px';
+                    cursor.style.top = startY + 'px';
+                    requestAnimationFrame(animate);
                 }}
                 
-                requestAnimationFrame(animate);
-                return {{success: true}};
+                return {{success: true, currentX: parseFloat(cursor.style.left), currentY: parseFloat(cursor.style.top)}};
             }})();
         """)
+        
+        print(f"🖱️  DEBUG: move_to result: {result}")
         
         if result and not result.get('success'):
             print(f"⚠️  Warning: Cursor movement may have failed: {result.get('error', 'Unknown error')}")
@@ -407,7 +430,7 @@ class CursorManager:
     
     async def show_click_effect(self, x: float, y: float):
         """
-        Show click effect at position.
+        Show click effect at position and wait for animation to complete.
         
         Args:
             x: X coordinate
@@ -419,10 +442,17 @@ class CursorManager:
         # Ensure cursor exists
         await self._ensure_cursor_exists()
         
+        # Show click effect with animation and wait for it to complete
         await self.page.evaluate(f"""
             (function() {{
-                const effect = document.getElementById('playwright-click-effect');
-                if (effect) {{
+                return new Promise((resolve) => {{
+                    const effect = document.getElementById('playwright-click-effect');
+                    if (!effect) {{
+                        resolve({{success: false, error: 'Click effect element not found'}});
+                        return;
+                    }}
+                    
+                    // Reset to initial state
                     effect.style.left = '{x}px';
                     effect.style.top = '{y}px';
                     effect.style.width = '0px';
@@ -431,14 +461,24 @@ class CursorManager:
                     effect.style.opacity = '1';
                     effect.style.display = 'block';
                     effect.style.visibility = 'visible';
+                    effect.style.transition = 'all 0.3s ease-out';
                     
-                    setTimeout(() => {{
+                    // Force reflow
+                    effect.offsetHeight;
+                    
+                    // Animate to expanded state
+                    requestAnimationFrame(() => {{
                         effect.style.width = '40px';
                         effect.style.height = '40px';
                         effect.style.borderWidth = '2px';
                         effect.style.opacity = '0';
-                    }}, 10);
-                }}
+                        
+                        // Wait for animation to complete
+                        setTimeout(() => {{
+                            resolve({{success: true, completed: true}});
+                        }}, 300); // Match transition duration
+                    }});
+                }});
             }})();
         """)
     
