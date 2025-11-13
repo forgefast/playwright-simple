@@ -563,6 +563,7 @@ class TestExecutor:
                         # Use video_start_time for subtitle timing if available
                         subtitle_reference_time = video_start_time if video_start_time else start_time
                         try:
+                            logger.info(f"Chamando process_all_in_one: video={video_to_process.name}, test_name={test_name}")
                             final_path = await self.video_processor.process_all_in_one(
                                 video_to_process,
                                 test_steps,
@@ -572,11 +573,17 @@ class TestExecutor:
                                 narration_audio=narration_audio,
                                 test_name=test_name
                             )
+                            logger.info(f"process_all_in_one retornou: {final_path.name if final_path else None} (suffix={final_path.suffix if final_path else None})")
                         except VideoProcessingError as e:
-                            logger.error(f"Erro ao processar vídeo: {e}")
+                            logger.error(f"Erro ao processar vídeo: {e}", exc_info=True)
                             if self.config.video.codec == "mp4":
                                 raise RuntimeError(f"Falha ao processar vídeo para MP4: {e}") from e
                             # If not MP4, use original video
+                            final_path = video_to_process
+                        except Exception as e:
+                            logger.error(f"Erro inesperado ao processar vídeo: {e}", exc_info=True)
+                            if self.config.video.codec == "mp4":
+                                raise RuntimeError(f"Falha ao processar vídeo para MP4: {e}") from e
                             final_path = video_to_process
                         if final_path and final_path.exists():
                             # If we converted, rename to expected mp4 name
