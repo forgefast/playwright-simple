@@ -307,13 +307,16 @@ class VideoProcessor:
             # Check if ffmpeg is available
             subprocess.run(['ffmpeg', '-version'], capture_output=True, check=True, timeout=5)
             logger.debug("FFmpeg disponível")
-        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+            print(f"  🔍 DEBUG: FFmpeg disponível")
+        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as e:
             logger.warning("ffmpeg não encontrado. Vídeo não será processado.")
+            print(f"  🔍 DEBUG: FFmpeg NÃO encontrado: {e}")
             return video_path
         
         # Determine output extension based on config
         output_ext = ".mp4" if self.config.video.codec == "mp4" else video_path.suffix
         output_path = video_path.parent / f"{video_path.stem}_processed{output_ext}"
+        print(f"  🔍 DEBUG: output_path={output_path.name}")
         
         try:
             # Create intro screen if test_name is provided
@@ -572,13 +575,16 @@ class VideoProcessor:
             
             # Log command for debugging
             logger.info(f"Processando vídeo: {video_path.name} -> {output_path.name}")
+            print(f"  🔍 DEBUG: Processando vídeo: {video_path.name} -> {output_path.name}")
             logger.debug(f"FFmpeg command: {' '.join(cmd)}")
             if intro_video and intro_video.exists():
                 logger.info(f"Tela inicial incluída: {intro_video.name} ({intro_video.stat().st_size / 1024:.1f}KB)")
+                print(f"  🔍 DEBUG: Tela inicial incluída: {intro_video.name}")
             
             # Run ffmpeg (single pass - much faster!)
             # Increased timeout for large videos with subtitles and intro screen
             logger.info("Iniciando processamento FFmpeg...")
+            print(f"  🔍 DEBUG: Iniciando processamento FFmpeg...")
             try:
                 result = subprocess.run(
                     cmd,
