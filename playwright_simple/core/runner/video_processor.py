@@ -446,8 +446,11 @@ class VideoProcessor:
             
             # Fast path: Only intro + conversion, no filters, no speed change
             # Even with subtitles, we can optimize by using faster preset
+            # BUT: if we have video filters (like subtitles), we CANNOT use fast path
+            # Fast path is only for simple intro + conversion without any filters
             use_fast_path = (has_intro and not audio_filters and 
-                           self.config.video.speed == 1.0 and not has_audio_input)
+                           self.config.video.speed == 1.0 and not has_audio_input and
+                           not has_video_filters)  # NO VIDEO FILTERS for fast path!
             
             if use_fast_path:
                 if not has_video_filters:
