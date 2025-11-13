@@ -523,6 +523,7 @@ class TestExecutor:
                                 logger.warning(f"Erro ao deletar vídeo antigo {video_file.name}: {e}")
                     
                     # Process video: speed, subtitles, and audio in ONE pass (much faster!)
+                    logger.info(f"Preparando processamento de vídeo: found_video={found_video.name if found_video else None}, expected_path={expected_path.name}, needs_conversion={needs_conversion}")
                     # Generate narration if enabled
                     narration_audio = None
                     if self.config.video.narration and test_steps:
@@ -547,6 +548,8 @@ class TestExecutor:
                         narration_audio or
                         needs_conversion  # Always process if we need to convert webm to mp4
                     )
+                    
+                    logger.info(f"needs_processing={needs_processing} (test_name={test_name is not None}, speed={self.config.video.speed}, subtitles={self.config.video.subtitles and bool(test_steps)}, audio_file={bool(self.config.video.audio_file)}, narration={bool(narration_audio)}, needs_conversion={needs_conversion})")
                     
                     if needs_processing:
                         _log_action("video_processing_started", test_name, {
