@@ -319,20 +319,25 @@ class VideoProcessor:
         print(f"  🔍 DEBUG: output_path={output_path.name}")
         
         try:
+            print(f"  🔍 DEBUG: Entrando no try de process_all_in_one")
             # Create intro screen if test_name is provided
             intro_video = None
             formatted_name = None
             if test_name:
                 formatted_name = self._format_video_name(test_name)
                 logger.info(f"Criando tela inicial para: {formatted_name}")
+                print(f"  🔍 DEBUG: Criando tela inicial para: {formatted_name}")
                 intro_video = self._create_intro_screen(formatted_name, duration=3.0)
                 if intro_video and intro_video.exists():
                     size_kb = intro_video.stat().st_size / 1024
                     logger.info(f"Tela inicial criada com sucesso: {intro_video.name} ({size_kb:.1f}KB)")
+                    print(f"  🔍 DEBUG: Tela inicial criada: {intro_video.name}")
                 else:
                     logger.warning(f"Tela inicial não foi criada para: {formatted_name}")
+                    print(f"  🔍 DEBUG: Tela inicial NÃO foi criada")
             
             # Build complex filter combining speed, subtitles, and audio
+            print(f"  🔍 DEBUG: Construindo filtros...")
             video_filters = []
             audio_filters = []
             input_files = []
@@ -383,6 +388,7 @@ class VideoProcessor:
             # 2. Subtitles (if enabled and steps available)
             srt_path = None
             if self.config.video.subtitles and test_steps:
+                print(f"  🔍 DEBUG: Gerando legendas...")
                 # test_steps can be TestStep objects or dicts - _generate_srt_file handles both
                 srt_path = await subtitle_generator.generate(video_path, test_steps, start_time)
                 if srt_path and srt_path.exists():
@@ -394,7 +400,12 @@ class VideoProcessor:
                     # WARNING: This filter is SLOW and forces full re-encode
                     # Consider disabling subtitles if speed is critical
                     logger.warning(f"Adicionando legendas (isso pode demorar): {srt_path.name}")
+                    print(f"  🔍 DEBUG: Legendas geradas: {srt_path.name}, adicionando filtro")
                     video_filters.append(f"subtitles='{srt_path_escaped}':force_style='FontSize=24,PrimaryColour=&Hffffff,OutlineColour=&H000000,Outline=2,Alignment=2'")
+                else:
+                    print(f"  🔍 DEBUG: Legendas NÃO foram geradas")
+            else:
+                print(f"  🔍 DEBUG: Legendas desabilitadas ou sem steps (subtitles={self.config.video.subtitles}, test_steps={bool(test_steps)})")
             
             # 3. Build ffmpeg command
             cmd = ['ffmpeg'] + input_files
@@ -519,8 +530,10 @@ class VideoProcessor:
                 else:
                     audio_output_label = f'[{main_video_idx}:a]?'  # Use input directly (optional)
             
+            print(f"  🔍 DEBUG: filter_complex_parts={len(filter_complex_parts)}, use_fast_path={use_fast_path}")
             if filter_complex_parts and not use_fast_path:
                 # Full processing path (with filters)
+                print(f"  🔍 DEBUG: Entrando no caminho completo de processamento")
                 cmd.extend(['-filter_complex', ';'.join(filter_complex_parts)])
                 # Map video stream
                 if video_output_label == '[v]':
@@ -548,6 +561,7 @@ class VideoProcessor:
                     cmd.extend(['-c:v', 'copy'])  # No video filters, just copy
             else:
                 # No filters, just copy streams
+                print(f"  🔍 DEBUG: Sem filtros, apenas copiando streams (RETORNANDO AQUI!)")
                 cmd.extend(['-c:v', 'copy'])
                 cmd.extend(['-c:a', 'copy'])
                 cmd.extend(['-y', str(output_path)])
@@ -557,6 +571,7 @@ class VideoProcessor:
                     video_path.unlink()
                     output_path.rename(video_path)
                     return video_path
+                print(f"  🔍 DEBUG: Copy falhou, retornando vídeo original")
                 return video_path
             
             # Audio codec
