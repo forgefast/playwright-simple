@@ -311,6 +311,11 @@ class CursorManager:
             x: X coordinate
             y: Y coordinate
         """
+        # Debug: Log movement
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.debug(f"Moving cursor to ({x}, {y})")
+        
         # Ensure cursor exists before moving
         await self._ensure_cursor_exists()
         
@@ -340,19 +345,21 @@ class CursorManager:
         current_x = current_pos.get('x', default_x) if current_pos.get('x', 0) > 0 else default_x
         current_y = current_pos.get('y', default_y) if current_pos.get('y', 0) > 0 else default_y
         
-        # Move cursor with smooth animation
-        await self.page.evaluate(f"""
+        # Move cursor with smooth animation - use simpler approach for reliability
+        result = await self.page.evaluate(f"""
             (function() {{
                 const cursor = document.getElementById('playwright-cursor');
                 if (!cursor) {{
-                    console.error('Cursor not found!');
-                    return;
+                    console.error('Cursor not found in move_to!');
+                    return {{success: false, error: 'Cursor not found'}};
                 }}
                 
                 const currentX = {current_x};
                 const currentY = {current_y};
                 const targetX = {x};
                 const targetY = {y};
+                
+                console.log('Moving cursor from (' + currentX + ', ' + currentY + ') to (' + targetX + ', ' + targetY + ')');
                 
                 // Ensure cursor is visible
                 cursor.style.display = 'block';
@@ -383,12 +390,17 @@ class CursorManager:
                         // Final position
                         cursor.style.left = targetX + 'px';
                         cursor.style.top = targetY + 'px';
+                        console.log('Cursor movement complete to (' + targetX + ', ' + targetY + ')');
                     }}
                 }}
                 
                 requestAnimationFrame(animate);
+                return {{success: true}};
             }})();
         """)
+        
+        if result and not result.get('success'):
+            print(f"⚠️  Warning: Cursor movement may have failed: {result.get('error', 'Unknown error')}")
         
         # Wait for animation to complete
         await asyncio.sleep(self.config.animation_speed + 0.1)
