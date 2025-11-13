@@ -1,449 +1,229 @@
-# Handoff Note - Tela Inicial de Vídeos e Correções
+# Handoff Note - Processamento de Vídeo e Legendas
 
-**Data**: 2025-01-XX (Última atualização)  
-**Status**: Tela Inicial Implementada ✅ | Logging Detalhado Implementado ✅ | Problema de Vídeo Corrigido ✅
+**Data**: 2025-11-13  
+**Status**: 🔧 Em Progresso - Problema Principal Identificado e Parcialmente Corrigido
 
 ---
 
-## 🚨 PROBLEMA ATUAL
+## 🎯 OBJETIVO
 
-### Vídeo Está Sendo Cortado
-- **Sintoma**: Vídeos gerados têm duração menor que o esperado (ex: teste de 21.48s gera vídeo de 15.72s)
-- **Teste Real**: `test_colaborador_portal.yaml` em `/home/gabriel/softhill/presentation/playwright/tests/yaml/`
-- **Status**: Investigação em andamento - pode ser problema no processamento FFmpeg ou na gravação do Playwright
+Corrigir o processamento de vídeo que estava falhando silenciosamente. O vídeo webm era gravado, mas o processamento para MP4 com tela inicial e legendas não estava sendo executado.
 
-### Tela Inicial Implementada
-- ✅ **Concluído**: Tela inicial com gradiente roxo/azul (#667eea → #764ba2) implementada
-- ✅ Formatação automática do nome do teste (ex: `test_colaborador_portal` → "Colaborador Portal")
-- ✅ Texto "Gravando vídeo de teste..." abaixo do título
-- ⚠️ **Problema**: Tela inicial não está sendo adicionada porque `needs_processing` é False quando não há speed/subtitles/audio
-- 🔧 **Correção Parcial**: Adicionado `test_name is not None` em `needs_processing`, mas ainda precisa verificar se está funcionando
+---
 
-### Mudanças Recentes
-1. **Adicionada função `_format_video_name()`** em `video_processor.py`:
-   - Remove prefixos `test_`, `Test_`
-   - Remove prefixos numéricos (01_, 02_, etc.)
-   - Converte snake_case para Title Case
+## 🔍 PROBLEMA IDENTIFICADO
 
-2. **Adicionada função `_create_intro_screen()`** em `video_processor.py`:
-   - Cria vídeo de 3 segundos com gradiente roxo/azul
-   - Usa FFmpeg com filtros `geq` para gradiente (fallback para cor sólida se falhar)
-   - Adiciona texto centralizado com nome formatado
+### Sintoma Principal
+- Vídeo webm era gravado com sucesso
+- Processamento para MP4 não ocorria
+- Erro: `RuntimeError: Vídeo deveria ser MP4 mas é .webm`
+- `process_all_in_one` estava sendo chamado, mas retornava o vídeo original sem processar
 
-3. **Modificado `process_all_in_one()`**:
-   - Aceita parâmetro `test_name` opcional
-   - Concatena tela inicial + vídeo principal usando `concat` filter
-   - Ajusta índices de input/output para considerar tela inicial
+### Causa Raiz
+1. **Lógica de `use_fast_path` incorreta**: Não verificava `has_video_filters`, permitindo usar fast path mesmo com legendas
+2. **Falta de `-y` no comando FFmpeg**: Quando `use_fast_path=True`, o comando não tinha `-y` para sobrescrever arquivo de saída
+3. **Early return no bloco `else`**: Quando não havia `filter_complex_parts` e não estava usando fast path, o código retornava o vídeo original sem processar
 
-4. **Modificado `test_executor.py`**:
-   - Passa `test_name` para `process_all_in_one()`
-   - `needs_processing` agora inclui `test_name is not None`
+---
 
-5. **Removido `-shortest` flag** do FFmpeg:
-   - Estava cortando vídeo quando áudio era mais curto
-   - Agora deixa vídeo determinar duração
+## ✅ CORREÇÕES APLICADAS
 
-### Mudanças Recentes que Podem Ter Causado o Problema
-1. **Remoção de debugs e verificações redundantes**:
-   - Removidas chamadas de `_remove_duplicate_cursors()` em múltiplos lugares
-   - Removidos screenshots de debug
-   - Removidas verificações de cursor duplicado após cada ação
+### 1. Correção da Lógica `use_fast_path`
+**Arquivo**: `playwright_simple/core/runner/video_processor.py` (linha ~451)
 
-2. **Refatoração do `cursor.py`**:
-   - Arquivo reduzido de 879 linhas para 109 linhas
-   - Código modularizado em: `cursor_styles.py`, `cursor_debug.py`, `cursor_elements.py`, `cursor_movement.py`, `cursor_effects.py`, `cursor_injection.py`
-   - Removida classe `CursorDebug` do `CursorManager`
-
-3. **Correção no método `type()`**:
-   - Adicionado clique no elemento mesmo quando não há coordenadas (para garantir foco)
-
-### Arquivos Modificados Recentemente
-- `playwright_simple/core/cursor.py` - Refatorado completamente
-- `playwright_simple/core/cursor_*.py` - Novos módulos criados
-- `playwright_simple/core/interactions.py` - Removidas verificações redundantes
-- `playwright_simple/core/helpers.py` - Removidas verificações redundantes
-- `playwright_simple/core/base.py` - Removidas verificações redundantes
-- `playwright_simple/odoo/auth.py` - Removidos debugs e prints
-
-### Próximos Passos para Resolver
-
-#### 1. Testar com Teste Real
-```bash
-cd /home/gabriel/softhill/presentation/playwright
-python3 run_one_test.py 18  # ou "colaborador_portal"
-```
-
-**OU** simplesmente passar o YAML como parâmetro:
 ```python
-from pathlib import Path
-from playwright_simple import TestRunner
-from playwright_simple.odoo import OdooYAMLParser
-from racco_config import get_racco_config
+# ANTES (ERRADO):
+use_fast_path = (has_intro and not audio_filters and 
+               self.config.video.speed == 1.0 and not has_audio_input)
 
-yaml_path = Path("tests/yaml/test_colaborador_portal.yaml")
-yaml_data = OdooYAMLParser.parse_file(yaml_path)
-test_function = OdooYAMLParser.to_python_function(yaml_data)
-
-config = get_racco_config()
-runner = TestRunner(config=config)
-await runner.run_test("Colaborador Portal", test_function)
+# DEPOIS (CORRETO):
+use_fast_path = (has_intro and not audio_filters and 
+               self.config.video.speed == 1.0 and not has_audio_input and
+               not has_video_filters)  # NO VIDEO FILTERS for fast path!
 ```
 
-#### 2. Verificar se Tela Inicial Está Sendo Criada
-- Verificar logs para "Tela inicial criada" ou "Tela inicial adicionada"
-- Verificar se arquivo temporário `/tmp/intro_*.mp4` está sendo criado
-- Verificar se `intro_video` não é None em `process_all_in_one()`
+### 2. Adição de `-y` no Bloco `use_fast_path`
+**Arquivo**: `playwright_simple/core/runner/video_processor.py` (linhas ~471, ~482, ~503)
 
-#### 3. Verificar Duração do Vídeo Original
-- Verificar duração do vídeo WebM original ANTES do processamento
-- Comparar com duração após processamento
-- Pode ser que Playwright esteja cortando o vídeo na gravação
+Adicionado `cmd.extend(['-y', str(output_path)])` em todos os caminhos do `use_fast_path` para garantir que FFmpeg sobrescreva o arquivo de saída.
 
-#### 4. Verificar Concatenação FFmpeg
-- Verificar se `concat` filter está funcionando corretamente
-- Verificar se índices de input/output estão corretos
-- Adicionar logs do comando FFmpeg executado
-
-#### 5. Corrigir Gradiente (Opcional)
-- Atualmente usando `geq` filter que pode não funcionar em todos os FFmpeg
-- Fallback para cor sólida funciona, mas não tem gradiente
-- Considerar usar imagem PNG pré-renderizada com gradiente
-
-### Scripts Úteis Criados
-- `playwright-simple/scripts/analyze_video.py` - Analisa metadados de vídeos (duração, tamanho, codec, etc.)
-- `playwright-simple/test_colaborador_real.py` - Script para executar teste real (criado mas não testado)
-
-### Arquivos Modificados Recentemente
-- `playwright_simple/core/runner/video_processor.py`:
-  - Adicionado `_format_video_name()` (linhas 152-183)
-  - Adicionado `_create_intro_screen()` (linhas 185-294)
-  - Modificado `process_all_in_one()` para aceitar `test_name` e concatenar tela inicial
-  - Removido `-shortest` flag do FFmpeg
-  
-- `playwright_simple/core/runner/test_executor.py`:
-  - Modificado `needs_processing` para incluir `test_name is not None` (linha 542)
-  - Passa `test_name` para `process_all_in_one()` (linha 566)
+### 3. Logs de Debug Adicionados
+Adicionados prints detalhados para rastrear a execução:
+- `🔍 DEBUG: needs_processing=...`
+- `🔍 DEBUG: process_all_in_one chamado: ...`
+- `🔍 DEBUG: FFmpeg disponível`
+- `🔍 DEBUG: Tela inicial criada: ...`
+- `🔍 DEBUG: Legendas geradas: ...`
+- `🔍 DEBUG: filter_complex_parts=..., use_fast_path=...`
+- `🔍 DEBUG: Processando vídeo: ...`
+- `🔍 DEBUG: Iniciando processamento FFmpeg...`
 
 ---
 
-## ✅ Refatoração Completa - CONCLUÍDA
+## 📊 STATUS ATUAL
 
-### 0. Refatoração do Sistema de Cursor (RECENTE)
-- ✅ **Concluído**: `cursor.py` refatorado de 879 linhas para 109 linhas
-- ✅ Módulos criados:
-  - `cursor_styles.py` (122 linhas) - Geração de CSS
-  - `cursor_debug.py` (90 linhas) - Debug utilities (não mais usado)
-  - `cursor_elements.py` (236 linhas) - Gerenciamento de elementos DOM
-  - `cursor_movement.py` (157 linhas) - Movimento e animação
-  - `cursor_effects.py` (164 linhas) - Efeitos visuais (click/hover)
-  - `cursor_injection.py` (184 linhas) - Injeção de JavaScript/CSS
-- ✅ Removidos debugs e verificações redundantes:
-  - Removidas 12+ chamadas de `_remove_duplicate_cursors()`
-  - Removidos screenshots de debug
-  - Removidos prints de debug
-- ⚠️ **ATENÇÃO**: Pode ter causado o problema do login (ver seção PROBLEMA CRÍTICO)
+### ✅ Funcionando
+- ✅ Tela inicial sendo criada corretamente (corrigido erro de sintaxe do `drawtext`)
+- ✅ Legendas sendo geradas (arquivo SRT criado)
+- ✅ FFmpeg sendo executado quando `use_fast_path=False` (com legendas)
+- ✅ Vídeo `_processed.mp4` sendo gerado (confirmado: arquivos de 1.6MB e 3.1MB encontrados)
 
-### 1. Substituição de Exceções Genéricas
-- ✅ **Concluído**: Todas as exceções genéricas (`Exception`) foram substituídas por exceções específicas
-- ✅ Arquivos atualizados:
-  - `base.py` - Usa `ElementNotFoundError`, `NavigationError`, `PlaywrightTimeoutError`
-  - `runner.py` - Usa `VideoProcessingError`, `TTSGenerationError`
-  - `tts.py` - Usa `TTSGenerationError` com propagação adequada
-  - `yaml_parser.py` - Tratamento específico de erros
-  - `video.py`, `screenshot.py`, `selectors.py` - Logging e tratamento melhorados
-
-### 2. Logging Estruturado
-- ✅ **Concluído**: Logging adicionado em todos os módulos core
-- ✅ Arquivos com logging:
-  - `base.py` - `logger = logging.getLogger(__name__)`
-  - `runner.py` - Logging de erros, warnings e debug
-  - `tts.py` - Logging de geração de áudio e erros
-  - `video.py`, `screenshot.py`, `selectors.py`, `yaml_parser.py` - Logging completo
-- ✅ Níveis apropriados: `logger.debug()`, `logger.warning()`, `logger.error()` com `exc_info=True` para erros críticos
-
-### 3. Docstrings Completas
-- ✅ **Concluído**: Docstrings adicionadas/atualizadas em todos os métodos públicos e privados críticos
-- ✅ Métodos documentados:
-  - `TestRunner`: `run_test()`, `run_all()`, `_run_parallel()`, `_print_summary()`, `get_results()`, `get_summary()`, `_process_video_speed()`, `_add_subtitles()`, `_add_subtitles_drawtext()`, `_add_audio()`
-  - `SimpleTestBase`: Todos os métodos principais já tinham docstrings, algumas foram melhoradas
-  - `YAMLParser`: Métodos principais documentados
-
-### 4. Melhorias de Error Handling
-- ✅ Mensagens de erro mais descritivas
-- ✅ Propagação adequada de exceções com `raise ... from e`
-- ✅ Cleanup em `finally` blocks
-- ✅ Tratamento específico de exceções do Playwright (`PlaywrightTimeoutError`)
+### ⚠️ Pendências
+- ⚠️ Vídeo final não está sendo renomeado de `*_processed.mp4` para `{test_name}.mp4`
+- ⚠️ Processamento está demorando muito (timeout após 120s, mas vídeo é gerado)
+- ⚠️ Teste simples (`test_simple_login.yaml`) criado para debug rápido, mas ainda precisa ser validado completamente
 
 ---
 
-## 🧪 Testes - EM PROGRESSO
+## 🔧 PRÓXIMOS PASSOS
 
-### Status Atual
-- **Cobertura Total**: 42% (Meta: 80%)
-- **Testes Passando**: 142 passed, 16 failed
-- **Arquivos com menor cobertura**:
-  - `runner.py`: 8% (545/590 linhas não cobertas)
-  - `base.py`: 49% (234/463 linhas não cobertas)
-  - `yaml_parser.py`: 43% (165/289 linhas não cobertas)
-  - `tts.py`: 27% (130/177 linhas não cobertas)
-  - `session.py`: 15% (85/100 linhas não cobertas)
+### 1. Verificar Renomeação do Vídeo Final
+**Arquivo**: `playwright_simple/core/runner/test_executor.py` (linhas ~580-590)
 
-### Testes Implementados
-- ✅ `test_base.py` - Testes básicos de inicialização, `go_to()`, `wait()`
-- ✅ `test_base_extended.py` - Testes adicionais: `back()`, `forward()`, `refresh()`, `click()`, `double_click()`, `right_click()`, `type()`, `select()`, `hover()`, `assert_text()`, `assert_visible()`, `assert_url()`, `assert_count()`, `assert_attr()`, `fill_form()`, `get_text()`, `get_attr()`, `is_visible()`, `is_enabled()`, `wait_for()`, `wait_for_url()`, `wait_for_text()`, `navigate()`, `scroll()`, `screenshot()`
-- ✅ `test_yaml_parser.py` - Testes de parsing, loading, inheritance, includes, execução de steps
-- ✅ `test_runner.py` - Testes básicos de inicialização, `get_summary()`, `get_results()`
-- ✅ `test_config.py` - Testes completos de configuração
-- ✅ `test_cursor.py`, `test_video.py`, `test_screenshot.py`, `test_selectors.py` - Testes dos managers
+Verificar se o código que renomeia `*_processed.mp4` para `{test_name}.mp4` está sendo executado. O vídeo está sendo gerado, mas não está sendo renomeado.
 
-### Testes que Precisam ser Corrigidos
-1. **test_base_extended.py::test_assert_url** - Falha na validação de URL pattern
-2. **test_base_extended.py::test_wait_for_url** - Timeout na espera de URL
-3. **test_forgeerp.py** - Erros de argumentos do TestConfig (3 testes)
-4. **test_screenshot.py::test_screenshot_capture_element** - Erro com MagicMock
-5. **test_selectors.py** - 2 testes falhando (timeout e MagicMock)
-6. **test_tts.py** - 6 testes falhando (problemas com mocking de módulos TTS)
-
-### Testes que Precisam ser Implementados
-
-#### Para `runner.py` (8% cobertura):
-- [ ] Teste de `run_test()` com sucesso
-- [ ] Teste de `run_test()` com falha
-- [ ] Teste de `run_all()` com múltiplos testes
-- [ ] Teste de `_run_parallel()` com workers
-- [ ] Teste de `_process_video_speed()` (com e sem ffmpeg)
-- [ ] Teste de `_process_video_all_in_one()` (mocking ffmpeg)
-- [ ] Teste de `_generate_narration()` (mocking TTS)
-- [ ] Teste de `_generate_srt_file()`
-- [ ] Teste de `_add_subtitles()` (mocking ffmpeg)
-- [ ] Teste de `_add_subtitles_drawtext()` (mocking ffmpeg)
-- [ ] Teste de `_add_audio()` (mocking ffmpeg)
-- [ ] Teste de `_create_test_instance()` (SimpleTestBase e OdooTestBase)
-
-#### Para `base.py` (49% cobertura):
-- [ ] Teste de `_prepare_element_interaction()` (casos de sucesso e erro)
-- [ ] Teste de `_move_cursor_to_element()` 
-- [ ] Teste de `_navigate_with_cursor()` (com erro de injeção de cursor)
-- [ ] Teste de `go_to()` com erro de injeção de cursor
-- [ ] Teste de `navigate()` com menu não encontrado (deve lançar `ElementNotFoundError`)
-- [ ] Teste de `login()` completo (sucesso e falha)
-- [ ] Teste de `fill_by_label()` (com e sem context)
-- [ ] Teste de `select_by_label()`
-- [ ] Teste de `drag()` (drag and drop)
-- [ ] Teste de `assert_text()` com falha
-- [ ] Teste de `assert_visible()` com elemento não encontrado
-- [ ] Teste de `assert_count()` com contagem incorreta
-- [ ] Teste de `assert_attr()` com atributo não encontrado
-- [ ] Teste de `get_card_content()`
-- [ ] Teste de `save_session()` e `load_session()`
-- [ ] Teste de `wait_for_modal()` e `close_modal()`
-- [ ] Teste de `click_button()`
-
-#### Para `yaml_parser.py` (43% cobertura):
-- [ ] Teste de `_resolve_inheritance()` com múltiplos níveis
-- [ ] Teste de `_resolve_includes()` com múltiplos includes
-- [ ] Teste de `_execute_step()` para todas as ações:
-  - [ ] `assert_text`, `assert_visible`, `assert_url`, `assert_count`, `assert_attr`
-  - [ ] `fill_form`, `navigate`, `screenshot`
-  - [ ] Ações com setup/teardown
-- [ ] Teste de `to_python_function()` com setup/teardown
-- [ ] Teste de `to_python_function()` com session save/load
-
-#### Para `tts.py` (27% cobertura):
-- [ ] Teste de `generate_audio()` com gTTS (mocking)
-- [ ] Teste de `generate_audio()` com edge-tts (mocking)
-- [ ] Teste de `generate_audio()` com pyttsx3 (mocking)
-- [ ] Teste de `generate_audio()` com engine desconhecido
-- [ ] Teste de `generate_narration()` completo (mocking TTS e ffmpeg)
-- [ ] Teste de `_concatenate_audio()` (mocking ffmpeg)
-- [ ] Teste de tratamento de erros TTS
-
-#### Para `session.py` (15% cobertura):
-- [ ] Teste de `save_session()` e `load_session()`
-- [ ] Teste de `clear_session()`
-- [ ] Teste de tratamento de erros
-
----
-
-## 🔧 Configuração e Dependências
-
-### Instalado
-- ✅ `pytest-cov` - Para cobertura de código
-- ✅ `pytest-asyncio` - Para testes assíncronos
-- ✅ `coverage` - Biblioteca de cobertura
-
-### Comando para Executar Testes com Coverage
-```bash
-cd /home/gabriel/softhill/playwright-simple
-python3 -m pytest tests/ -v --tb=short --cov=playwright_simple.core --cov-report=term-missing --cov-report=html --cov-fail-under=80
-```
-
-### Arquivos de Teste Criados/Atualizados
-- `tests/test_base.py` - Testes básicos
-- `tests/test_base_extended.py` - Testes estendidos (NOVO)
-- `tests/test_yaml_parser.py` - Testes do parser YAML (NOVO)
-- `tests/test_runner.py` - Testes básicos do runner
-- Outros arquivos de teste já existiam
-
----
-
-## 📋 Próximos Passos Prioritários
-
-### 1. Corrigir Testes que Estão Falhando
-1. Corrigir `test_assert_url()` - Ajustar pattern matching de URL
-2. Corrigir `test_wait_for_url()` - Ajustar timeout e pattern
-3. Corrigir `test_forgeerp.py` - Ajustar argumentos do TestConfig
-4. Corrigir `test_screenshot.py` - Ajustar uso de MagicMock
-5. Corrigir `test_selectors.py` - Ajustar mocks e timeouts
-6. Corrigir `test_tts.py` - Ajustar mocking de módulos TTS
-
-### 2. Implementar Testes para `runner.py`
-- Foco em métodos de processamento de vídeo (mocking ffmpeg)
-- Testes de narração (mocking TTS)
-- Testes de execução de testes (mocking Playwright)
-
-### 3. Implementar Testes para `base.py`
-- Métodos de interação não cobertos
-- Métodos de navegação com erros
-- Métodos de asserção com falhas
-
-### 4. Implementar Testes para `yaml_parser.py`
-- Herança e includes complexos
-- Todas as ações de steps
-- Setup/teardown e session
-
-### 5. Implementar Testes para `tts.py` e `session.py`
-- Mocking de bibliotecas TTS
-- Testes de session management
-
----
-
-## 🐛 Problemas Conhecidos
-
-1. **Testes TTS**: Módulos TTS (`gTTS`, `edge_tts`, `pyttsx3`) precisam ser mockados corretamente
-2. **Testes de URL**: Patterns de URL precisam ser ajustados para funcionar com `data:` URLs
-3. **Testes de Screenshot**: MagicMock não pode ser usado diretamente em expressões `await`
-4. **Testes de Selectors**: Timeouts podem ser muito curtos em alguns casos
-5. **Testes ForgeERP**: TestConfig não aceita alguns argumentos que os testes esperam
-
----
-
-## 📝 Notas Técnicas
-
-### Estrutura de Testes
-- Todos os testes assíncronos usam `@pytest.mark.asyncio`
-- Testes de Playwright usam `async_playwright()` context manager
-- Testes devem limpar recursos (browser, context) em `finally` ou após cada teste
-
-### Mocking
-- Para ffmpeg: Mockar `subprocess.run()` e verificar comandos
-- Para TTS: Mockar módulos (`gTTS`, `edge_tts`, `pyttsx3`) antes de importar
-- Para Playwright: Usar `async_playwright()` real, mas mockar métodos específicos quando necessário
-
-### Cobertura
-- Meta: 80% de cobertura total
-- Focar em caminhos críticos primeiro
-- Testes de erro são importantes para cobertura
-
----
-
-## 🎯 Objetivo Final
-
-**Atingir 80% de cobertura de código em todos os módulos core, com todos os testes passando.**
-
----
-
----
-
-## 🔍 Debugging do Problema de Login
-
-### Comandos Úteis
-```bash
-# Analisar vídeo gerado
-cd /home/gabriel/softhill
-python3 playwright-simple/scripts/analyze_video.py presentation/playwright/videos/common_login.webm
-
-# Executar teste de login
-cd /home/gabriel/softhill/presentation/playwright
-python3 run_single_test.py
-```
-
-### Arquivos para Verificar
-- `playwright_simple/odoo/auth.py` - Método `login()` (linhas 22-146)
-- `playwright_simple/core/interactions.py` - Método `type()` (linhas 95-129)
-- `playwright_simple/core/cursor.py` - Método `move_to()` e `show_click_effect()`
-
-### Possíveis Causas
-1. Botão de submit não está sendo encontrado (selector incorreto)
-2. Clique no botão está falhando silenciosamente (exceção engolida)
-3. Cursor não está se movendo até o botão corretamente
-4. Efeito de click não está sendo mostrado, mas o clique não está acontecendo
-5. Timeout muito curto fazendo o teste terminar antes do login completar
-
----
-
----
-
-## 📝 Como Executar Testes YAML
-
-### Método Simples (Recomendado)
 ```python
-from pathlib import Path
-from playwright_simple import TestRunner
-from playwright_simple.odoo import OdooYAMLParser
-from racco_config import get_racco_config
-
-# Carregar YAML
-yaml_path = Path("tests/yaml/test_colaborador_portal.yaml")
-yaml_data = OdooYAMLParser.parse_file(yaml_path)
-test_function = OdooYAMLParser.to_python_function(yaml_data)
-
-# Executar
-config = get_racco_config()
-runner = TestRunner(config=config)
-await runner.run_test("Colaborador Portal", test_function)
+if needs_conversion and final_path.suffix == ".mp4":
+    if expected_path.exists():
+        expected_path.unlink()
+    final_path.rename(expected_path)
+    final_path = expected_path
 ```
 
-### Usando Script Existente
-```bash
-cd /home/gabriel/softhill/presentation/playwright
-python3 run_one_test.py 18  # ou "colaborador_portal"
-```
+### 2. Otimizar Performance do Processamento
+O processamento está demorando muito. Possíveis otimizações:
+- Verificar se o preset `ultrafast` está sendo usado corretamente
+- Considerar processar legendas de forma assíncrona
+- Verificar se há algum bloqueio no FFmpeg
 
-### Localização dos Testes
-- **Testes YAML**: `/home/gabriel/softhill/presentation/playwright/tests/yaml/`
-- **Configuração**: `/home/gabriel/softhill/presentation/playwright/racco_config.py`
-- **Scripts**: `/home/gabriel/softhill/presentation/playwright/run_one_test.py`
+### 3. Validar Teste Completo
+Executar o teste completo `test_colaborador_portal.yaml` (ID 18) para validar que tudo está funcionando end-to-end.
+
+### 4. Remover Logs de Debug
+Após validação completa, remover os prints de debug (`🔍 DEBUG:`) para limpar a saída.
 
 ---
 
-**Última atualização**: 2025-01-XX  
-**Próximo desenvolvedor**: 
+## 📝 ARQUIVOS MODIFICADOS
 
-## ✅ Melhorias Implementadas Recentemente
+1. **`playwright_simple/core/runner/video_processor.py`**
+   - Corrigida lógica de `use_fast_path` (linha ~451)
+   - Adicionado `-y` nos comandos FFmpeg do fast path (linhas ~471, ~482, ~503)
+   - Corrigida sintaxe do `drawtext` para tela inicial (linha ~226 - vírgula entre dois drawtext)
+   - Melhorados logs de erro do FFmpeg (linhas ~594-613)
+   - Adicionados prints de debug extensivos
 
-### 1. Logging Detalhado
-- ✅ Logs WARNING quando elemento não é encontrado para clique
-- ✅ Logs INFO quando ações são executadas com sucesso
-- ✅ Logs DEBUG com coordenadas de elementos
-- ✅ Logs ERROR com detalhes completos quando exceções ocorrem
-- ✅ Detecção automática de mudança de estado após ações (click, type, select)
-- ✅ Logs diferenciados para passos estáticos vs dinâmicos
-- ✅ Logs detalhados de navegação (início, sucesso, falha, timeout)
+2. **`playwright_simple/core/runner/test_executor.py`**
+   - Adicionado tratamento de exceções `VideoProcessingError` (linhas ~572-587)
+   - Adicionados logs de debug (linhas ~526, ~551, ~566, ~576)
 
-### 2. Correção de Bug de Vídeo
-- ✅ Corrigido problema de áudio no processamento de vídeo (erro "Output with label '1:a' does not exist")
-- ✅ Vídeo agora processa corretamente mesmo quando não há áudio no vídeo principal
+3. **`presentation/playwright/tests/yaml/test_simple_login.yaml`** (NOVO)
+   - Teste simples criado para debug rápido (apenas login + screenshot)
 
-### 3. Validação do Teste
-- ✅ Teste `test_colaborador_portal.yaml` executado com sucesso
-- ✅ Todos os 13 steps executaram corretamente
-- ⚠️ Problema de timeout no processamento de vídeo (pode ser servidor Odoo lento)
+4. **`presentation/playwright/run_one_test.py`**
+   - Adicionado mapeamento para teste simples (ID 99)
 
-## Próximos Passos
+---
 
-1. **PRIORIDADE**: Testar novamente o teste do colaborador para validar processamento completo do vídeo
-2. Verificar se tela inicial está sendo adicionada corretamente (já implementado, precisa validar)
-3. Corrigir gradiente se necessário (atualmente fallback para cor sólida funciona)
-4. Continuar melhorias de type hints e docstrings
-5. Implementar testes unitários para validar separação core/odoo
+## 🧪 TESTES PARA VALIDAÇÃO
+
+### Teste Simples (Rápido)
+```bash
+cd /home/gabriel/softhill/presentation/playwright
+timeout 300 python3 run_one_test.py 99
+```
+
+**Esperado**:
+- ✅ Vídeo gravado
+- ✅ Tela inicial criada
+- ✅ Legendas geradas
+- ✅ Vídeo `teste_simples_login.mp4` gerado (não apenas `*_processed.mp4`)
+
+### Teste Completo
+```bash
+cd /home/gabriel/softhill/presentation/playwright
+timeout 600 python3 run_one_test.py 18
+```
+
+**Esperado**:
+- ✅ Vídeo `portal_do_colaborador_racco.mp4` gerado
+- ✅ Tela inicial incluída
+- ✅ Legendas incluídas
+- ✅ Processamento completo em tempo razoável (< 5 minutos)
+
+---
+
+## 🐛 PROBLEMAS CONHECIDOS
+
+1. **Renomeação do Vídeo Final**
+   - Vídeo `_processed.mp4` é gerado, mas não é renomeado para `{test_name}.mp4`
+   - Verificar lógica de renomeação em `test_executor.py`
+
+2. **Performance do Processamento**
+   - Processamento está demorando muito (timeout após 120s)
+   - Vídeo é gerado, mas processo não termina
+   - Pode ser problema de timeout ou bloqueio no FFmpeg
+
+3. **Logs Excessivos**
+   - Muitos prints de debug (`🔍 DEBUG:`) foram adicionados
+   - Remover após validação completa
+
+---
+
+## 📚 CONTEXTO TÉCNICO
+
+### Arquitetura de Processamento
+1. **Gravação**: Playwright grava vídeo em `.webm`
+2. **Processamento**: `process_all_in_one()` processa o vídeo:
+   - Cria tela inicial (3s)
+   - Gera legendas (SRT)
+   - Concatena intro + vídeo principal
+   - Adiciona legendas (filtro `subtitles`)
+   - Converte para MP4 (se necessário)
+3. **Renomeação**: Renomeia `*_processed.mp4` para `{test_name}.mp4`
+
+### Fast Path vs Full Path
+- **Fast Path**: Quando não há filtros de vídeo, apenas concatenação + conversão
+- **Full Path**: Quando há filtros (legendas), processamento completo com re-encode
+
+### Comandos FFmpeg Principais
+- **Tela Inicial**: `ffmpeg -f lavfi -i color=... -vf drawtext=...`
+- **Concatenação**: `[0:v][1:v]concat=n=2:v=1:a=0[v]`
+- **Legendas**: `subtitles='{srt_path}':force_style=...`
+- **Conversão**: `-c:v libx264 -preset ultrafast -crf 23`
+
+---
+
+## 💡 DICAS PARA CONTINUAÇÃO
+
+1. **Verificar Renomeação**: Adicionar logs antes/depois da renomeação para ver se está sendo executada
+2. **Verificar Timeout**: Aumentar timeout ou verificar se FFmpeg está travando
+3. **Testar com Vídeo Pequeno**: Usar teste simples para iterar mais rápido
+4. **Monitorar FFmpeg**: Verificar se FFmpeg está realmente processando ou travado
+
+---
+
+## 📦 COMMITS REALIZADOS
+
+1. `fix: Otimizar processamento de vídeo e criação de tela inicial`
+2. `fix: Corrigir criação de tela inicial - separar drawtext filters corretamente`
+3. `fix: Melhorar logs de erro do FFmpeg e tratamento de exceções`
+4. `debug: Adicionar logs no início de process_all_in_one para debug`
+5. `debug: Adicionar mais logs para identificar onde processamento está falhando`
+6. `debug: Adicionar logs detalhados de chamada e retorno de process_all_in_one`
+7. `debug: Adicionar prints para garantir que logs apareçam`
+8. `debug: Adicionar mais prints para rastrear execução de process_all_in_one`
+9. `debug: Adicionar prints para identificar onde process_all_in_one está retornando`
+10. `fix: Corrigir lógica de use_fast_path - não usar quando há filtros de vídeo`
+11. `fix: Adicionar -y e prints no bloco use_fast_path para garantir execução FFmpeg`
+
+---
+
+## 🎬 CONCLUSÃO
+
+O problema principal foi identificado e corrigido:
+- ✅ FFmpeg agora executa corretamente
+- ✅ Vídeo `_processed.mp4` está sendo gerado
+- ⚠️ Pendente: Renomeação do vídeo final e otimização de performance
+
+**Próximo passo crítico**: Verificar por que o vídeo não está sendo renomeado de `*_processed.mp4` para `{test_name}.mp4`.
