@@ -453,11 +453,14 @@ class VideoProcessor:
                            not has_video_filters)  # NO VIDEO FILTERS for fast path!
             
             if use_fast_path:
+                print(f"  🔍 DEBUG: use_fast_path=True, has_video_filters={has_video_filters}, needs_conversion={needs_conversion}")
                 if not has_video_filters:
                     # No filters at all - fastest path
                     logger.info("Usando caminho rápido: apenas concatenação + conversão (sem filtros)")
+                    print(f"  🔍 DEBUG: Caminho rápido sem filtros")
                     if needs_conversion:
                         # Concat intro + main, then convert to mp4
+                        print(f"  🔍 DEBUG: Precisa conversão, criando filter_complex para concat + conversão")
                         filter_complex_parts = [f'[{intro_video_idx}:v][{main_video_idx}:v]concat=n=2:v=1:a=0[v]']
                         cmd.extend(['-filter_complex', ';'.join(filter_complex_parts)])
                         cmd.extend(['-map', '[v]'])
@@ -465,17 +468,24 @@ class VideoProcessor:
                         cmd.extend(['-map', f'{main_video_idx}:a?'])
                         cmd.extend(['-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23'])
                         cmd.extend(['-c:a', 'aac'])
+                        cmd.extend(['-y', str(output_path)])
+                        print(f"  🔍 DEBUG: Comando FFmpeg montado, continuando para execução...")
                     else:
                         # Just concat, no conversion needed
+                        print(f"  🔍 DEBUG: Sem conversão, apenas concat")
                         filter_complex_parts = [f'[{intro_video_idx}:v][{main_video_idx}:v]concat=n=2:v=1:a=0[v]']
                         cmd.extend(['-filter_complex', ';'.join(filter_complex_parts)])
                         cmd.extend(['-map', '[v]'])
                         cmd.extend(['-map', f'{main_video_idx}:a?'])
                         cmd.extend(['-c:v', 'copy'])
                         cmd.extend(['-c:a', 'copy'])
+                        cmd.extend(['-y', str(output_path)])
+                        print(f"  🔍 DEBUG: Comando FFmpeg montado (copy), continuando para execução...")
                 else:
                     # Has video filters (subtitles) but can still optimize
-                    logger.info("Usando caminho otimizado: concatenação + subtítulos com preset rápido")
+                    # NOTE: This should not happen if use_fast_path logic is correct
+                    logger.warning("use_fast_path=True mas has_video_filters=True - isso não deveria acontecer!")
+                    print(f"  🔍 DEBUG: ERRO: use_fast_path=True mas tem filtros de vídeo!")
                     # Apply subtitles to main video first, then concat with intro
                     video_filter_chain = ','.join(video_filters)
                     filter_complex_parts = [
@@ -490,6 +500,8 @@ class VideoProcessor:
                     else:
                         cmd.extend(['-c:v', 'libx264', '-preset', 'ultrafast'])  # Still need to encode for subtitles
                     cmd.extend(['-c:a', 'aac' if needs_conversion else 'copy'])
+                    cmd.extend(['-y', str(output_path)])
+                    print(f"  🔍 DEBUG: Comando FFmpeg montado (com filtros), continuando para execução...")
             else:
                 # Not using fast path - build filters normally
                 if intro_video and intro_video.exists():
