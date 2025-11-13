@@ -278,17 +278,18 @@ class CursorManager:
             """
     
     def _get_click_effect_css(self) -> str:
-        """Generate CSS for click effect."""
+        """Generate CSS for click effect - more visible."""
         return f"""
             position: fixed !important;
             width: 0 !important;
             height: 0 !important;
-            border: 6px solid {self.config.click_effect_color} !important;
+            border: 8px solid {self.config.click_effect_color} !important;
             border-radius: 50% !important;
             pointer-events: none !important;
             z-index: 2147483646 !important;
             transform: translate(-50%, -50%) !important;
-            transition: all 0.3s ease-out !important;
+            transition: all 0.4s ease-out !important;
+            box-shadow: 0 0 20px {self.config.click_effect_color} !important;
         """
     
     def _get_size_pixels(self) -> int:
@@ -311,9 +312,6 @@ class CursorManager:
             x: X coordinate
             y: Y coordinate
         """
-        # Debug: Print movement
-        print(f"🖱️  DEBUG: move_to called with ({x}, {y})")
-        
         # Ensure cursor exists before moving
         await self._ensure_cursor_exists()
         
@@ -326,22 +324,16 @@ class CursorManager:
         current_pos = await self.page.evaluate("""
             (function() {
                 const cursor = document.getElementById('playwright-cursor');
-                console.log('DEBUG: Checking cursor existence, found:', cursor ? 'YES' : 'NO');
                 if (cursor) {
                     const left = parseFloat(cursor.style.left) || 0;
                     const top = parseFloat(cursor.style.top) || 0;
-                    console.log('DEBUG: Current cursor position:', left, top);
                     return {x: left, y: top, exists: true};
                 }
-                console.error('DEBUG: Cursor not found in DOM!');
                 return {x: 0, y: 0, exists: false};
             })();
         """)
         
-        print(f"🖱️  DEBUG: Current cursor position: {current_pos}")
-        
         if not current_pos.get('exists'):
-            print("⚠️  DEBUG: Cursor doesn't exist, creating it...")
             # Cursor doesn't exist, create it first
             await self._ensure_cursor_exists()
             current_pos = {'x': default_x, 'y': default_y}
@@ -349,17 +341,12 @@ class CursorManager:
         current_x = current_pos.get('x', default_x) if current_pos.get('x', 0) > 0 else default_x
         current_y = current_pos.get('y', default_y) if current_pos.get('y', 0) > 0 else default_y
         
-        print(f"🖱️  DEBUG: Moving from ({current_x}, {current_y}) to ({x}, {y})")
-        
-        # Move cursor - use direct style update first to test
+        # Move cursor with smooth animation - use Promise to wait for completion
         result = await self.page.evaluate(f"""
             (function() {{
                 const cursor = document.getElementById('playwright-cursor');
-                console.log('DEBUG move_to: Looking for cursor, found:', cursor ? 'YES' : 'NO');
-                
                 if (!cursor) {{
-                    console.error('DEBUG move_to: Cursor not found in DOM!');
-                    return {{success: false, error: 'Cursor not found'}};
+                    return Promise.resolve({{success: false, error: 'Cursor not found'}});
                 }}
                 
                 const currentX = {current_x};
@@ -367,26 +354,17 @@ class CursorManager:
                 const targetX = {x};
                 const targetY = {y};
                 
-                console.log('DEBUG move_to: Moving from (' + currentX + ', ' + currentY + ') to (' + targetX + ', ' + targetY + ')');
-                
                 // Ensure cursor is visible
                 cursor.style.display = 'block';
                 cursor.style.visibility = 'visible';
                 cursor.style.opacity = '1';
                 cursor.style.zIndex = '2147483647';
                 
-                // First, move directly to test if it works
-                cursor.style.left = targetX + 'px';
-                cursor.style.top = targetY + 'px';
-                console.log('DEBUG move_to: Direct move applied, new position:', cursor.style.left, cursor.style.top);
-                
-                // Then animate if needed
+                // Animate movement with requestAnimationFrame and return Promise
                 const duration = {self.config.animation_speed} * 1000;
-                if (duration > 0) {{
-                    const startTime = performance.now();
-                    const startX = currentX;
-                    const startY = currentY;
-                    
+                const startTime = performance.now();
+                
+                return new Promise((resolve) => {{
                     function animate() {{
                         const elapsed = performance.now() - startTime;
                         const progress = Math.min(elapsed / duration, 1);
@@ -394,8 +372,8 @@ class CursorManager:
                         // Ease-out cubic
                         const easeOut = 1 - Math.pow(1 - progress, 3);
                         
-                        const posX = startX + (targetX - startX) * easeOut;
-                        const posY = startY + (targetY - startY) * easeOut;
+                        const posX = currentX + (targetX - currentX) * easeOut;
+                        const posY = currentY + (targetY - currentY) * easeOut;
                         
                         cursor.style.left = posX + 'px';
                         cursor.style.top = posY + 'px';
@@ -406,27 +384,21 @@ class CursorManager:
                             // Final position
                             cursor.style.left = targetX + 'px';
                             cursor.style.top = targetY + 'px';
-                            console.log('DEBUG move_to: Animation complete');
+                            resolve({{success: true, completed: true}});
                         }}
                     }}
                     
-                    // Reset to start position and animate
-                    cursor.style.left = startX + 'px';
-                    cursor.style.top = startY + 'px';
                     requestAnimationFrame(animate);
-                }}
-                
-                return {{success: true, currentX: parseFloat(cursor.style.left), currentY: parseFloat(cursor.style.top)}};
+                }});
             }})();
         """)
-        
-        print(f"🖱️  DEBUG: move_to result: {result}")
         
         if result and not result.get('success'):
             print(f"⚠️  Warning: Cursor movement may have failed: {result.get('error', 'Unknown error')}")
         
-        # Wait for animation to complete
-        await asyncio.sleep(self.config.animation_speed + 0.1)
+        # Wait for animation to complete - the JavaScript Promise will resolve when done
+        # Add a small buffer to ensure animation is fully rendered
+        await asyncio.sleep(0.1)
     
     async def show_click_effect(self, x: float, y: float):
         """
@@ -452,31 +424,33 @@ class CursorManager:
                         return;
                     }}
                     
-                    // Reset to initial state
+                    // Reset to initial state - make it more visible
                     effect.style.left = '{x}px';
                     effect.style.top = '{y}px';
                     effect.style.width = '0px';
                     effect.style.height = '0px';
-                    effect.style.borderWidth = '6px';
+                    effect.style.borderWidth = '8px';
                     effect.style.opacity = '1';
                     effect.style.display = 'block';
                     effect.style.visibility = 'visible';
-                    effect.style.transition = 'all 0.3s ease-out';
+                    effect.style.transition = 'all 0.4s ease-out';
+                    effect.style.boxShadow = '0 0 20px {self.config.click_effect_color}';
                     
                     // Force reflow
                     effect.offsetHeight;
                     
-                    // Animate to expanded state
+                    // Animate to expanded state - larger and more visible
                     requestAnimationFrame(() => {{
-                        effect.style.width = '40px';
-                        effect.style.height = '40px';
-                        effect.style.borderWidth = '2px';
+                        effect.style.width = '60px';
+                        effect.style.height = '60px';
+                        effect.style.borderWidth = '3px';
                         effect.style.opacity = '0';
+                        effect.style.boxShadow = '0 0 30px {self.config.click_effect_color}';
                         
                         // Wait for animation to complete
                         setTimeout(() => {{
                             resolve({{success: true, completed: true}});
-                        }}, 300); // Match transition duration
+                        }}, 400); // Match transition duration
                     }});
                 }});
             }})();

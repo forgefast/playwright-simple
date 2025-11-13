@@ -1,0 +1,12 @@
+name: Test with Inheritance
+description: Example of using extends to inherit from common_login.yaml
+
+# Herda todos os steps de common_login.yaml
+extends: common_login.yaml
+
+steps:
+  - go_to: "Vendas > Pedidos"
+  - click: "Criar"
+  - fill: "Cliente = João Silva"
+  - click: "Salvar"
+

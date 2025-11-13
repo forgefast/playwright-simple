@@ -1,0 +1,73 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "playwright-simple"
+version = "0.1.0"
+description = "A simple and intuitive library for writing Playwright tests, designed for QAs without deep programming knowledge"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "ForgeERP Team", email = "dev@forgeerp.com"}
+]
+keywords = ["playwright", "testing", "automation", "qa", "e2e"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Quality Assurance",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Software Development :: Quality Assurance",
+]
+dependencies = [
+    "playwright>=1.40.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+    "types-PyYAML>=6.0.0",
+]
+odoo = [
+    # No additional Python dependencies required
+    # Odoo is a web application, accessed via Playwright
+]
+forgeerp = [
+    # No additional Python dependencies required
+    # ForgeERP is a web application, accessed via Playwright
+]
+
+[project.urls]
+Documentation = "https://github.com/forgeerp/playwright-simple/blob/main/docs/README.md"
+Source = "https://github.com/forgeerp/playwright-simple"
+Tracker = "https://github.com/forgeerp/playwright-simple/issues"
+
+[tool.black]
+line-length = 100
+target-version = ['py38', 'py39', 'py310', 'py311']
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+

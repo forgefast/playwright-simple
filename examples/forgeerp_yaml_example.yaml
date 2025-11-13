@@ -1,0 +1,40 @@
+name: provision_client_test
+base_url: http://localhost:8000
+
+config:
+  cursor:
+    style: arrow
+    color: "#6366f1"  # ForgeERP indigo
+  video:
+    enabled: true
+    quality: high
+  browser:
+    headless: false
+    slow_mo: 500
+
+setup:
+  - go_to_provision:
+
+steps:
+  - fill_provision_form:
+      client_name: "test-client-yaml"
+      environment: "dev"
+      database_type: "postgresql"
+      namespace: "test-namespace"
+  
+  - submit_form:
+      wait_for_response: true
+      container_selector: "#provision-result"
+  
+  - wait_for_htmx_swap: "#provision-result"
+  
+  - assert_no_errors:
+      result_container_selector: "#provision-result"
+  
+  - screenshot: "provision_result"
+
+teardown:
+  - go_to: "/"
+
+save_session: false
+

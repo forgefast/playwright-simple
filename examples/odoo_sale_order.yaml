@@ -1,0 +1,45 @@
+name: Criar Pedido de Venda
+description: Exemplo user-friendly de criação de pedido de venda no Odoo usando YAML
+
+steps:
+  # Login no sistema
+  - login: admin
+    password: admin
+    database: devel
+  
+  # Navegar para o menu de Pedidos
+  - go_to: "Vendas > Pedidos"
+  
+  # Clicar no botão Criar
+  - click: "Criar"
+  
+  # Preencher campo Cliente (Many2one - busca automática)
+  - fill: "Cliente = João Silva"
+  
+  # Adicionar uma linha de produto
+  - add_line: "Adicionar linha"
+  
+  # Preencher produto na linha adicionada
+  - fill: "Produto = Batom"
+  
+  # Preencher quantidade
+  - fill: "Quantidade = 10"
+  
+  # Adicionar outro produto
+  - add_line: "Adicionar linha"
+  - fill: "Produto = Base"
+  - fill: "Quantidade = 5"
+  
+  # Salvar o pedido
+  - click: "Salvar"
+  
+  # Tirar screenshot do pedido completo
+  - screenshot: pedido_criado
+    description: Pedido criado com sucesso
+  
+  # Confirmar pedido (se houver wizard, será detectado automaticamente)
+  - click: "Confirmar"
+  
+  # Screenshot final
+  - screenshot: pedido_confirmado
+    description: Pedido confirmado
