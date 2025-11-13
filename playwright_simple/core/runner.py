@@ -187,10 +187,27 @@ class TestRunner:
                 else:
                     print(f"  ⚠️  Sessão não encontrada")
             
+            # Set up console message listener to capture JavaScript logs
+            console_messages = []
+            def handle_console(msg):
+                console_messages.append(msg.text)
+                if "DEBUG" in msg.text or "cursor" in msg.text.lower() or "error" in msg.text.lower():
+                    print(f"  📜 Console: {msg.text}")
+            
+            page.on("console", handle_console)
+            
             # Run test
             print(f"  ▶️  Executando teste...")
             await test_func(page, test)
             print(f"  ✅ Teste executado com sucesso")
+            
+            # Print summary of console messages
+            if console_messages:
+                debug_messages = [m for m in console_messages if "DEBUG" in m or "cursor" in m.lower()]
+                if debug_messages:
+                    print(f"  📜 Console messages relacionados ao cursor ({len(debug_messages)}):")
+                    for msg in debug_messages[:10]:  # Show first 10
+                        print(f"     {msg}")
             
             # Save session if test function has save_session attribute
             if hasattr(test_func, 'save_session') and test_func.save_session:
