@@ -25,9 +25,11 @@ O sistema usa dois mecanismos para capturar ações:
 
 1. **Processar eventos pendentes antes da navegação**: O `_handle_navigation` em `event_capture.py` agora processa eventos pendentes antes de limpar o array.
 
-2. **Detectar links e processar imediatamente**: Em `element_interactions.py`, quando detectamos que o elemento é um link, tentamos processar eventos imediatamente.
+2. **Detectar links e disparar evento manualmente**: Em `element_interactions.py`, quando detectamos que o elemento é um link, tentamos disparar manualmente um evento click via JavaScript para garantir que seja capturado.
 
-3. **Delay após clique em links**: Adicionamos um pequeno delay (0.05s) após clicar em links para dar tempo do evento ser adicionado ao array.
+3. **Delay após clique em links**: Adicionamos um delay (0.15s) após clicar em links para dar tempo do evento ser adicionado ao array.
+
+4. **Links sempre são 'click'**: O `action_converter` foi ajustado para sempre tratar links como `click`, nunca como `submit`, mesmo que tenham texto como "Entrar" (do ponto de vista do usuário, links parecem botões, mas são navegação).
 
 ### Solução Ideal (Futura)
 
