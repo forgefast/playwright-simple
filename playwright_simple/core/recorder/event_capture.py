@@ -694,6 +694,24 @@ class EventCapture:
                     pass  # Continue even if timeout
                 
                 try:
+                    # CRITICAL: Process any pending events BEFORE clearing the array
+                    # This ensures clicks that happened just before navigation are captured
+                    pending_events = await self.page.evaluate("""
+                        () => {
+                            const events = window.__playwright_recording_events || [];
+                            return events;
+                        }
+                    """)
+                    
+                    # Process pending events before navigation clears them
+                    if pending_events:
+                        logger.info(f"Processing {len(pending_events)} pending event(s) before navigation")
+                        for event in pending_events:
+                            try:
+                                await self._process_event(event)
+                            except Exception as e:
+                                logger.debug(f"Error processing pending event before navigation: {e}")
+                    
                     # Reset flag and reinject
                     await self.page.evaluate("""
                         (function() {
