@@ -235,7 +235,7 @@ class Recorder:
                                             return window.__playwright_cursor_last_position || null;
                                         }
                                     """)
-                                    if position and position.x && position.y:
+                                    if position and position.get('x') and position.get('y'):
                                         break
                                     # Wait for storage to be available using dynamic wait
                                     try:
