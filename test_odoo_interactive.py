@@ -178,8 +178,7 @@ async def test_odoo_login():
         await recorder.stop(save=False)
         return
     print("   ✅ Campo encontrado")
-    if not recorder.fast_mode:
-        await asyncio.sleep(1)
+    # Removed static sleep - fast mode should be instant
     
     # 4. Digitar login (admin)
     print("\n4️⃣  Digitando login...")
@@ -217,8 +216,7 @@ async def test_odoo_login():
         await recorder.stop(save=False)
         return
     print("   ✅ Campo encontrado")
-    if not recorder.fast_mode:
-        await asyncio.sleep(1)
+    # Removed static sleep - fast mode should be instant
     
     # 6. Digitar senha
     print("\n6️⃣  Digitando senha...")
