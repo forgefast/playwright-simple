@@ -289,7 +289,7 @@ async def test_odoo_login():
             print("   ⏸️  Adicionando passo estático ao YAML...")
             static_step = {
                 'action': 'wait',
-                'seconds': 0.5 if recorder.fast_mode else 2.0,
+                'seconds': 0.1 if recorder.fast_mode else 2.0,  # Muito rápido em fast mode
                 'description': 'Passo estático (feedback visual)',
                 'static': True
             }

@@ -508,20 +508,33 @@ class ElementInteractions:
                 if clear:
                     await element.fill('')
                 
-                # Type text character by character to trigger input events
-                # This ensures events are captured by event_capture
-                text_str = str(text)
-                type_delay = 1 if self.fast_mode else 10  # Much faster in fast mode
-                for char in text_str:
-                    await element.type(char, delay=type_delay)
-                    # Small delay to ensure events are processed (reduced in fast mode)
-                    if not self.fast_mode:
+                if self.fast_mode:
+                    # In fast mode, use fill() for instant typing, then trigger events manually
+                    await element.fill(text)
+                    # Trigger input events manually so event_capture can catch them
+                    await element.evaluate(f"""
+                        (el) => {{
+                            const value = '{text}';
+                            // Trigger input event for each character (for event_capture)
+                            for (let i = 0; i < value.length; i++) {{
+                                const inputEvent = new Event('input', {{ bubbles: true }});
+                                el.dispatchEvent(inputEvent);
+                            }}
+                            // Trigger blur to finalize
+                            el.blur();
+                        }}
+                    """)
+                else:
+                    # Type text character by character to trigger input events
+                    # This ensures events are captured by event_capture
+                    text_str = str(text)
+                    for char in text_str:
+                        await element.type(char, delay=10)
                         await asyncio.sleep(0.01)
-                
-                # Trigger blur event to finalize input (so it's captured)
-                await element.evaluate('el => el.blur()')
-                # Reduced delay in fast mode
-                await asyncio.sleep(0.01 if self.fast_mode else 0.1)
+                    
+                    # Trigger blur event to finalize input (so it's captured)
+                    await element.evaluate('el => el.blur()')
+                    await asyncio.sleep(0.1)
                 
                 return True
             
