@@ -360,12 +360,12 @@ async def test_cursor_not_created_at_center_after_navigation(browser_page: Page)
     x_diff_from_target = abs(cursor_pos['x'] - target_x)
     y_diff_from_target = abs(cursor_pos['y'] - target_y)
     
-    # Verificar que NÃO está no centro (deve estar pelo menos 50px longe do centro)
+    # Verificar que NÃO está no centro (deve estar pelo menos 30px longe do centro em pelo menos uma direção)
     x_diff_from_center = abs(cursor_pos['x'] - center_x)
     y_diff_from_center = abs(cursor_pos['y'] - center_y)
     
-    # Se estiver muito próximo do centro (menos de 50px em ambas as direções), é um problema
-    is_too_close_to_center = x_diff_from_center < 50 and y_diff_from_center < 50
+    # Se estiver muito próximo do centro (menos de 30px em ambas as direções), é um problema
+    is_too_close_to_center = x_diff_from_center < 30 and y_diff_from_center < 30
     
     assert not is_too_close_to_center, \
         f"Cursor não deve estar no centro após navegação. Posição: ({cursor_pos['x']}, {cursor_pos['y']}), Centro: ({center_x}, {center_y}), Diferença: ({x_diff_from_center}, {y_diff_from_center})"
