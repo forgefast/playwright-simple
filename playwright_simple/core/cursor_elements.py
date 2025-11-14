@@ -163,14 +163,22 @@ class CursorElements:
                     const cursor = document.createElement('div');
                     cursor.id = CURSOR_ID;
                     cursor.style.cssText = cursorStyle;
+                    // CRITICAL: Set position IMMEDIATELY before appending to DOM
+                    // This prevents cursor from appearing at center (0,0) before animation
                     // Use initial position (from previous page if available, otherwise center)
                     cursor.style.left = initialX + 'px';
                     cursor.style.top = initialY + 'px';
                     cursor.style.display = 'block';
                     cursor.style.visibility = 'visible';
                     cursor.style.opacity = '1';
+                    // Disable transitions during creation to prevent animation from center
+                    cursor.style.transition = 'none';
                     if (document.body) {{
                         document.body.appendChild(cursor);
+                        // Re-enable transitions after cursor is positioned (for future movements)
+                        setTimeout(() => {{
+                            cursor.style.transition = '';
+                        }}, 0);
                     }} else {{
                         // If body doesn't exist yet, wait for it
                         const observer = new MutationObserver(() => {{
@@ -183,6 +191,10 @@ class CursorElements:
                             }}
                             if (document.body && !document.getElementById(CURSOR_ID)) {{
                                 document.body.appendChild(cursor);
+                                // Re-enable transitions after cursor is positioned
+                                setTimeout(() => {{
+                                    cursor.style.transition = '';
+                                }}, 0);
                                 observer.disconnect();
                             }}
                         }});
@@ -198,10 +210,24 @@ class CursorElements:
                     // Only set position if it's truly unset (0, NaN, or empty)
                     // Otherwise preserve the current position
                     if (isNaN(currentLeft) || currentLeft === 0 || cursor.style.left === '' || cursor.style.left === '0px') {{
+                        // Disable transition when setting initial position to prevent animation
+                        const oldTransition = cursor.style.transition;
+                        cursor.style.transition = 'none';
                         cursor.style.left = initialX + 'px';
+                        // Re-enable transition after position is set
+                        setTimeout(() => {{
+                            cursor.style.transition = oldTransition;
+                        }}, 0);
                     }}
                     if (isNaN(currentTop) || currentTop === 0 || cursor.style.top === '' || cursor.style.top === '0px') {{
+                        // Disable transition when setting initial position to prevent animation
+                        const oldTransition = cursor.style.transition;
+                        cursor.style.transition = 'none';
                         cursor.style.top = initialY + 'px';
+                        // Re-enable transition after position is set
+                        setTimeout(() => {{
+                            cursor.style.transition = oldTransition;
+                        }}, 0);
                     }}
                     cursor.style.display = 'block';
                     cursor.style.visibility = 'visible';

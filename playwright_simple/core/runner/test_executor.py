@@ -355,12 +355,23 @@ class TestExecutor:
                         x = int(position.get('x'))
                         y = int(position.get('y'))
                         logger.info(f"🖱️  [DEBUG] Navigation detected, restoring cursor to ({x}, {y})")
-                        # Re-inject cursor and restore position
+                        # CRITICAL: Store position BEFORE injecting cursor
+                        # This ensures cursor is created at correct position, not center
+                        await page.evaluate(f"""
+                            () => {{
+                                const pos = {{x: {x}, y: {y}}};
+                                window.__playwright_cursor_last_position = pos;
+                                try {{
+                                    sessionStorage.setItem('__playwright_cursor_last_position', JSON.stringify(pos));
+                                }} catch (e) {{
+                                    // sessionStorage might not be available
+                                }}
+                            }}
+                        """)
+                        # Re-inject cursor (will use stored position, not center)
                         await test.cursor_manager.inject(force=True)
-                        logger.info(f"🖱️  [DEBUG] Cursor injected, moving to ({x}, {y})")
-                        await test.cursor_manager.move_to(x, y)
-                        # Sync Playwright mouse position to match cursor visual
-                        logger.info(f"🖱️  [DEBUG] Syncing Playwright mouse to ({x}, {y})")
+                        logger.info(f"🖱️  [DEBUG] Cursor injected at ({x}, {y}), syncing mouse")
+                        # Sync Playwright mouse position to match cursor visual (cursor already at correct position)
                         await page.mouse.move(x, y)
                         logger.info(f"Cursor restored after navigation: ({x}, {y})")
                         logger.info(f"🖱️  [DEBUG] Cursor and mouse restored to ({x}, {y})")
