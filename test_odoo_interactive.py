@@ -328,16 +328,17 @@ async def test_odoo_login():
     # 10. Parar
     print("\n🔟 Parando recorder...")
     try:
-        # Cancelar task do recorder
+        # Parar recorder diretamente (já salvamos antes)
+        # Não esperar pelo recorder_task para evitar delays
+        await asyncio.wait_for(recorder.stop(save=True), timeout=5.0)
+        print("   ✅ Recorder parado")
+        
+        # Cancelar task do recorder depois (não bloqueia)
         recorder_task.cancel()
         try:
-            await recorder_task
-        except asyncio.CancelledError:
-            pass
-        
-        # Parar recorder
-        await asyncio.wait_for(recorder.stop(save=True), timeout=10.0)
-        print("   ✅ Recorder parado")
+            await asyncio.wait_for(recorder_task, timeout=1.0)
+        except (asyncio.CancelledError, asyncio.TimeoutError):
+            pass  # Ignore - já paramos o recorder
     except asyncio.TimeoutError:
         print("   ⚠️  Timeout ao parar recorder")
     except Exception as e:

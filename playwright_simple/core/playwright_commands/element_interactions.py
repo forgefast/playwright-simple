@@ -472,7 +472,8 @@ class ElementInteractions:
                 # This ensures the cursor moves to the field and clicks it
                 if element_coords:
                     # Use visual feedback to move cursor and show click animation
-                    if visual_feedback and cursor_controller:
+                    # Skip visual feedback in fast mode for speed
+                    if visual_feedback and cursor_controller and not self.fast_mode:
                         await visual_feedback.show_click_feedback(
                             element_coords['x'],
                             element_coords['y'],
@@ -489,7 +490,8 @@ class ElementInteractions:
                                 'x': int(box['x'] + box['width'] / 2),
                                 'y': int(box['y'] + box['height'] / 2)
                             }
-                            if visual_feedback and cursor_controller:
+                            # Skip visual feedback in fast mode for speed
+                            if visual_feedback and cursor_controller and not self.fast_mode:
                                 await visual_feedback.show_click_feedback(
                                     coords['x'],
                                     coords['y'],
@@ -501,9 +503,10 @@ class ElementInteractions:
                     except:
                         await element.click()
                 
-                # Reduce delay in fast mode
-                delay = 0.01 if self.fast_mode else 0.1
-                await asyncio.sleep(delay)  # Small delay after click
+                # No delay in fast mode, small delay in normal mode
+                if not self.fast_mode:
+                    await asyncio.sleep(0.1)  # Small delay after click
+                # Fast mode: no delay - instant
                 
                 if self.fast_mode:
                     # In fast mode, clear and type instantly via evaluate (all in one call)
