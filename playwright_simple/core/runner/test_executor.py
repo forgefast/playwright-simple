@@ -284,6 +284,12 @@ class TestExecutor:
             print(f"  🖱️  Injetando cursor...")
             await test.cursor_manager.inject(force=True)
             
+            # Move cursor to center of screen to ensure it's visible
+            viewport = page.viewport_size or {"width": 1920, "height": 1080}
+            center_x = viewport['width'] / 2
+            center_y = viewport['height'] / 2
+            await test.cursor_manager.move_to(center_x, center_y)
+            
             # Remove hover effect and hide click effect if disabled (they might have been created)
             await page.evaluate(f"""
                 (function() {{
@@ -308,7 +314,7 @@ class TestExecutor:
             """)
             
             await asyncio.sleep(0.2)  # Reduced delay
-            print(f"  ✅ Cursor injetado")
+            print(f"  ✅ Cursor injetado e posicionado no centro")
             
             # Navigate to base URL first
             if self.config.base_url:
