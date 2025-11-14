@@ -83,7 +83,7 @@ class VisualFeedback:
                     if self.enable_animations:
                         if DEBUG_CURSOR_MOVEMENT:
                             logger.info(f"🖱️  [DEBUG] Waiting for smooth animation to complete (0.3s)")
-                    await asyncio.sleep(0.3)  # Smooth animation takes ~0.3s
+                        await asyncio.sleep(0.3)  # Smooth animation takes ~0.3s
                     else:
                         # Even without animation, wait a bit for cursor to be positioned
                         await asyncio.sleep(0.1)
