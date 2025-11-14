@@ -468,63 +468,61 @@ class ElementInteractions:
                         }
             
             if element:
-                # Always click on field before typing (for better UX in videos)
-                # This ensures the cursor moves to the field and clicks it
-                if element_coords:
-                    # Use visual feedback to move cursor and show click animation
-                    # Skip visual feedback in fast mode for speed
-                    if visual_feedback and cursor_controller and not self.fast_mode:
-                        await visual_feedback.show_click_feedback(
-                            element_coords['x'],
-                            element_coords['y'],
-                            cursor_controller
-                        )
-                    # Click on element to focus
-                    await self.page.mouse.click(element_coords['x'], element_coords['y'])
-                else:
-                    # Fallback: try to get coordinates from element
-                    try:
-                        box = await element.bounding_box()
-                        if box:
-                            coords = {
-                                'x': int(box['x'] + box['width'] / 2),
-                                'y': int(box['y'] + box['height'] / 2)
-                            }
-                            # Skip visual feedback in fast mode for speed
-                            if visual_feedback and cursor_controller and not self.fast_mode:
-                                await visual_feedback.show_click_feedback(
-                                    coords['x'],
-                                    coords['y'],
-                                    cursor_controller
-                                )
-                            await self.page.mouse.click(coords['x'], coords['y'])
-                        else:
-                            await element.click()
-                    except:
-                        await element.click()
-                
-                # No delay in fast mode, small delay in normal mode
-                if not self.fast_mode:
-                    await asyncio.sleep(0.1)  # Small delay after click
-                # Fast mode: no delay - instant
-                
                 if self.fast_mode:
-                    # In fast mode, clear and type instantly via evaluate (all in one call)
+                    # In fast mode: focus and type instantly in one operation (no click animation)
                     text_str = str(text)
                     await element.evaluate("""
                         (el, value) => {
+                            // Focus element (triggers focus event)
+                            el.focus();
                             // Clear and set value instantly
                             el.value = value;
-                            // Trigger input events for each character (for event_capture)
-                            for (let i = 0; i < value.length; i++) {
-                                const inputEvent = new Event('input', { bubbles: true });
-                                el.dispatchEvent(inputEvent);
-                            }
+                            // Trigger single input event (not per character - much faster)
+                            const inputEvent = new Event('input', { bubbles: true, cancelable: true });
+                            el.dispatchEvent(inputEvent);
+                            // Trigger change event (for form validation)
+                            const changeEvent = new Event('change', { bubbles: true, cancelable: true });
+                            el.dispatchEvent(changeEvent);
                             // Trigger blur to finalize
                             el.blur();
                         }
                     """, text_str)
                 else:
+                    # Normal mode: click on field before typing (for better UX in videos)
+                    if element_coords:
+                        # Use visual feedback to move cursor and show click animation
+                        if visual_feedback and cursor_controller:
+                            await visual_feedback.show_click_feedback(
+                                element_coords['x'],
+                                element_coords['y'],
+                                cursor_controller
+                            )
+                        # Click on element to focus
+                        await self.page.mouse.click(element_coords['x'], element_coords['y'])
+                    else:
+                        # Fallback: try to get coordinates from element
+                        try:
+                            box = await element.bounding_box()
+                            if box:
+                                coords = {
+                                    'x': int(box['x'] + box['width'] / 2),
+                                    'y': int(box['y'] + box['height'] / 2)
+                                }
+                                if visual_feedback and cursor_controller:
+                                    await visual_feedback.show_click_feedback(
+                                        coords['x'],
+                                        coords['y'],
+                                        cursor_controller
+                                    )
+                                await self.page.mouse.click(coords['x'], coords['y'])
+                            else:
+                                await element.click()
+                        except:
+                            await element.click()
+                    
+                    # Small delay after click
+                    await asyncio.sleep(0.1)
+                    
                     # Type text character by character to trigger input events
                     # This ensures events are captured by event_capture
                     if clear:

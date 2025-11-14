@@ -551,6 +551,119 @@ def find_active_sessions() -> list:
     return sessions
 
 
+def cleanup_orphan_browser_processes(timeout: float = 5.0) -> int:
+    """
+    Clean up orphaned browser processes (chromium, firefox, webkit, ffmpeg) from Playwright.
+    
+    Args:
+        timeout: Maximum time to spend on cleanup (seconds)
+    
+    Returns:
+        Number of processes killed
+    """
+    if not PSUTIL_AVAILABLE:
+        return 0
+    
+    import time
+    start_time = time.time()
+    killed = 0
+    
+    try:
+        current_pid = os.getpid()
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'ppid']):
+            if time.time() - start_time > timeout:
+                break
+            
+            try:
+                # Skip current process and its parents
+                if proc.info['pid'] == current_pid:
+                    continue
+                
+                # Check for browser processes
+                name = proc.info['name'] or ''
+                cmdline = ' '.join(proc.info['cmdline'] or [])
+                
+                is_browser_process = (
+                    'chromium' in name.lower() or
+                    'chrome' in name.lower() or
+                    'firefox' in name.lower() or
+                    'webkit' in name.lower() or
+                    'ffmpeg' in name.lower() or
+                    '/playwright/' in cmdline or
+                    'playwright_chromiumdev_profile' in cmdline or
+                    'playwright_firefoxdev_profile' in cmdline or
+                    'playwright_webkitdev_profile' in cmdline
+                )
+                
+                if is_browser_process:
+                    # Check if parent is a playwright/python process or if it's orphaned
+                    try:
+                        parent = proc.parent()
+                        if parent:
+                            parent_cmdline = ' '.join(parent.cmdline() if parent else [])
+                            is_playwright_parent = (
+                                'playwright' in parent_cmdline.lower() or
+                                'python' in parent_cmdline.lower() or
+                                parent.info['pid'] == current_pid
+                            )
+                            
+                            # Only kill if:
+                            # 1. Parent is NOT a playwright/python process (orphaned)
+                            # 2. Process has been running for more than 1 hour (likely orphaned)
+                            if not is_playwright_parent or (time.time() - proc.create_time()) > 3600:
+                                try:
+                                    proc.terminate()
+                                    proc.wait(timeout=1.0)
+                                    killed += 1
+                                    logger.debug(f"Killed orphaned browser process: {proc.info['pid']} ({name})")
+                                except (psutil.NoSuchProcess, psutil.TimeoutExpired):
+                                    try:
+                                        proc.kill()
+                                        killed += 1
+                                    except psutil.NoSuchProcess:
+                                        pass
+                        else:
+                            # No parent - definitely orphaned
+                            try:
+                                proc.terminate()
+                                proc.wait(timeout=1.0)
+                                killed += 1
+                                logger.debug(f"Killed orphaned browser process (no parent): {proc.info['pid']} ({name})")
+                            except (psutil.NoSuchProcess, psutil.TimeoutExpired):
+                                try:
+                                    proc.kill()
+                                    killed += 1
+                                except psutil.NoSuchProcess:
+                                    pass
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        # Can't check parent - only kill if very old (likely orphaned)
+                        if (time.time() - proc.create_time()) > 3600:
+                            try:
+                                proc.terminate()
+                                proc.wait(timeout=1.0)
+                                killed += 1
+                                logger.debug(f"Killed old browser process (can't check parent): {proc.info['pid']} ({name})")
+                            except (psutil.NoSuchProcess, psutil.TimeoutExpired):
+                                try:
+                                    proc.kill()
+                                    killed += 1
+                                except psutil.NoSuchProcess:
+                                    pass
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+            except Exception as e:
+                logger.debug(f"Error checking process {proc.info.get('pid')}: {e}")
+                continue
+    
+    except Exception as e:
+        logger.warning(f"Error cleaning up orphan browser processes: {e}")
+    
+    if killed > 0:
+        logger.info(f"Cleaned up {killed} orphaned browser process(es)")
+    
+    return killed
+
+
 def cleanup_old_sessions(force: bool = False, timeout: float = 5.0) -> int:
     """
     Clean up old recording sessions and their processes.
@@ -568,6 +681,9 @@ def cleanup_old_sessions(force: bool = False, timeout: float = 5.0) -> int:
     start_time = time.time()
     temp_dir = Path(tempfile.gettempdir()) / "playwright-simple"
     if not temp_dir.exists():
+        # Still try to clean orphan browser processes
+        if force:
+            return cleanup_orphan_browser_processes(timeout=timeout)
         return 0
     
     cleaned = 0
@@ -690,6 +806,11 @@ def cleanup_old_sessions(force: bool = False, timeout: float = 5.0) -> int:
     
     if cleaned > 0:
         logger.info(f"Cleaned up {cleaned} old session(s)")
+    
+    # Also clean up orphan browser processes if force=True
+    if force:
+        browser_cleaned = cleanup_orphan_browser_processes(timeout=max(0, timeout - (time.time() - start_time)))
+        cleaned += browser_cleaned
     
     return cleaned
 
