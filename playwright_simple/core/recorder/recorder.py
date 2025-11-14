@@ -194,12 +194,24 @@ class Recorder:
                             return
                         
                         if self.cursor_controller:
-                            # Wait for page to be ready (longer delay for dynamic pages)
-                            await asyncio.sleep(0.5)
-                            
-                            # Wait for DOM to be ready
+                            # Wait for page to be ready using dynamic waits
+                            # First, wait for DOM to be ready (with reasonable timeout)
                             try:
-                                await page.wait_for_load_state('domcontentloaded', timeout=3000)
+                                await page.wait_for_load_state('domcontentloaded', timeout=10000)
+                            except Exception as e:
+                                logger.debug(f"DOM ready timeout, continuing: {e}")
+                                # Try to wait for at least document.readyState
+                                try:
+                                    await page.wait_for_function(
+                                        "document.readyState === 'interactive' || document.readyState === 'complete'",
+                                        timeout=5000
+                                    )
+                                except:
+                                    pass  # Continue even if timeout
+                            
+                            # Wait for body to exist (ensures DOM is usable)
+                            try:
+                                await page.wait_for_selector('body', timeout=5000, state='attached')
                             except:
                                 pass  # Continue even if timeout
                             

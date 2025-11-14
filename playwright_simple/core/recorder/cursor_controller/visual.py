@@ -35,11 +35,20 @@ class CursorVisual:
             return
         
         try:
-            # Wait for page to be ready
+            # Wait for page to be ready using dynamic waits
             try:
-                await self.page.wait_for_load_state('domcontentloaded', timeout=5000)
-            except:
-                pass  # Continue even if timeout
+                # Wait for DOM to be ready (with reasonable timeout for slow connections)
+                await self.page.wait_for_load_state('domcontentloaded', timeout=10000)
+            except Exception as e:
+                logger.debug(f"DOM ready timeout in cursor start, continuing: {e}")
+                # Try to wait for at least document.readyState as fallback
+                try:
+                    await self.page.wait_for_function(
+                        "document.readyState === 'interactive' || document.readyState === 'complete'",
+                        timeout=5000
+                    )
+                except:
+                    pass  # Continue even if timeout
             
             # Get viewport size to calculate center
             viewport = self.page.viewport_size
