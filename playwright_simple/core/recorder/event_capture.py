@@ -27,6 +27,8 @@ class EventCapture:
         self.last_scroll_position = None
         # Track recent programmatic clicks on links to reconstruct actions if navigation happens
         self.recent_link_clicks: List[Dict[str, Any]] = []  # List of recent link clicks with timestamp
+        # Track pending navigation requests to process events before navigation
+        self._pending_navigation_request = None
     
     def on_event(self, event_type: str, handler: Callable):
         """Register event handler."""
