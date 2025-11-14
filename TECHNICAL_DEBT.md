@@ -8,11 +8,18 @@ Quando clicamos em um link (`<a href="...">`) via comandos CLI programáticos (`
 
 ### Contexto
 
+**IMPORTANTE**: Injetar JavaScript no navegador para capturar eventos NÃO é gambiarra - é o padrão da indústria usado por:
+- Playwright Codegen (`playwright codegen`)
+- Selenium IDE
+- Katalon Recorder
+- Extensões de navegador (content scripts)
+- Ferramentas de session replay (Hotjar, FullStory, etc.)
+
 O sistema usa dois mecanismos para capturar ações:
 
-1. **`event_capture`**: Captura eventos DOM nativos através de listeners JavaScript injetados na página. Funciona bem para ações do usuário na tela (cliques reais do mouse).
+1. **`event_capture`**: Captura eventos DOM nativos através de listeners JavaScript injetados na página. **Este é o padrão da indústria** para gravação de testes. Funciona bem para ações do usuário na tela (cliques reais do mouse), exceto para links que causam navegação imediata.
 
-2. **Comandos CLI programáticos** (`pw-click`, `pw-type`, etc.): Executam ações via Playwright diretamente. Atualmente dependem do `event_capture` para adicionar steps ao YAML.
+2. **Comandos CLI programáticos** (`pw-click`, `pw-type`, etc.): Executam ações via Playwright diretamente. Agora adicionam diretamente ao YAML (não dependem mais do `event_capture`).
 
 ### Problema Específico
 
@@ -101,9 +108,18 @@ O problema fundamental é que:
 - Processar eventos pendentes antes da navegação: O evento já foi perdido
 - Marcação de prioridade: Não ajuda se o contexto já foi destruído
 
-### Solução Necessária (Urgente)
+### Solução Implementada (Testando)
 
-**Opção 1: Processamento Síncrono Imediato (Recomendado)**
+**Opção 3: Usar `page.on('request')` para detectar navegação** ✅ IMPLEMENTADO
+- Intercepta requisições HTTP de tipo 'document' antes da navegação
+- Processa eventos pendentes IMEDIATAMENTE quando detecta requisição de navegação
+- Permite navegação continuar normalmente após processamento
+
+**Status**: Implementado, aguardando teste do usuário
+
+### Outras Opções (Se a atual não funcionar)
+
+**Opção 1: Processamento Síncrono Imediato**
 - Quando detectar clique em link, processar o evento IMEDIATAMENTE via `page.evaluate()`
 - Não depender do polling assíncrono
 - Processar antes de permitir a navegação
@@ -112,11 +128,6 @@ O problema fundamental é que:
 - Usar `page.route()` do Playwright para interceptar requisições de navegação
 - Verificar se há eventos pendentes antes de permitir a navegação
 - Processar eventos antes de continuar
-
-**Opção 3: Usar `page.on('request')` para detectar navegação**
-- Interceptar requisições HTTP antes da navegação
-- Processar eventos pendentes imediatamente
-- Permitir navegação apenas após processamento
 
 ### Prioridade
 
