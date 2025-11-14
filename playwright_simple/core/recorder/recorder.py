@@ -115,6 +115,15 @@ class Recorder:
     async def start(self):
         """Start recording session."""
         try:
+            # Clean up old sessions before starting (with timeout to avoid blocking)
+            from .command_server import cleanup_old_sessions
+            try:
+                cleaned = cleanup_old_sessions(force=True, timeout=5.0)
+                if cleaned > 0:
+                    logger.info(f"Cleaned up {cleaned} old recording session(s) before starting")
+            except Exception as e:
+                logger.warning(f"Error during cleanup (continuing anyway): {e}")
+            
             page = await self.browser_manager.start()
             
             # Initialize event capture EARLY - before navigation if possible
@@ -296,12 +305,32 @@ class Recorder:
         
         # Stop event capture
         if self.event_capture:
-            logger.info("Stopping event capture...")
-            await self.event_capture.stop()
+            try:
+                logger.info("Stopping event capture...")
+                await self.event_capture.stop()
+            except Exception as e:
+                logger.debug(f"Error stopping event capture: {e}")
+        
+        # Stop cursor controller
+        if self.cursor_controller:
+            try:
+                await self.cursor_controller.stop()
+            except Exception as e:
+                logger.debug(f"Error stopping cursor controller: {e}")
+        
+        # Stop command server
+        if self.command_server:
+            try:
+                await self.command_server.stop()
+            except Exception as e:
+                logger.debug(f"Error stopping command server: {e}")
         
         # Stop console
-        logger.info("Stopping console interface...")
-        self.console.stop()
+        try:
+            logger.info("Stopping console interface...")
+            self.console.stop()
+        except Exception as e:
+            logger.debug(f"Error stopping console: {e}")
         
         # Save YAML if requested
         if save:
@@ -334,8 +363,12 @@ class Recorder:
                 print(f"   ⚠️  {steps_count} steps will be lost")
                 print(f"   Use 'save' command before 'exit' to save progress")
         
-        # Close browser
-        await self.browser_manager.stop()
+        # Close browser (always, even if save=False)
+        try:
+            await self.browser_manager.stop()
+            logger.info("Browser closed successfully")
+        except Exception as e:
+            logger.error(f"Error closing browser: {e}", exc_info=True)
     
     async def _wait_for_exit(self):
         """Wait for exit command."""

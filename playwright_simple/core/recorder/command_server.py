@@ -551,6 +551,149 @@ def find_active_sessions() -> list:
     return sessions
 
 
+def cleanup_old_sessions(force: bool = False, timeout: float = 5.0) -> int:
+    """
+    Clean up old recording sessions and their processes.
+    
+    Args:
+        force: If True, kill all sessions. If False, only clean up dead processes.
+        timeout: Maximum time to spend on cleanup (seconds)
+    
+    Returns:
+        Number of processes killed/cleaned
+    """
+    import signal
+    import time
+    
+    start_time = time.time()
+    temp_dir = Path(tempfile.gettempdir()) / "playwright-simple"
+    if not temp_dir.exists():
+        return 0
+    
+    cleaned = 0
+    
+    if not PSUTIL_AVAILABLE:
+        # Without psutil, just remove all lock files if force=True
+        if force:
+            for lock_file in temp_dir.glob("*.lock"):
+                if time.time() - start_time > timeout:
+                    logger.warning(f"Cleanup timeout after {timeout}s, stopping")
+                    break
+                try:
+                    lock_file.unlink()
+                    cleaned += 1
+                except:
+                    pass
+        return cleaned
+    
+    # With psutil, check each process
+    for lock_file in temp_dir.glob("*.lock"):
+        if time.time() - start_time > timeout:
+            logger.warning(f"Cleanup timeout after {timeout}s, stopping")
+            break
+            
+        try:
+            data = json.loads(lock_file.read_text())
+            pid = data['pid']
+            session_id = data.get('session_id', 'unknown')
+            
+            try:
+                process = psutil.Process(pid)
+                
+                # Check if it's a playwright-simple process
+                try:
+                    cmdline = ' '.join(process.cmdline())
+                    is_playwright_simple = (
+                        'playwright-simple' in cmdline or
+                        'recorder' in cmdline.lower() or
+                        'playwright_simple' in cmdline
+                    )
+                except (psutil.AccessDenied, psutil.NoSuchProcess):
+                    # Can't read cmdline, assume it's not ours
+                    is_playwright_simple = False
+                
+                if force or not is_playwright_simple:
+                    # Kill process if force=True or not a playwright-simple process
+                    if force:
+                        try:
+                            process.terminate()
+                            # Wait a bit for graceful shutdown (with timeout)
+                            try:
+                                process.wait(timeout=1.0)  # Reduced from 2s
+                            except psutil.TimeoutExpired:
+                                # Force kill if didn't terminate
+                                try:
+                                    process.kill()
+                                except psutil.NoSuchProcess:
+                                    pass
+                            logger.info(f"Killed process {pid} (session: {session_id})")
+                            cleaned += 1
+                        except psutil.NoSuchProcess:
+                            pass
+                        except Exception as e:
+                            logger.debug(f"Error killing process {pid}: {e}")
+                    
+                    # Remove lock file
+                    try:
+                        lock_file.unlink()
+                    except:
+                        pass
+                elif not process.is_running():
+                    # Process died, clean up
+                    try:
+                        lock_file.unlink()
+                        cleaned += 1
+                    except:
+                        pass
+            except psutil.NoSuchProcess:
+                # Process doesn't exist, clean up lock file
+                try:
+                    lock_file.unlink()
+                    cleaned += 1
+                except:
+                    pass
+            except Exception as e:
+                logger.debug(f"Error checking process {pid}: {e}")
+                # If we can't check, and force=True, remove lock file
+                if force:
+                    try:
+                        lock_file.unlink()
+                        cleaned += 1
+                    except:
+                        pass
+        except Exception as e:
+            logger.debug(f"Error reading lock file {lock_file}: {e}")
+            # Remove invalid lock files
+            if force:
+                try:
+                    lock_file.unlink()
+                    cleaned += 1
+                except:
+                    pass
+    
+    # Also clean up command/response files from dead sessions
+    if force:
+        for cmd_file in temp_dir.glob("*.commands"):
+            if time.time() - start_time > timeout:
+                break
+            try:
+                cmd_file.unlink()
+            except:
+                pass
+        for resp_file in temp_dir.glob("*.response"):
+            if time.time() - start_time > timeout:
+                break
+            try:
+                resp_file.unlink()
+            except:
+                pass
+    
+    if cleaned > 0:
+        logger.info(f"Cleaned up {cleaned} old session(s)")
+    
+    return cleaned
+
+
 def send_command(command: str, args: str = "", session_id: Optional[str] = None, timeout: float = 5.0) -> Dict[str, Any]:
     """
     Send command to active recording session.
