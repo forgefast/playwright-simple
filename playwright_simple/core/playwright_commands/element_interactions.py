@@ -643,14 +643,42 @@ class ElementInteractions:
                         }
             
             if element:
+                # CRITICAL: Always click on field before typing (even in fast_mode)
+                # This ensures the click is captured in YAML and matches real user behavior
+                # Click must happen BEFORE typing to be captured correctly
+                if element_coords:
+                    # Click on element to focus (this will be captured by event_capture)
+                    logger.debug(f"Clicking on field before typing at ({element_coords['x']}, {element_coords['y']})")
+                    await self.page.mouse.click(element_coords['x'], element_coords['y'])
+                    # Small delay to allow click event to be captured
+                    await asyncio.sleep(0.1)
+                else:
+                    # Fallback: try to get coordinates from element
+                    try:
+                        box = await element.bounding_box()
+                        if box:
+                            coords = {
+                                'x': int(box['x'] + box['width'] / 2),
+                                'y': int(box['y'] + box['height'] / 2)
+                            }
+                            logger.debug(f"Clicking on field before typing at ({coords['x']}, {coords['y']})")
+                            await self.page.mouse.click(coords['x'], coords['y'])
+                            await asyncio.sleep(0.1)
+                        else:
+                            # Last resort: use element.click() which also triggers click event
+                            await element.click()
+                            await asyncio.sleep(0.1)
+                    except:
+                        # Last resort: use element.click()
+                        await element.click()
+                        await asyncio.sleep(0.1)
+                
                 if self.fast_mode:
-                    # In fast mode: focus and type instantly in one operation (no click animation)
+                    # In fast mode: type instantly after click (click already happened above)
                     text_str = str(text)
                     logger.debug(f"Fast mode typing: Setting value '{text_str[:50]}...' and dispatching input event")
                     await element.evaluate("""
                         (el, value) => {
-                            // Focus element (triggers focus event)
-                            el.focus();
                             // Clear and set value instantly
                             el.value = value;
                             // Trigger single input event (not per character - much faster)
