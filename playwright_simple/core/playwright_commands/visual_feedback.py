@@ -38,8 +38,10 @@ class VisualFeedback:
         if cursor_controller:
             try:
                 await cursor_controller.show()
+                # Move cursor to position (this will save position automatically)
                 await cursor_controller.move(x, y, smooth=True)
-                await asyncio.sleep(0.3)  # Small delay so user can see cursor move
+                # Wait for cursor to reach position (smooth animation takes ~0.3s)
+                await asyncio.sleep(0.3)
                 
                 # Show click animation
                 await self.page.evaluate(f"""

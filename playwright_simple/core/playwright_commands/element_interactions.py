@@ -331,19 +331,38 @@ class ElementInteractions:
                         }
             
             if element:
-                # Click on field before typing (for better UX in videos)
-                if element_coords and visual_feedback and cursor_controller:
-                    await visual_feedback.show_click_feedback(
-                        element_coords['x'],
-                        element_coords['y'],
-                        cursor_controller
-                    )
-                
-                # Click on element to focus (even if already focused, for visual clarity)
+                # Always click on field before typing (for better UX in videos)
+                # This ensures the cursor moves to the field and clicks it
                 if element_coords:
+                    # Use visual feedback to move cursor and show click animation
+                    if visual_feedback and cursor_controller:
+                        await visual_feedback.show_click_feedback(
+                            element_coords['x'],
+                            element_coords['y'],
+                            cursor_controller
+                        )
+                    # Click on element to focus
                     await self.page.mouse.click(element_coords['x'], element_coords['y'])
                 else:
-                    await element.click()
+                    # Fallback: try to get coordinates from element
+                    try:
+                        box = await element.bounding_box()
+                        if box:
+                            coords = {
+                                'x': int(box['x'] + box['width'] / 2),
+                                'y': int(box['y'] + box['height'] / 2)
+                            }
+                            if visual_feedback and cursor_controller:
+                                await visual_feedback.show_click_feedback(
+                                    coords['x'],
+                                    coords['y'],
+                                    cursor_controller
+                                )
+                            await self.page.mouse.click(coords['x'], coords['y'])
+                        else:
+                            await element.click()
+                    except:
+                        await element.click()
                 
                 await asyncio.sleep(0.1)  # Small delay after click
                 

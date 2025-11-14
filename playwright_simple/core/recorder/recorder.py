@@ -216,17 +216,29 @@ class Recorder:
                                 pass  # Continue even if timeout
                             
                             # Get last position from storage (persists across navigations)
-                            position = await page.evaluate("""
-                                () => {
-                                    return window.__playwright_cursor_last_position || null;
-                                }
-                            """)
+                            # Try multiple times as storage might not be immediately available after navigation
+                            position = None
+                            for attempt in range(3):
+                                try:
+                                    position = await page.evaluate("""
+                                        () => {
+                                            return window.__playwright_cursor_last_position || null;
+                                        }
+                                    """)
+                                    if position:
+                                        break
+                                    await asyncio.sleep(0.1)  # Small delay between attempts
+                                except:
+                                    await asyncio.sleep(0.1)
                             
-                            if position:
-                                x = position.get('x')
-                                y = position.get('y')
+                            if position and position.get('x') and position.get('y'):
+                                x = int(position.get('x'))
+                                y = int(position.get('y'))
                                 # Always restore cursor (force=True to reinject even if "active")
                                 await self.cursor_controller.start(force=True, initial_x=x, initial_y=y)
+                                # Also update controller's current position
+                                self.cursor_controller.current_x = x
+                                self.cursor_controller.current_y = y
                                 logger.info(f"Cursor restored after navigation: ({x}, {y})")
                             else:
                                 # No saved position, start at center

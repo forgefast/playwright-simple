@@ -206,7 +206,11 @@ class PlaywrightHandlers:
         
         args = args.strip()
         
-        # Check for "into" keyword
+        # Check for "into" keyword (support both " into " and "--into")
+        if ' --into ' in args or ' --into' in args:
+            # Replace --into with into for parsing
+            args = args.replace('--into', 'into')
+        
         if ' into ' in args.lower():
             parts = args.split(' into ', 1)
             if len(parts) == 2:

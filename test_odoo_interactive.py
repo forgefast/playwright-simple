@@ -99,7 +99,7 @@ async def test_odoo_login():
     # 4. Digitar email
     print("\n4️⃣  Digitando email...")
     success, error = await run_with_timeout(
-        handlers.handle_pw_type('admin@example.com --into "Email"'),
+        handlers.handle_pw_type('admin@example.com into "Email"'),
         timeout_seconds=10.0,
         step_name="type email"
     )
@@ -127,7 +127,7 @@ async def test_odoo_login():
     # 6. Digitar senha
     print("\n6️⃣  Digitando senha...")
     success, error = await run_with_timeout(
-        handlers.handle_pw_type('admin --into "Password"'),
+        handlers.handle_pw_type('admin into "Password"'),
         timeout_seconds=10.0,
         step_name="type password"
     )
