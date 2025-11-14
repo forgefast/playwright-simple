@@ -125,6 +125,7 @@ class Recorder:
                 logger.warning(f"Error during cleanup (continuing anyway): {e}")
             
             page = await self.browser_manager.start()
+            self.page = page  # Store page reference for command handlers
             
             # Initialize event capture EARLY - before navigation if possible
             # This allows script injection to happen as soon as page loads
