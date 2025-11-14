@@ -227,10 +227,10 @@ class CommandServer:
         
         if args.startswith('selector '):
             selector = args[9:].strip().strip('"\'')
-            success = await commands.click(selector=selector)
+            success = await commands.click(selector=selector, cursor_controller=cursor_controller)
         elif args.startswith('role '):
             role = args[5:].strip().strip('"\'')
-            success = await commands.click(role=role, index=index)
+            success = await commands.click(role=role, index=index, cursor_controller=cursor_controller)
         else:
             text = args.strip('"\'')
             success = await commands.click(text=text, index=index, cursor_controller=cursor_controller)
