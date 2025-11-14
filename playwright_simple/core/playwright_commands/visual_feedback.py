@@ -63,12 +63,12 @@ class VisualFeedback:
                     # CursorController interface
                     if DEBUG_CURSOR_MOVEMENT:
                         logger.info(f"🖱️  [DEBUG] Using CursorController.move({x}, {y}, smooth={self.enable_animations})")
-                await cursor_controller.show()
-                # Move cursor to position (this will save position automatically)
-                # Use smooth animation if animations are enabled (even in fast_mode for recording)
-                await cursor_controller.move(x, y, smooth=self.enable_animations)
-                # Wait for cursor to reach position (only if smooth animation)
-                if self.enable_animations:
+                    await cursor_controller.show()
+                    # Move cursor to position (this will save position automatically)
+                    # Use smooth animation if animations are enabled (even in fast_mode for recording)
+                    await cursor_controller.move(x, y, smooth=self.enable_animations)
+                    # Wait for cursor to reach position (only if smooth animation)
+                    if self.enable_animations:
                         if DEBUG_CURSOR_MOVEMENT:
                             logger.info(f"🖱️  [DEBUG] Waiting for smooth animation to complete (0.3s)")
                         await asyncio.sleep(0.3)  # Smooth animation takes ~0.3s
