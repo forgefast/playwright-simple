@@ -32,30 +32,41 @@ async def test_odoo_login():
     try:
         # Wait for recorder to be ready using dynamic wait
         page = None
-        for attempt in range(10):  # Try up to 10 times
+        for attempt in range(20):  # Try up to 20 times (4s total)
             try:
                 if hasattr(recorder, 'page') and recorder.page:
                     page = recorder.page
                     # Check if page is ready
-                    await asyncio.wait_for(
-                        page.wait_for_load_state('domcontentloaded', timeout=1000),
-                        timeout=1.5
-                    )
-                    break
+                    try:
+                        await asyncio.wait_for(
+                            page.wait_for_load_state('domcontentloaded', timeout=1000),
+                            timeout=1.5
+                        )
+                        # Page is ready
+                        break
+                    except:
+                        # Page exists but not ready yet, continue waiting
+                        pass
             except:
-                await asyncio.sleep(0.2)  # Small delay between attempts
+                pass
+            await asyncio.sleep(0.2)  # Small delay between attempts
         
         if page:
             print("✅ Recorder iniciado!")
+            # Wait a bit more for page to be fully interactive
+            if not recorder.fast_mode:
+                await asyncio.sleep(1)
+            else:
+                await asyncio.sleep(0.2)
         else:
             print("⚠️  Recorder iniciado (página ainda carregando)")
+            # Wait a bit anyway
+            await asyncio.sleep(1 if not recorder.fast_mode else 0.3)
     except Exception as e:
         print(f"⚠️  Erro ao iniciar recorder: {e}")
+        await asyncio.sleep(1 if not recorder.fast_mode else 0.3)
     
     print("📝 Testando comandos diretamente...\n")
-    
-    # Aguardar página carregar (reduzido em fast mode)
-    await asyncio.sleep(0.5)  # Reduced from 3s
     
     # Usar command_handlers diretamente
     handlers = recorder.command_handlers
