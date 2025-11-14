@@ -31,12 +31,21 @@ O sistema usa dois mecanismos para capturar ações:
 
 4. **Links sempre são 'click'**: O `action_converter` foi ajustado para sempre tratar links como `click`, nunca como `submit`, mesmo que tenham texto como "Entrar" (do ponto de vista do usuário, links parecem botões, mas são navegação).
 
-### Solução Ideal (Futura)
+### Solução Implementada ✅
 
-**Opção 1**: Comandos CLI programáticos deveriam adicionar diretamente ao YAML, não depender do `event_capture`. Isso faz sentido porque:
+**Padrão Correto Implementado**: Comandos CLI programáticos agora adicionam diretamente ao YAML, não dependem do `event_capture`. Isso é o padrão correto porque:
 - São ações programáticas, não ações do usuário
 - Temos todas as informações necessárias (text, selector, role, index)
 - Não há problema de timing com navegação
+- É o padrão usado em ferramentas como Selenium IDE, Katalon, etc.
+
+**Separação de Responsabilidades**:
+- **Ações programáticas** (CLI commands: `pw-click`, `pw-type`, etc.): Adicionam diretamente ao YAML usando `action_converter`
+- **Ações do usuário real** (mouse real, teclado real): Continuam usando `event_capture` para capturar eventos DOM
+
+### Solução Ideal (Futura - se necessário)
+
+Se ainda houver problemas com ações do usuário real em links, podemos considerar:
 
 **Opção 2**: Melhorar o `event_capture` para processar eventos de links imediatamente, sem depender do polling. Por exemplo:
 - Interceptar navegação e processar eventos pendentes antes
