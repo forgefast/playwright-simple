@@ -532,17 +532,39 @@ class EventCapture:
                     continue
                 
                 # Get events and also check event count before clearing
+                # CRITICAL: Check for link clicks and process them with higher priority
                 result = await self.page.evaluate("""
                     () => {
                         const events = window.__playwright_recording_events || [];
                         const count = events.length;
+                        const hasLinkClick = window.__playwright_recording_link_click || false;
+                        const linkClickTime = window.__playwright_recording_link_click_time || null;
+                        
+                        // Clear link click flag
+                        window.__playwright_recording_link_click = false;
+                        window.__playwright_recording_link_click_time = null;
+                        
+                        // Clear events array after reading
                         window.__playwright_recording_events = [];
-                        return { events: events, count: count };
+                        
+                        return { 
+                            events: events, 
+                            count: count,
+                            hasLinkClick: hasLinkClick,
+                            linkClickTime: linkClickTime
+                        };
                     }
                 """)
                 
                 events = result.get('events', [])
                 event_count = result.get('count', 0)
+                has_link_click = result.get('hasLinkClick', False)
+                
+                # If we detected a link click, process events immediately with higher priority
+                if has_link_click:
+                    logger.info(f"🔗 Link click detected! Processing {len(events)} event(s) immediately")
+                    if self.debug:
+                        logger.info(f"🔍 DEBUG: Link click timestamp: {result.get('linkClickTime')}")
                 
                 # Log polling status every 50 polls in debug mode
                 if self.debug and poll_count % 50 == 0:
@@ -560,7 +582,12 @@ class EventCapture:
                     await self._process_event(event)
                 
                 # Use shorter delay for first few polls to catch initial clicks faster
-                delay = 0.05 if poll_count <= 10 else 0.1
+                # CRITICAL: Use even shorter delay if we detected a link click (navigation may be imminent)
+                if has_link_click:
+                    delay = 0.01  # Very short delay for link clicks
+                    logger.debug("Using minimal delay after link click detection")
+                else:
+                    delay = 0.05 if poll_count <= 10 else 0.1
                 await asyncio.sleep(delay)
             except Exception as e:
                 # Ignore context destroyed errors (happens during navigation)
@@ -704,16 +731,27 @@ class EventCapture:
                 try:
                     # CRITICAL: Process any pending events BEFORE clearing the array
                     # This ensures clicks that happened just before navigation are captured
-                    pending_events = await self.page.evaluate("""
+                    # Especially important for link clicks which cause immediate navigation
+                    pending_result = await self.page.evaluate("""
                         () => {
                             const events = window.__playwright_recording_events || [];
-                            return events;
+                            const hasLinkClick = window.__playwright_recording_link_click || false;
+                            const linkClickTime = window.__playwright_recording_link_click_time || null;
+                            return {
+                                events: events,
+                                hasLinkClick: hasLinkClick,
+                                linkClickTime: linkClickTime
+                            };
                         }
                     """)
                     
+                    pending_events = pending_result.get('events', [])
+                    has_link_click = pending_result.get('hasLinkClick', False)
+                    
                     # Process pending events before navigation clears them
                     if pending_events:
-                        logger.info(f"Processing {len(pending_events)} pending event(s) before navigation")
+                        priority_msg = " (LINK CLICK - HIGH PRIORITY)" if has_link_click else ""
+                        logger.info(f"Processing {len(pending_events)} pending event(s) before navigation{priority_msg}")
                         for event in pending_events:
                             try:
                                 await self._process_event(event)
