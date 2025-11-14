@@ -19,6 +19,7 @@ from .screenshot import ScreenshotManager
 from .selectors import SelectorManager
 from .session import SessionManager
 from .helpers import TestBaseHelpers
+from ..extensions import ExtensionRegistry, Extension
 from .interactions import InteractionMixin
 from .assertions import AssertionMixin
 from .wait import WaitMixin
@@ -30,7 +31,6 @@ from .auth import AuthMixin
 from .exceptions import (
     ElementNotFoundError,
     NavigationError,
-    VideoProcessingError,
 )
 from .constants import (
     CURSOR_HOVER_DELAY,
@@ -145,6 +145,25 @@ class SimpleTestBase(
         
         # Inject cursor on first action
         self._cursor_injected = False
+        
+        # Initialize extension registry
+        self.extensions = ExtensionRegistry()
+        # Initialize extensions with this test instance
+        # (will be called when extensions are registered)
+    
+    async def register_extension(self, extension: Extension) -> None:
+        """
+        Register an extension.
+        
+        Args:
+            extension: Extension instance to register
+        """
+        self.extensions.register(extension)
+        await extension.initialize(self)
+    
+    async def cleanup_extensions(self) -> None:
+        """Cleanup all registered extensions."""
+        await self.extensions.cleanup_all()
     
     async def _ensure_cursor(self) -> None:
         """Ensure cursor is injected."""
@@ -284,3 +303,39 @@ class SimpleTestBase(
         """
         context = self.page.context
         return await self.session_manager.load_session(context, session_name, apply_storage)
+    
+    # ==================== Wait Methods ====================
+    
+    async def wait_until_ready(self, timeout: Optional[int] = None) -> 'SimpleTestBase':
+        """
+        Wait until page is ready (loaded and stable).
+        
+        This is a generic method that works for any web application.
+        It waits for the page to reach the configured load state.
+        
+        Args:
+            timeout: Maximum time to wait in milliseconds (default: from config)
+            
+        Returns:
+            Self for method chaining
+            
+        Example:
+            ```python
+            await test.wait_until_ready()
+            ```
+        """
+        timeout = timeout or self.config.browser.wait_timeout
+        load_state = self.config.browser.wait_for_load
+        
+        try:
+            # Wait for the configured load state
+            if load_state in ["load", "domcontentloaded", "networkidle"]:
+                await self.page.wait_for_load_state(load_state, timeout=timeout)
+            else:
+                # Default to load if invalid value
+                await self.page.wait_for_load_state("load", timeout=timeout)
+        except Exception as e:
+            # Don't fail if wait times out - just log
+            logger.debug(f"wait_until_ready timeout or error: {e}")
+        
+        return self

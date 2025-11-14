@@ -117,7 +117,9 @@ class OdooNavigationMixin:
             if resolved == "DASHBOARD":
                 # Navigate to dashboard
                 logger.info(f"Navegando para Dashboard")
-                await self.menu.go_to_dashboard()
+                success = await self.menu.go_to_dashboard()
+                if not success:
+                    raise ValueError("Não foi possível navegar para o Dashboard - logo não encontrado ou clique não funcionou")
                 logger.info(f"Navegação para Dashboard concluída")
             elif resolved and resolved.startswith("/"):
                 # It's a URL, use parent's go_to

@@ -1,0 +1,136 @@
+name: Catálogo de Produtos
+description: Demonstra catálogo completo com categorias, filtros e detalhes.
+
+base_url: https://odoo.racco.com.br
+
+config:
+  video:
+    enabled: true
+    quality: high
+    codec: mp4
+    speed: 1.0
+    subtitles: true
+    hard_subtitles: false
+    audio: true
+    narration: true
+    narration_lang: pt-BR
+    narration_engine: gtts
+    narration_slow: false
+  debug:
+    enabled: true
+    pause_on_error: true
+    interactive_mode: true
+    hot_reload_enabled: true
+  logging:
+    level: DEBUG
+    console_output: true
+  browser:
+    headless: false
+    slow_mo: 50
+
+steps:
+  # Login
+  - action: login
+    login: admin
+    password: admin
+    database: devel
+    description: "Login como admin"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Navega para Produtos
+  - action: navigate_menu
+    menu_path: ["Vendas", "Produtos"]
+    description: "Navegar para Produtos"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 01_products_list
+    description: "Lista de Produtos"
+  
+  # Mostra todos os produtos
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 02_all_products
+    description: "Todos os Produtos"
+  
+  # Filtra por categoria - Maquiagem
+  - action: search
+    search_text: "Batom"
+    description: "Buscar Batom"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 03_products_maquiagem
+    description: "Produtos - Maquiagem"
+  
+  # Filtra por categoria - Perfumaria
+  - action: search
+    search_text: "Perfume"
+    description: "Buscar Perfume"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 04_products_perfumaria
+    description: "Produtos - Perfumaria"
+  
+  # Abre um produto para ver detalhes
+  - action: open_record
+    record_text: "Produto"
+    position: primeiro
+    description: "Abrir produto"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 05_product_detail
+    description: "Detalhes do Produto"
+  
+  # Volta para lista
+  - action: click_button
+    text: "Lista"
+    description: "Voltar para lista"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Mostra preços e disponibilidade
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 07_products_prices
+    description: "Preços e Disponibilidade"
+  
+  # Login como revendedor para ver catálogo no portal
+  - action: login
+    login: lucia.santos@exemplo.com
+    password: demo123
+    database: devel
+    description: "Login como revendedor"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Acessa e-commerce
+  - action: navigate_menu
+    menu_path: ["Loja"]
+    description: "Acessar Loja"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 08_ecommerce_catalog
+    description: "Catálogo E-commerce"
+

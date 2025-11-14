@@ -261,6 +261,56 @@ class OdooTestBase(
         await asyncio.sleep(ACTION_DELAY * 1)  # Minimal delay
         return self
     
+    async def _check_current_state(self, destination: str) -> bool:
+        """
+        Check if we're already at the destination (state machine check).
+        
+        Args:
+            destination: Destination to check (e.g., "Dashboard", "Contatos", "Portal")
+            
+        Returns:
+            True if already at destination, False otherwise
+        """
+        try:
+            destination_lower = destination.lower().strip()
+            current_url = self.page.url.lower()
+            
+            # Dashboard check
+            if destination_lower in ["dashboard", "menu principal", "home", "início", "página inicial"]:
+                from ..odoo.specific.logo import LogoNavigator
+                logo_nav = LogoNavigator(self.page, self.cursor_manager)
+                return await logo_nav._is_on_dashboard()
+            
+            # Portal check
+            elif destination_lower in ["portal", "meu portal", "portal do cliente"]:
+                return '/my' in current_url
+            
+            # Shop check
+            elif destination_lower in ["loja", "e-commerce", "shop", "compras"]:
+                return '/shop' in current_url
+            
+            # Menu/app check - use _is_current_app
+            else:
+                # Parse menu path (e.g., "Vendas > Pedidos" -> app="Vendas")
+                menu_parts = destination.split('>')
+                app_name = menu_parts[0].strip() if menu_parts else destination.strip()
+                
+                if hasattr(self, 'menu') and hasattr(self.menu, '_is_current_app'):
+                    is_current = await self.menu._is_current_app(app_name)
+                    if is_current:
+                        # If submenu specified, check if we're on the submenu
+                        if len(menu_parts) > 1:
+                            submenu = menu_parts[1].strip().lower()
+                            page_title = (await self.page.title()).lower()
+                            # Check if submenu is in title or URL
+                            return submenu in page_title or submenu.replace(' ', '') in current_url.replace(' ', '')
+                        return True
+                
+                return False
+        except Exception as e:
+            logger.debug(f"Erro ao verificar estado atual: {e}")
+            return False
+    
     async def go_to(self, menu_path_or_url: str) -> 'OdooTestBase':
         """
         Navigate to a menu, URL, or user-friendly location - overrides generic go_to().
@@ -268,12 +318,26 @@ class OdooTestBase(
         This method implements Odoo-specific navigation to ensure it's used instead
         of the generic NavigationMixin.go_to().
         
+        Uses state machine: checks current state before navigating.
+        If already at destination, skips navigation.
+        
         Args:
             menu_path_or_url: Menu path, user-friendly text, or URL
             
         Returns:
             Self for method chaining
         """
+        # State machine: check if we're already at the destination
+        if not menu_path_or_url.startswith("/") and not menu_path_or_url.startswith("http"):
+            is_already_there = await self._check_current_state(menu_path_or_url)
+            logger.info(f"Verificação de estado para '{menu_path_or_url}': {is_already_there}")
+            if is_already_there:
+                logger.info(f"✅ Já estamos em '{menu_path_or_url}' - não precisa navegar (máquina de estado)")
+                print(f"  ✅ Já estamos em '{menu_path_or_url}' - não precisa navegar")
+                return self
+            else:
+                logger.info(f"🔄 Não estamos em '{menu_path_or_url}' - precisa navegar")
+                print(f"  🔄 Navegando para '{menu_path_or_url}'...")
         # First check if it's a URL (starts with / or http)
         # BUT: For Odoo, we should NEVER use direct URL navigation to avoid "Missing Action" errors
         # Only allow direct navigation for external URLs (http/https) that are not Odoo URLs
@@ -342,11 +406,16 @@ class OdooTestBase(
         # Resolve user-friendly URLs using OdooNavigationMixin logic
         text_lower = menu_path_or_url.lower().strip()
         
-        # Dashboard/Home mappings
+        # Dashboard/Home mappings - usa navegação via cursor
         if text_lower in ["dashboard", "menu principal", "home", "início", "página inicial"]:
-            await self.menu.go_to_dashboard()
+            # State check already done above - se já está no dashboard, retorna
+            # Se não está, navega usando cursor (sem navegação direta)
+            success = await self.menu.go_to_dashboard()
+            if not success:
+                raise ValueError("Não foi possível navegar para o Dashboard - cursor não conseguiu clicar no elemento necessário")
         # Portal mappings - try to find links first, avoid direct URL navigation
         elif text_lower in ["portal", "meu portal", "portal do cliente"]:
+            # State check already done above, proceed with navigation
             # Try to find portal link
             try:
                 portal_link = self.page.locator('a[href*="/my"], a:has-text("Portal"), a:has-text("Meu Portal")').first
@@ -366,8 +435,10 @@ class OdooTestBase(
                         return self
             except Exception:
                 pass
-            # Fallback: try direct navigation only if link not found
-            await super(SimpleTestBase, self).go_to("/my")
+            # Don't use direct navigation - cursor must be the protagonist
+            # If portal link not found, we should fail rather than navigate without cursor
+            logger.warning("Link do Portal não encontrado - não é possível navegar sem cursor visual")
+            raise ValueError("Não foi possível encontrar link do Portal para navegação com cursor visual")
         # E-commerce/Shop mappings - try to find links first
         elif text_lower in ["loja", "e-commerce", "shop", "compras"]:
             try:
@@ -435,6 +506,7 @@ class OdooTestBase(
             await super(SimpleTestBase, self).go_to("/my/profile")
         else:
             # Not a special URL, treat as menu path (e.g., "Vendas", "Contatos")
+            # State check already done above, proceed with navigation
             # Log navigation attempt
             logger.info(f"Attempting to navigate to menu: {menu_path_or_url}")
             try:

@@ -8,8 +8,9 @@ Handles video speed adjustment, format conversion, and processing.
 
 import logging
 import subprocess
+import time
 from pathlib import Path
-from typing import Optional, List, Any, TYPE_CHECKING
+from typing import Optional, List, Any, Union, Tuple, TYPE_CHECKING
 from datetime import datetime
 
 from ..config import TestConfig
@@ -301,16 +302,20 @@ class VideoProcessor:
         Returns:
             Path to processed video, or None if processing failed
         """
+        process_start_time = time.time()
         logger.info(f"process_all_in_one chamado: video={video_path.name}, test_name={test_name}, subtitles={self.config.video.subtitles}, steps={len(test_steps) if test_steps else 0}")
         print(f"  🔍 DEBUG: process_all_in_one chamado: video={video_path.name}, test_name={test_name}")
+        print(f"  ⏱️  Performance: Iniciando process_all_in_one às {time.strftime('%H:%M:%S')}")
         try:
             # Check if ffmpeg is available
             subprocess.run(['ffmpeg', '-version'], capture_output=True, check=True, timeout=5)
             logger.debug("FFmpeg disponível")
             print(f"  🔍 DEBUG: FFmpeg disponível")
         except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as e:
-            logger.warning("ffmpeg não encontrado. Vídeo não será processado.")
+            process_duration = time.time() - process_start_time
+            logger.warning(f"ffmpeg não encontrado após {process_duration:.2f}s. Vídeo não será processado.")
             print(f"  🔍 DEBUG: FFmpeg NÃO encontrado: {e}")
+            print(f"  ⏱️  Performance: process_all_in_one abortado após {process_duration:.2f}s (FFmpeg não encontrado)")
             return video_path
         
         # Determine output extension based on config
@@ -321,13 +326,18 @@ class VideoProcessor:
         try:
             print(f"  🔍 DEBUG: Entrando no try de process_all_in_one")
             # Create intro screen if test_name is provided
+            # TEMPORARILY DISABLED - focus on fixing library first
             intro_video = None
             formatted_name = None
-            if test_name:
+            if False and test_name:  # DISABLED: test_name
+                intro_start = time.time()
                 formatted_name = self._format_video_name(test_name)
                 logger.info(f"Criando tela inicial para: {formatted_name}")
                 print(f"  🔍 DEBUG: Criando tela inicial para: {formatted_name}")
+                print(f"  ⏱️  Performance: Iniciando criação de tela inicial às {time.strftime('%H:%M:%S')}")
                 intro_video = self._create_intro_screen(formatted_name, duration=3.0)
+                intro_duration = time.time() - intro_start
+                print(f"  ⏱️  Performance: Criação de tela inicial concluída em {intro_duration:.2f}s")
                 if intro_video and intro_video.exists():
                     size_kb = intro_video.stat().st_size / 1024
                     logger.info(f"Tela inicial criada com sucesso: {intro_video.name} ({size_kb:.1f}KB)")
@@ -335,22 +345,29 @@ class VideoProcessor:
                 else:
                     logger.warning(f"Tela inicial não foi criada para: {formatted_name}")
                     print(f"  🔍 DEBUG: Tela inicial NÃO foi criada")
+            else:
+                print(f"  🔍 DEBUG: Tela inicial DESABILITADA para teste de performance")
             
             # Build complex filter combining speed, subtitles, and audio
+            filter_build_start = time.time()
             print(f"  🔍 DEBUG: Construindo filtros...")
+            print(f"  ⏱️  Performance: Iniciando construção de filtros às {time.strftime('%H:%M:%S')}")
             video_filters = []
             audio_filters = []
             input_files = []
             
-            # Add intro video first if created
+            # Add intro video first if created (use relative path if in same directory)
             if intro_video and intro_video.exists():
-                input_files.extend(['-i', str(intro_video)])
+                if intro_video.parent == video_path.parent:
+                    input_files.extend(['-i', intro_video.name])
+                else:
+                    input_files.extend(['-i', str(intro_video)])
                 logger.info(f"Tela inicial será adicionada ao vídeo: {formatted_name}")
             elif test_name:
                 logger.warning(f"Tela inicial não disponível apesar de test_name={test_name}")
             
-            # Add main video
-            input_files.extend(['-i', str(video_path)])
+            # Add main video (will use relative path when FFmpeg runs in video directory)
+            input_files.extend(['-i', video_path.name])
             
             # 1. Speed adjustment
             if self.config.video.speed != 1.0:
@@ -386,22 +403,39 @@ class VideoProcessor:
                     audio_filters.append(f'atempo={self.config.video.speed}')
             
             # 2. Subtitles (if enabled and steps available)
+            # Can use hard subtitles (burned into video) or soft subtitles (separate track)
             srt_path = None
+            use_hard_subtitles = self.config.video.hard_subtitles
+            print(f"  🔍 DEBUG: hard_subtitles config: {use_hard_subtitles}")
             if self.config.video.subtitles and test_steps:
+                subtitle_gen_start = time.time()
                 print(f"  🔍 DEBUG: Gerando legendas...")
+                print(f"  ⏱️  Performance: Iniciando geração de legendas às {time.strftime('%H:%M:%S')}")
                 # test_steps can be TestStep objects or dicts - _generate_srt_file handles both
                 srt_path = await subtitle_generator.generate(video_path, test_steps, start_time)
+                subtitle_gen_duration = time.time() - subtitle_gen_start
+                print(f"  ⏱️  Performance: Geração de legendas concluída em {subtitle_gen_duration:.2f}s")
                 if srt_path and srt_path.exists():
-                    # Use absolute path for subtitles filter to avoid path issues
-                    srt_absolute = srt_path.resolve()
-                    # Escape single quotes in path if any
-                    srt_path_escaped = str(srt_absolute).replace("'", "'\\''")
-                    # Use subtitles filter with absolute path
-                    # WARNING: This filter is SLOW and forces full re-encode
-                    # Consider disabling subtitles if speed is critical
-                    logger.warning(f"Adicionando legendas (isso pode demorar): {srt_path.name}")
-                    print(f"  🔍 DEBUG: Legendas geradas: {srt_path.name}, adicionando filtro")
-                    video_filters.append(f"subtitles='{srt_path_escaped}':force_style='FontSize=24,PrimaryColour=&Hffffff,OutlineColour=&H000000,Outline=2,Alignment=2'")
+                    if use_hard_subtitles:
+                        # Use hard subtitles (burned into video) - requires re-encode
+                        # Use filename only (SRT is in same directory as video)
+                        # FFmpeg will look for it relative to video file location
+                        srt_filename = srt_path.name
+                        # Escape for filter: colon, brackets, single quotes
+                        srt_path_escaped = (srt_filename
+                                          .replace(':', '\\:')
+                                          .replace('[', '\\[')
+                                          .replace(']', '\\]')
+                                          .replace("'", "\\'"))
+                        # Use single quotes for the path
+                        subtitle_filter = f"subtitles='{srt_path_escaped}':force_style='FontSize=24,PrimaryColour=&Hffffff,OutlineColour=&H000000,Outline=2,Alignment=2,MarginV=20'"
+                        video_filters.append(subtitle_filter)
+                        logger.info(f"Legendas serão queimadas no vídeo (hard subtitles): {srt_path.name}")
+                        print(f"  🔍 DEBUG: Legendas geradas: {srt_path.name}, serão queimadas no vídeo (hard subtitles)")
+                    else:
+                        # Use soft subtitles (separate track) - MUCH faster, no re-encode needed
+                        logger.info(f"Legendas serão adicionadas como faixa separada (soft subtitles): {srt_path.name}")
+                        print(f"  🔍 DEBUG: Legendas geradas: {srt_path.name}, serão adicionadas como faixa separada (soft subtitles - rápido)")
                 else:
                     print(f"  🔍 DEBUG: Legendas NÃO foram geradas")
             else:
@@ -410,20 +444,37 @@ class VideoProcessor:
             # 3. Build ffmpeg command
             cmd = ['ffmpeg'] + input_files
             
+            # Add subtitle file as input (for soft subtitles - no re-encode needed!)
+            if srt_path and srt_path.exists() and not use_hard_subtitles:
+                cmd.extend(['-i', str(srt_path)])
+            
             # Add audio inputs (narration takes priority, then background audio)
+            # Use relative paths from video directory for FFmpeg execution
             audio_inputs = []
+            audio_input_paths = []
+            
+            # Add narration audio (now always a single concatenated file with silence)
             if narration_audio and narration_audio.exists():
-                audio_inputs.append(str(narration_audio))
+                audio_inputs.append(narration_audio)
+                # Use relative path if in same directory, otherwise absolute
+                if narration_audio.parent == video_path.parent:
+                    audio_input_paths.append(narration_audio.name)
+                else:
+                    audio_input_paths.append(str(narration_audio))
             if self.config.video.audio_file:
                 audio_path = Path(self.config.video.audio_file)
                 if audio_path.exists():
-                    audio_inputs.append(str(audio_path))
+                    audio_inputs.append(audio_path)
+                    if audio_path.parent == video_path.parent:
+                        audio_input_paths.append(audio_path.name)
+                    else:
+                        audio_input_paths.append(str(audio_path))
             
-            for i, audio_input in enumerate(audio_inputs):
+            for i, audio_input_path in enumerate(audio_input_paths):
                 # Loop background audio if mixing with narration
-                if len(audio_inputs) > 1 and i == len(audio_inputs) - 1:
+                if len(audio_input_paths) > 1 and i == len(audio_input_paths) - 1:
                     cmd.extend(['-stream_loop', '-1'])
-                cmd.extend(['-i', audio_input])
+                cmd.extend(['-i', audio_input_path])
             
             # Clean up intro video after processing
             intro_cleanup = intro_video if intro_video and intro_video.exists() else None
@@ -434,30 +485,137 @@ class VideoProcessor:
             audio_output_label = '[a]'
             
             # Determine input indices
+            # Input order: [0] intro (if exists), [1] main video, [2] subtitles (if soft subtitles), [3+] audio inputs
             main_video_idx = 1 if intro_video and intro_video.exists() else 0
             intro_video_idx = 0 if intro_video and intro_video.exists() else None
+            subtitle_input_idx = None
+            if srt_path and srt_path.exists() and not use_hard_subtitles:
+                # Subtitle input index: after intro (if exists) + main video
+                # Input order: [0] intro (if exists), [1] main video, [2] subtitles (if intro exists), [1] subtitles (if no intro)
+                subtitle_input_idx = (1 if intro_video and intro_video.exists() else 0) + 1
             
             # Check conditions for fast path
-            has_video_filters = bool(video_filters)
+            # IMPORTANT: Soft subtitles don't count as video_filters - they don't require re-encode!
+            # Hard subtitles DO count as video_filters because they require re-encode
+            has_video_filters = bool(video_filters)  # Speed/setpts filters + hard subtitles (if enabled)
             needs_conversion = self.config.video.codec == "mp4" and video_path.suffix == ".webm"
             has_intro = intro_video and intro_video.exists()
             has_audio_input = len(audio_inputs) > 0
-            audio_input_offset = (2 if intro_video and intro_video.exists() else 1)
+            has_soft_subtitles = srt_path and srt_path.exists() and not use_hard_subtitles
+            # Audio input offset: intro(1) + main(1) + subtitles(1 if soft subtitles) = base offset
+            audio_input_offset = (1 if intro_video and intro_video.exists() else 0) + 1 + (1 if has_soft_subtitles else 0)
             
-            # Fast path: Only intro + conversion, no filters, no speed change
-            # Even with subtitles, we can optimize by using faster preset
-            # BUT: if we have video filters (like subtitles), we CANNOT use fast path
-            # Fast path is only for simple intro + conversion without any filters
+            # Fast path: intro + conversion + soft subtitles (all without re-encode except conversion)
+            # Soft subtitles can be added with -c copy, so they don't block fast path!
+            # Hard subtitles block fast path because they require re-encode
             use_fast_path = (has_intro and not audio_filters and 
                            self.config.video.speed == 1.0 and not has_audio_input and
-                           not has_video_filters)  # NO VIDEO FILTERS for fast path!
+                           not has_video_filters)  # NO VIDEO FILTERS (but soft subtitles are OK!)
             
             if use_fast_path:
                 print(f"  🔍 DEBUG: use_fast_path=True, has_video_filters={has_video_filters}, needs_conversion={needs_conversion}")
                 if not has_video_filters:
                     # No filters at all - fastest path
-                    logger.info("Usando caminho rápido: apenas concatenação + conversão (sem filtros)")
+                    logger.info("Usando caminho rápido: concatenação em webm + conversão para mp4")
                     print(f"  🔍 DEBUG: Caminho rápido sem filtros")
+                    if needs_conversion and has_intro:
+                        # OPTIMIZED: Concat in webm first (can use copy = fast!), then convert to mp4
+                        # Step 1: Convert intro.mp4 to webm (quick)
+                        intro_webm = None
+                        if intro_video and intro_video.exists():
+                            intro_webm_start = time.time()
+                            intro_webm = video_path.parent / f"intro_{video_path.stem}.webm"
+                            print(f"  🔍 DEBUG: Convertendo intro para webm: {intro_webm.name}")
+                            convert_intro_cmd = [
+                                'ffmpeg', '-i', str(intro_video),
+                                '-c:v', 'libvpx-vp9', '-preset', 'ultrafast', '-crf', '30',
+                                '-c:a', 'libopus', '-y', str(intro_webm)
+                            ]
+                            convert_result = subprocess.run(convert_intro_cmd, capture_output=True, text=True, timeout=30)
+                            intro_webm_duration = time.time() - intro_webm_start
+                            print(f"  ⏱️  Performance: Intro convertido para webm em {intro_webm_duration:.2f}s")
+                            if convert_result.returncode != 0 or not intro_webm.exists():
+                                logger.warning("Falha ao converter intro para webm, usando método direto")
+                                intro_webm = None
+                        
+                        # Step 2: Concat intro.webm + main.webm → temp.webm (using copy = FAST!)
+                        if intro_webm and intro_webm.exists():
+                            concat_start = time.time()
+                            temp_webm = video_path.parent / f"{video_path.stem}_concat.webm"
+                            # Create concat file for demuxer (fastest method)
+                            concat_file = video_path.parent / f"{video_path.stem}_concat.txt"
+                            with open(concat_file, 'w') as f:
+                                f.write(f"file '{intro_webm.absolute()}'\n")
+                                f.write(f"file '{video_path.absolute()}'\n")
+                            
+                            concat_cmd = [
+                                'ffmpeg', '-f', 'concat', '-safe', '0', '-i', str(concat_file),
+                                '-c', 'copy', '-y', str(temp_webm)
+                            ]
+                            print(f"  🔍 DEBUG: Concatenando em webm (copy - rápido!)")
+                            concat_result = subprocess.run(concat_cmd, capture_output=True, text=True, timeout=60)
+                            concat_duration = time.time() - concat_start
+                            print(f"  ⏱️  Performance: Concatenação webm concluída em {concat_duration:.2f}s")
+                            
+                            # Clean up concat file and intro webm
+                            if concat_file.exists():
+                                concat_file.unlink()
+                            if intro_webm.exists():
+                                intro_webm.unlink()
+                            
+                            if concat_result.returncode == 0 and temp_webm.exists():
+                                # Step 3: Convert temp.webm → final.mp4 with soft subtitles
+                                convert_start = time.time()
+                                print(f"  🔍 DEBUG: Convertendo webm concatenado para mp4 com legendas")
+                                final_cmd = ['ffmpeg', '-i', str(temp_webm)]
+                                if srt_path and srt_path.exists():
+                                    final_cmd.extend(['-i', str(srt_path)])
+                                    final_cmd.extend(['-map', '0:v', '-map', '0:a?', '-map', '1:s?'])
+                                    final_cmd.extend(['-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-threads', '0'])
+                                    final_cmd.extend(['-c:a', 'aac'])
+                                    final_cmd.extend(['-c:s', 'mov_text'])
+                                else:
+                                    final_cmd.extend(['-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-threads', '0'])
+                                    final_cmd.extend(['-c:a', 'aac'])
+                                final_cmd.extend(['-y', str(output_path)])
+                                
+                                ffmpeg_start_time = time.time()
+                                print(f"  ⏱️  Performance: Iniciando conversão final webm→mp4 às {time.strftime('%H:%M:%S')}")
+                                result = subprocess.run(final_cmd, capture_output=True, text=True, timeout=600)
+                                convert_duration = time.time() - convert_start
+                                ffmpeg_duration = time.time() - ffmpeg_start_time
+                                print(f"  ⏱️  Performance: Conversão webm→mp4 concluída em {ffmpeg_duration:.2f}s")
+                                
+                                # Clean up temp webm
+                                if temp_webm.exists():
+                                    temp_webm.unlink()
+                                
+                                if result.returncode == 0 and output_path.exists():
+                                    if video_path.exists():
+                                        video_path.unlink()
+                                    process_duration = time.time() - process_start_time
+                                    logger.info(f"process_all_in_one concluído (fast path - webm concat) em {process_duration:.2f}s")
+                                    print(f"  ⏱️  Performance: process_all_in_one concluído (fast path - webm concat) em {process_duration:.2f}s")
+                                    if intro_cleanup and intro_cleanup.exists():
+                                        try:
+                                            intro_cleanup.unlink()
+                                        except Exception as e:
+                                            logger.warning(f"Erro ao remover tela inicial temporária: {e}")
+                                    return output_path
+                                else:
+                                    error_output = result.stderr if result.stderr else result.stdout or 'Erro desconhecido'
+                                    logger.error(f"FFmpeg error (conversão final): {error_output[:500]}")
+                                    if output_path.exists():
+                                        output_path.unlink()
+                                    raise VideoProcessingError(f"Falha ao converter para MP4: {error_output[:500]}")
+                            else:
+                                logger.warning("Falha na concatenação webm, usando método direto")
+                                # Fall through to direct method
+                        else:
+                            logger.warning("Intro webm não disponível, usando método direto")
+                            # Fall through to direct method
+                    
+                    # Direct method: concat + convert in one pass (if webm concat failed or no intro)
                     if needs_conversion:
                         # Concat intro + main, then convert to mp4
                         print(f"  🔍 DEBUG: Precisa conversão, criando filter_complex para concat + conversão")
@@ -466,10 +624,46 @@ class VideoProcessor:
                         cmd.extend(['-map', '[v]'])
                         # Copy audio from main video if exists
                         cmd.extend(['-map', f'{main_video_idx}:a?'])
-                        cmd.extend(['-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23'])
+                        # Add soft subtitles if available (no re-encode needed!)
+                        if has_soft_subtitles and subtitle_input_idx is not None:
+                            cmd.extend(['-map', f'{subtitle_input_idx}:s?'])
+                            cmd.extend(['-c:s', 'mov_text'])  # MP4 subtitle codec
+                        cmd.extend(['-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-threads', '0'])
                         cmd.extend(['-c:a', 'aac'])
                         cmd.extend(['-y', str(output_path)])
-                        print(f"  🔍 DEBUG: Comando FFmpeg montado, continuando para execução...")
+                        print(f"  🔍 DEBUG: Comando FFmpeg montado, executando...")
+                        # Execute FFmpeg immediately for fast path
+                        ffmpeg_start_time = time.time()
+                        logger.info("Iniciando processamento FFmpeg (fast path)...")
+                        print(f"  ⏱️  Performance: Iniciando FFmpeg (fast path) às {time.strftime('%H:%M:%S')}")
+                        try:
+                            result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+                            ffmpeg_duration = time.time() - ffmpeg_start_time
+                            logger.info(f"FFmpeg processou (fast path) em {ffmpeg_duration:.2f}s")
+                            print(f"  ⏱️  Performance: FFmpeg (fast path) concluído em {ffmpeg_duration:.2f}s")
+                        except subprocess.TimeoutExpired as e:
+                            logger.error(f"Timeout no processamento FFmpeg (fast path) após 600s")
+                            raise VideoProcessingError(f"Video processing timeout: {e}") from e
+                        
+                        if result.returncode == 0 and output_path.exists():
+                            if video_path.exists():
+                                video_path.unlink()
+                            process_duration = time.time() - process_start_time
+                            logger.info(f"process_all_in_one concluído (fast path) em {process_duration:.2f}s")
+                            print(f"  ⏱️  Performance: process_all_in_one concluído (fast path) em {process_duration:.2f}s")
+                            # Clean up intro video
+                            if intro_cleanup and intro_cleanup.exists():
+                                try:
+                                    intro_cleanup.unlink()
+                                except Exception as e:
+                                    logger.warning(f"Erro ao remover tela inicial temporária: {e}")
+                            return output_path
+                        else:
+                            error_output = result.stderr if result.stderr else result.stdout or 'Erro desconhecido'
+                            logger.error(f"FFmpeg error (fast path): {error_output[:500]}")
+                            if output_path.exists():
+                                output_path.unlink()
+                            raise VideoProcessingError(f"Falha ao processar vídeo (fast path): {error_output[:500]}")
                     else:
                         # Just concat, no conversion needed
                         print(f"  🔍 DEBUG: Sem conversão, apenas concat")
@@ -477,31 +671,53 @@ class VideoProcessor:
                         cmd.extend(['-filter_complex', ';'.join(filter_complex_parts)])
                         cmd.extend(['-map', '[v]'])
                         cmd.extend(['-map', f'{main_video_idx}:a?'])
+                        # Add soft subtitles if available (no re-encode needed!)
+                        if has_soft_subtitles and subtitle_input_idx is not None:
+                            cmd.extend(['-map', f'{subtitle_input_idx}:s?'])
+                            cmd.extend(['-c:s', 'mov_text'])  # MP4 subtitle codec
                         cmd.extend(['-c:v', 'copy'])
                         cmd.extend(['-c:a', 'copy'])
                         cmd.extend(['-y', str(output_path)])
-                        print(f"  🔍 DEBUG: Comando FFmpeg montado (copy), continuando para execução...")
+                        print(f"  🔍 DEBUG: Comando FFmpeg montado (copy), executando...")
+                        # Execute FFmpeg immediately for fast path
+                        ffmpeg_start_time = time.time()
+                        logger.info("Iniciando processamento FFmpeg (fast path - copy)...")
+                        print(f"  ⏱️  Performance: Iniciando FFmpeg (fast path - copy) às {time.strftime('%H:%M:%S')}")
+                        try:
+                            result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+                            ffmpeg_duration = time.time() - ffmpeg_start_time
+                            logger.info(f"FFmpeg processou (fast path - copy) em {ffmpeg_duration:.2f}s")
+                            print(f"  ⏱️  Performance: FFmpeg (fast path - copy) concluído em {ffmpeg_duration:.2f}s")
+                        except subprocess.TimeoutExpired as e:
+                            logger.error(f"Timeout no processamento FFmpeg (fast path - copy) após 600s")
+                            raise VideoProcessingError(f"Video processing timeout: {e}") from e
+                        
+                        if result.returncode == 0 and output_path.exists():
+                            if video_path.exists():
+                                video_path.unlink()
+                            process_duration = time.time() - process_start_time
+                            logger.info(f"process_all_in_one concluído (fast path - copy) em {process_duration:.2f}s")
+                            print(f"  ⏱️  Performance: process_all_in_one concluído (fast path - copy) em {process_duration:.2f}s")
+                            # Clean up intro video
+                            if intro_cleanup and intro_cleanup.exists():
+                                try:
+                                    intro_cleanup.unlink()
+                                except Exception as e:
+                                    logger.warning(f"Erro ao remover tela inicial temporária: {e}")
+                            return output_path
+                        else:
+                            error_output = result.stderr if result.stderr else result.stdout or 'Erro desconhecido'
+                            logger.error(f"FFmpeg error (fast path - copy): {error_output[:500]}")
+                            if output_path.exists():
+                                output_path.unlink()
+                            raise VideoProcessingError(f"Falha ao processar vídeo (fast path - copy): {error_output[:500]}")
                 else:
                     # Has video filters (subtitles) but can still optimize
                     # NOTE: This should not happen if use_fast_path logic is correct
                     logger.warning("use_fast_path=True mas has_video_filters=True - isso não deveria acontecer!")
                     print(f"  🔍 DEBUG: ERRO: use_fast_path=True mas tem filtros de vídeo!")
-                    # Apply subtitles to main video first, then concat with intro
-                    video_filter_chain = ','.join(video_filters)
-                    filter_complex_parts = [
-                        f'[{main_video_idx}:v]{video_filter_chain}[main_v]',
-                        f'[{intro_video_idx}:v][main_v]concat=n=2:v=1:a=0[v]'
-                    ]
-                    cmd.extend(['-filter_complex', ';'.join(filter_complex_parts)])
-                    cmd.extend(['-map', '[v]'])
-                    cmd.extend(['-map', f'{main_video_idx}:a?'])
-                    if needs_conversion:
-                        cmd.extend(['-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23'])
-                    else:
-                        cmd.extend(['-c:v', 'libx264', '-preset', 'ultrafast'])  # Still need to encode for subtitles
-                    cmd.extend(['-c:a', 'aac' if needs_conversion else 'copy'])
-                    cmd.extend(['-y', str(output_path)])
-                    print(f"  🔍 DEBUG: Comando FFmpeg montado (com filtros), continuando para execução...")
+                    # This case shouldn't happen, but if it does, fall through to full path processing
+                    # Don't execute here, let it fall through to the full path handler below
             else:
                 # Not using fast path - build filters normally
                 if intro_video and intro_video.exists():
@@ -522,6 +738,7 @@ class VideoProcessor:
                 if has_audio_input:
                     # Use only external audio inputs (narration/background) if video doesn't have audio
                     # This avoids the "Output with label '1:a' does not exist" error
+                    # Audio is now always a single concatenated file (with silence already included)
                     num_audio_inputs = len(audio_inputs)
                     
                     if audio_filters:
@@ -534,9 +751,10 @@ class VideoProcessor:
                     else:
                         # Just use external audio (no mixing with video audio to avoid errors)
                         if num_audio_inputs == 1:
-                            filter_complex_parts.append(f'[{audio_input_offset}:a]{audio_output_label}')
+                            # No filters needed, just map directly - don't add to filter_complex
+                            audio_output_label = f'[{audio_input_offset}:a]'
                         else:
-                            # Multiple audio inputs (narration + background)
+                            # Multiple audio inputs (narration + background) - need to mix
                             filter_complex_parts.append(f'[{audio_input_offset}:a][{audio_input_offset + 1}:a]amix=inputs=2{audio_output_label}')
                 elif audio_filters:
                     # Only speed adjustment - but video might not have audio
@@ -545,48 +763,99 @@ class VideoProcessor:
                 else:
                     audio_output_label = f'[{main_video_idx}:a]?'  # Use input directly (optional)
             
+            filter_build_duration = time.time() - filter_build_start
+            print(f"  ⏱️  Performance: Construção de filtros concluída em {filter_build_duration:.3f}s")
             print(f"  🔍 DEBUG: filter_complex_parts={len(filter_complex_parts)}, use_fast_path={use_fast_path}")
             if filter_complex_parts and not use_fast_path:
                 # Full processing path (with filters)
                 print(f"  🔍 DEBUG: Entrando no caminho completo de processamento")
-                cmd.extend(['-filter_complex', ';'.join(filter_complex_parts)])
-                # Map video stream
-                if video_output_label == '[v]':
-                    cmd.extend(['-map', '[v]'])
+                # If we only have video filters (no audio mixing needed), use -vf instead of -filter_complex
+                # This is simpler and more reliable for subtitles filter
+                # Check if audio_output_label is a direct input reference (not from filter_complex)
+                use_vf = (video_filters and 
+                         audio_output_label and 
+                         audio_output_label.startswith('[') and 
+                         not audio_output_label == '[a]' and
+                         ';' not in ';'.join(filter_complex_parts) or len([p for p in filter_complex_parts if ':a' in p]) == 0)
+                
+                # If we have video filters and external audio (no complex audio mixing), use -vf
+                # This is simpler and more reliable for subtitles filter
+                if video_filters and has_audio_input and len(audio_inputs) == 1 and not audio_filters:
+                    # Simple case: video filters + single external audio, use -vf for video
+                    video_filter_chain = ','.join(video_filters)
+                    cmd.extend(['-vf', video_filter_chain])
+                    # Map video and audio directly
+                    cmd.extend(['-map', f'{main_video_idx}:v'])
+                    cmd.extend(['-map', f'{audio_input_offset}:a'])
                 else:
-                    cmd.extend(['-map', '0:v'])
-                # Map audio stream (only if audio output label was created)
-                if audio_output_label == '[a]':
-                    # Audio was processed through filter_complex
-                    cmd.extend(['-map', '[a]'])
-                elif audio_output_label.startswith('[') and audio_output_label.endswith(']'):
-                    # Audio label from filter (e.g., [0:a]?)
-                    # Extract the label without '?' if present
-                    audio_label = audio_output_label.rstrip('?')
-                    cmd.extend(['-map', audio_label])
-                # If audio_output_label is None or empty, don't map audio
+                    # Complex case: need filter_complex for audio mixing or multiple filters
+                    cmd.extend(['-filter_complex', ';'.join(filter_complex_parts)])
+                    # Map video stream
+                    if video_output_label == '[v]':
+                        cmd.extend(['-map', '[v]'])
+                    else:
+                        cmd.extend(['-map', '0:v'])
+                    # Map audio stream (only if audio output label was created)
+                    if audio_output_label == '[a]':
+                        # Audio was processed through filter_complex
+                        cmd.extend(['-map', '[a]'])
+                    elif audio_output_label and audio_output_label.startswith('[') and audio_output_label.endswith(']'):
+                        # Audio label from filter (e.g., [0:a]?)
+                        # Extract the label without '?' if present
+                        audio_label = audio_output_label.rstrip('?')
+                        cmd.extend(['-map', audio_label])
+                    # If audio_output_label is None or empty, don't map audio
+                
+                # Add soft subtitles if available (no re-encode needed!)
+                if has_soft_subtitles and subtitle_input_idx is not None:
+                    cmd.extend(['-map', f'{subtitle_input_idx}:s?'])
+                    cmd.extend(['-c:s', 'mov_text'])  # MP4 subtitle codec
                 
                 # Video codec (re-encode if we have video filters or need to convert format)
                 # If output should be mp4 but input is webm, always re-encode
+                # NOTE: Soft subtitles don't require re-encode, so they don't affect needs_reencode
                 needs_reencode = bool(video_filters) or (self.config.video.codec == "mp4" and video_path.suffix == ".webm")
                 if needs_reencode:
-                    # Use faster preset for better performance
-                    cmd.extend(['-c:v', 'libx264', '-preset', 'fast', '-crf', '23'])
+                    # Use ultrafast preset for maximum performance (especially important with subtitles filter)
+                    # Use multiple threads for faster encoding
+                    cmd.extend(['-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-threads', '0'])
                 else:
                     cmd.extend(['-c:v', 'copy'])  # No video filters, just copy
             else:
-                # No filters, just copy streams
-                print(f"  🔍 DEBUG: Sem filtros, apenas copiando streams (RETORNANDO AQUI!)")
-                cmd.extend(['-c:v', 'copy'])
-                cmd.extend(['-c:a', 'copy'])
+                # No filters, but may need format conversion
+                print(f"  🔍 DEBUG: Sem filtros, verificando se precisa conversão...")
+                needs_conversion = self.config.video.codec == "mp4" and video_path.suffix == ".webm"
+                # Map video and audio
+                cmd.extend(['-map', f'{main_video_idx}:v'])
+                cmd.extend(['-map', f'{main_video_idx}:a?'])
+                # Add soft subtitles if available (no re-encode needed!)
+                if has_soft_subtitles and subtitle_input_idx is not None:
+                    cmd.extend(['-map', f'{subtitle_input_idx}:s?'])
+                    cmd.extend(['-c:s', 'mov_text'])  # MP4 subtitle codec
+                if needs_conversion:
+                    # Need to convert format, can't just copy
+                    print(f"  🔍 DEBUG: Precisa conversão webm->mp4, usando codec libx264")
+                    cmd.extend(['-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-threads', '0'])
+                    cmd.extend(['-c:a', 'aac'])
+                else:
+                    # No conversion needed, just copy
+                    print(f"  🔍 DEBUG: Sem conversão, apenas copiando streams")
+                    cmd.extend(['-c:v', 'copy'])
+                    cmd.extend(['-c:a', 'copy'])
                 cmd.extend(['-y', str(output_path)])
-                # Run simple copy command
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+                # Run command
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
                 if result.returncode == 0 and output_path.exists():
-                    video_path.unlink()
-                    output_path.rename(video_path)
-                    return video_path
-                print(f"  🔍 DEBUG: Copy falhou, retornando vídeo original")
+                    if video_path.exists():
+                        video_path.unlink()
+                    process_duration = time.time() - process_start_time
+                    logger.info(f"process_all_in_one concluído (caminho simples) em {process_duration:.2f}s")
+                    print(f"  ⏱️  Performance: process_all_in_one concluído (caminho simples) em {process_duration:.2f}s")
+                    # Return processed video (caller will rename)
+                    return output_path
+                process_duration = time.time() - process_start_time
+                print(f"  🔍 DEBUG: Processamento falhou após {process_duration:.2f}s, retornando vídeo original")
+                print(f"  ⏱️  Performance: process_all_in_one falhou após {process_duration:.2f}s")
                 return video_path
             
             # Audio codec
@@ -598,30 +867,48 @@ class VideoProcessor:
             else:
                 cmd.extend(['-c:a', 'copy'])
             
-            cmd.extend(['-y', str(output_path)])
+            # Output path - use relative path when running in video directory
+            if output_path.parent == video_path.parent:
+                cmd.extend(['-y', output_path.name])
+            else:
+                cmd.extend(['-y', str(output_path)])
             
             # IMPORTANT: Don't limit duration - preserve full video length
             # Remove any -t or -to flags that might limit duration
             
             # Log command for debugging
+            cmd_build_duration = time.time() - filter_build_start
             logger.info(f"Processando vídeo: {video_path.name} -> {output_path.name}")
             print(f"  🔍 DEBUG: Processando vídeo: {video_path.name} -> {output_path.name}")
+            print(f"  ⏱️  Performance: Comando FFmpeg montado em {cmd_build_duration:.3f}s")
             logger.debug(f"FFmpeg command: {' '.join(cmd)}")
+            # Print command for debugging when there are errors
+            if video_filters or filter_complex_parts:
+                print(f"  🔍 DEBUG: Comando FFmpeg completo: {' '.join(cmd[:20])}...")
+                if filter_complex_parts:
+                    print(f"  🔍 DEBUG: filter_complex: {';'.join(filter_complex_parts)[:200]}...")
             if intro_video and intro_video.exists():
                 logger.info(f"Tela inicial incluída: {intro_video.name} ({intro_video.stat().st_size / 1024:.1f}KB)")
                 print(f"  🔍 DEBUG: Tela inicial incluída: {intro_video.name}")
             
             # Run ffmpeg (single pass - much faster!)
             # Increased timeout for large videos with subtitles and intro screen
+            ffmpeg_start_time = time.time()
             logger.info("Iniciando processamento FFmpeg...")
             print(f"  🔍 DEBUG: Iniciando processamento FFmpeg...")
+            print(f"  ⏱️  Performance: Iniciando FFmpeg às {time.strftime('%H:%M:%S')}")
             try:
+                # Change to video directory so SRT paths work correctly with relative paths
                 result = subprocess.run(
                     cmd,
                     capture_output=True,
                     text=True,
-                    timeout=600  # 10 minutes for complex processing
+                    timeout=600,  # 10 minutes for complex processing
+                    cwd=str(video_path.parent)
                 )
+                ffmpeg_duration = time.time() - ffmpeg_start_time
+                logger.info(f"FFmpeg processou em {ffmpeg_duration:.2f}s")
+                print(f"  ⏱️  Performance: FFmpeg concluído em {ffmpeg_duration:.2f}s")
             except subprocess.TimeoutExpired as e:
                 logger.error(f"Timeout no processamento FFmpeg após 600s")
                 logger.error(f"Comando que causou timeout: {' '.join(cmd[:10])}...")
@@ -661,16 +948,12 @@ class VideoProcessor:
                         logger.warning(f"FFmpeg warnings: {warnings[:5]}")
             
             if result.returncode == 0 and output_path.exists():
-                # If output is different format (e.g., mp4 from webm), delete original and use output
-                if output_path.suffix != video_path.suffix:
-                    video_path.unlink()  # Delete original webm
-                    # Return the output file (mp4)
-                    final_video = output_path
-                else:
-                    # Same format, rename output to original name
-                    video_path.unlink()
-                    output_path.rename(video_path)
-                    final_video = video_path
+                # Always delete original video and return processed video
+                # The caller (test_executor) will handle renaming to expected name
+                if video_path.exists():
+                    video_path.unlink()  # Delete original video
+                # Return the processed output file (keeps _processed suffix for caller to rename)
+                final_video = output_path
                 
                 # Clean up SRT file if created (but keep it for debugging for now)
                 # TODO: Remove this after verifying subtitle timing
@@ -704,6 +987,9 @@ class VideoProcessor:
                     logger.error(error_msg)
                     raise RuntimeError(error_msg)
                 
+                process_duration = time.time() - process_start_time
+                logger.info(f"process_all_in_one concluído em {process_duration:.2f}s total")
+                print(f"  ⏱️  Performance: process_all_in_one concluído em {process_duration:.2f}s total")
                 return final_video
             else:
                 # Get full error message
@@ -723,7 +1009,9 @@ class VideoProcessor:
                 if self.config.video.codec == "mp4":
                     raise VideoProcessingError(f"Falha ao processar vídeo para MP4: {error_msg}")
                 # Return original video if processing failed but MP4 not required
-                logger.warning(f"Processamento falhou, retornando vídeo original: {video_path}")
+                process_duration = time.time() - process_start_time
+                logger.warning(f"Processamento falhou após {process_duration:.2f}s, retornando vídeo original: {video_path}")
+                print(f"  ⏱️  Performance: process_all_in_one falhou após {process_duration:.2f}s")
                 return video_path
                 
         except subprocess.TimeoutExpired as e:

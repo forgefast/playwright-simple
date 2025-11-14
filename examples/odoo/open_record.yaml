@@ -1,0 +1,24 @@
+name: Abrir Registro Odoo
+description: Abrir um registro na lista usando apenas ações core
+
+# Recebe parâmetros: record_text (texto do registro para clicar)
+
+steps:
+  # Buscar o registro primeiro (se necessário)
+  - if: "{{ record_text }}"
+    then:
+      - compose: odoo/search.yaml
+        params:
+          search_text: "{{ record_text }}"
+          wait_for_results: true
+  
+  # Clicar no registro
+  - action: click
+    text: "{{ record_text }}"
+    description: "Abrir registro {{ record_text }}"
+  
+  # Aguardar carregamento do formulário
+  - action: wait
+    seconds: 0.5
+    description: "Aguardar carregamento do formulário"
+

@@ -1,0 +1,22 @@
+name: Preencher Campo Odoo
+description: Preencher um campo específico usando apenas ações core
+
+# Recebe parâmetros: field_label, field_value
+
+steps:
+  # Clicar no campo pelo label
+  - action: click
+    text: "{{ field_label }}"
+    description: "Clicar no campo {{ field_label }}"
+  
+  # Preencher o campo
+  - action: type
+    text: "{{ field_value }}"
+    description: "Preencher campo {{ field_label }} com {{ field_value }}"
+  
+  # Pressionar Tab ou Enter para confirmar (se necessário)
+  - action: press
+    key: "Tab"
+    description: "Confirmar preenchimento"
+    optional: true
+

@@ -1,0 +1,171 @@
+name: Critérios de Ingresso
+description: Demonstra os requisitos e processo para se tornar um revendedor.
+
+base_url: https://odoo.racco.com.br
+
+config:
+  video:
+    enabled: true
+    quality: high
+    codec: mp4
+    speed: 1.0
+    subtitles: true
+    hard_subtitles: false
+    audio: true
+    narration: true
+    narration_lang: pt-BR
+    narration_engine: gtts
+    narration_slow: false
+  debug:
+    enabled: true
+    pause_on_error: true
+    interactive_mode: true
+    hot_reload_enabled: true
+  logging:
+    level: DEBUG
+    console_output: true
+  browser:
+    headless: false
+    slow_mo: 50
+
+steps:
+  # Login
+  - action: login
+    login: admin
+    password: admin
+    database: devel
+    description: "Login como admin"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Mostra categorias de parceiros (perfis disponíveis)
+  - action: navigate_menu
+    menu_path: ["Contatos", "Categorias"]
+    description: "Navegar para Categorias"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 01_partner_categories
+    description: "Categorias de Parceiros"
+  
+  # Filtra para mostrar categorias de revendedor
+  - action: search
+    search_text: "Revendedor"
+    description: "Buscar Revendedor"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 02_revendedor_categories
+    description: "Categorias de Revendedor"
+  
+  # Mostra níveis disponíveis
+  - action: search
+    search_text: "Bronze"
+    description: "Buscar Bronze"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 03_level_bronze_criteria
+    description: "Critérios Nível Bronze"
+  
+  - action: search
+    search_text: "Prata"
+    description: "Buscar Prata"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 03_level_prata_criteria
+    description: "Critérios Nível Prata"
+  
+  - action: search
+    search_text: "Ouro"
+    description: "Buscar Ouro"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 03_level_ouro_criteria
+    description: "Critérios Nível Ouro"
+  
+  - action: search
+    search_text: "Platinum"
+    description: "Buscar Platinum"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 03_level_platinum_criteria
+    description: "Critérios Nível Platinum"
+  
+  # Mostra processo de cadastro - vai para clientes
+  - action: navigate_menu
+    menu_path: ["Contatos", "Clientes"]
+    description: "Navegar para Clientes"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Tenta criar novo parceiro para mostrar formulário
+  - action: click_button
+    text: "Criar"
+    description: "Criar novo parceiro"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 04_new_partner_form
+    description: "Formulário de Cadastro"
+  
+  # Preenche alguns campos de exemplo
+  - action: fill_field
+    field_label: "Nome"
+    field_value: "Novo Revendedor Teste"
+    description: "Preencher campo Nome"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: fill_field
+    field_label: "Email"
+    field_value: "novo.revendedor@exemplo.com"
+    description: "Preencher campo Email"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 05_partner_form_filled
+    description: "Formulário Preenchido"
+  
+  # Cancela criação
+  - action: click_button
+    text: "Descartar"
+    description: "Descartar criação"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Mostra requisitos
+  - action: navigate_menu
+    menu_path: ["Vendas", "Configuração"]
+    description: "Navegar para Configuração"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 06_ingress_requirements
+    description: "Requisitos de Ingresso"
+

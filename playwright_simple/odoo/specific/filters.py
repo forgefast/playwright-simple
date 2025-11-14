@@ -36,7 +36,11 @@ class FilterHelper:
         # Try to find the filter dropdown button/arrow
         # Odoo uses a dropdown toggle button with a caret/arrow icon
         filter_dropdown_selectors = [
-            # Filter dropdown button with caret (most specific)
+            # Search view dropdown toggler (most specific - the actual filter button)
+            'button.o_searchview_dropdown_toggler',
+            'button.o_searchview_dropdown_toggler.dropdown-toggle',
+            '.o_searchview_dropdown_toggler',
+            # Filter dropdown button with caret (alternative)
             '.o_filters_menu .dropdown-toggle',
             '.o_filters_menu button.dropdown-toggle',
             'button.o_filters_menu_button.dropdown-toggle',
@@ -54,22 +58,66 @@ class FilterHelper:
             # Search view filter button
             '.o_searchview .o_filters_menu button',
             '.o_searchview_facet button',
+            # Generic dropdown toggle in search area
+            '.o_searchview button.dropdown-toggle',
+            'button[title*="Ativar/Desativar painel de pesquisa"]',
         ]
         
         for selector in filter_dropdown_selectors:
             try:
                 filter_btn = self.page.locator(selector).first
                 if await filter_btn.count() > 0 and await filter_btn.is_visible():
-                    # Click the filter dropdown button
-                    await filter_btn.click()
+                    # Click the filter dropdown button using cursor system
+                    # Get the test instance from page context if available
+                    test_instance = getattr(self.page, '_test_instance', None)
+                    if test_instance and hasattr(test_instance, 'click'):
+                        # Use test.click() which handles cursor movement
+                        await test_instance.click(selector, "Botão de filtros")
+                    else:
+                        # Fallback: use cursor manager directly if available
+                        cursor_manager = getattr(self.page, '_cursor_manager', None)
+                        if cursor_manager:
+                            box = await filter_btn.bounding_box()
+                            if box:
+                                x = box['x'] + box['width'] / 2
+                                y = box['y'] + box['height'] / 2
+                                await cursor_manager.move_to(x, y)
+                                await asyncio.sleep(0.2)
+                                await cursor_manager.show_click_effect(x, y)
+                                await asyncio.sleep(0.05)
+                                # Click using page.mouse to ensure cursor is at position
+                                await self.page.mouse.click(x, y)
+                        else:
+                            # Last resort: direct click (no cursor)
+                            logger.warning(
+                                "DEPRECATED: filter_btn.click() usado sem cursor_manager. "
+                                "Esta ação será removida em versão futura. "
+                                "Certifique-se de que cursor_manager está disponível."
+                            )
+                            await filter_btn.click()
                     await asyncio.sleep(0.3)  # Wait for dropdown menu to open
                     
                     # Verify menu opened by checking if dropdown menu is visible
-                    dropdown_menu = self.page.locator('.o_filters_menu .dropdown-menu, .o_filters_menu_menu, .o_dropdown_menu').first
-                    if await dropdown_menu.count() > 0:
-                        is_visible = await dropdown_menu.is_visible()
-                        if is_visible:
-                            return True
+                    # Check multiple possible dropdown menu selectors
+                    dropdown_menu_selectors = [
+                        '.o_searchview_dropdown_menu',
+                        '.o_filters_menu .dropdown-menu',
+                        '.o_filters_menu_menu',
+                        '.o_dropdown_menu',
+                        '.dropdown-menu.show',
+                        '.o_searchview .dropdown-menu',
+                    ]
+                    for menu_selector in dropdown_menu_selectors:
+                        dropdown_menu = self.page.locator(menu_selector).first
+                        if await dropdown_menu.count() > 0:
+                            is_visible = await dropdown_menu.is_visible()
+                            if is_visible:
+                                return True
+                    
+                    # Also check if button aria-expanded changed to true
+                    aria_expanded = await filter_btn.get_attribute('aria-expanded')
+                    if aria_expanded == 'true':
+                        return True
             except Exception:
                 continue
         
@@ -92,6 +140,11 @@ class FilterHelper:
                         }
                     """)
                     if is_in_control_panel:
+                        logger.warning(
+                            "DEPRECATED: filter_btn.click() usado sem cursor. "
+                            "Esta ação será removida em versão futura. "
+                            "Use test.click() que utiliza cursor_manager."
+                        )
                         await filter_btn.click()
                         await asyncio.sleep(0.3)
                         return True
@@ -129,6 +182,11 @@ class FilterHelper:
                     # Look for filter option within dropdown
                     filter_option = dropdown_menu.locator(f'text={filter_name}').first
                     if await filter_option.count() > 0:
+                        logger.warning(
+                            "DEPRECATED: filter_option.click() usado sem cursor. "
+                            "Esta ação será removida em versão futura. "
+                            "Use test.click() que utiliza cursor_manager."
+                        )
                         await filter_option.click()
                         filter_found = True
                         break
@@ -136,6 +194,11 @@ class FilterHelper:
                     # Try with partial match
                     filter_option = dropdown_menu.locator(f'text=/{filter_name}/i').first
                     if await filter_option.count() > 0:
+                        logger.warning(
+                            "DEPRECATED: filter_option.click() usado sem cursor. "
+                            "Esta ação será removida em versão futura. "
+                            "Use test.click() que utiliza cursor_manager."
+                        )
                         await filter_option.click()
                         filter_found = True
                         break
@@ -143,6 +206,11 @@ class FilterHelper:
                     # Try with contains
                     filter_option = dropdown_menu.locator(f':has-text("{filter_name}")').first
                     if await filter_option.count() > 0:
+                        logger.warning(
+                            "DEPRECATED: filter_option.click() usado sem cursor. "
+                            "Esta ação será removida em versão futura. "
+                            "Use test.click() que utiliza cursor_manager."
+                        )
                         await filter_option.click()
                         filter_found = True
                         break
@@ -160,6 +228,11 @@ class FilterHelper:
                     }
                 """)
                 if is_in_dropdown:
+                    logger.warning(
+                        "DEPRECATED: filter_option.click() usado sem cursor. "
+                        "Esta ação será removida em versão futura. "
+                        "Use test.click() que utiliza cursor_manager."
+                    )
                     await filter_option.click()
                     filter_found = True
         
@@ -168,6 +241,10 @@ class FilterHelper:
             return True
         else:
             # If filter not found, try to close the menu and return False
+            logger.warning(
+                "DEPRECATED: page.keyboard.press() usado sem cursor. "
+                "Esta ação será removida em versão futura."
+            )
             await self.page.keyboard.press('Escape')
             logger.warning(f"Filter '{filter_name}' not found in dropdown menu")
             return False

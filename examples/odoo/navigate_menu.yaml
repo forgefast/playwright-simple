@@ -1,0 +1,34 @@
+name: Navegar Menu Odoo
+description: Navegar por menu hierárquico do Odoo usando apenas ações core
+
+# Recebe parâmetros: menu_path (array ou string com ">")
+# Exemplo: menu_path: ["Vendas", "Pedidos"] ou menu_path: "Vendas > Pedidos"
+
+steps:
+  # Converter string para array se necessário
+  - set: menu_array = "{{ menu_path }}"
+  # Verificar se é string (contém ">")
+  - if: "{{ ' > ' in str(menu_array) }}"
+    then:
+      - set: menu_array = "{{ str(menu_path).split(' > ') }}"
+  
+  # Abrir menu Apps se necessário (primeira vez)
+  - try:
+      - action: click
+        text: "Apps"
+        description: "Abrir menu Apps"
+    catch:
+      # Menu já aberto ou não precisa - não fazer nada
+      - action: wait
+        seconds: 0.1
+  
+  # Navegar por cada item do menu
+  - for: menu_item in menu_array
+    steps:
+      - action: click
+        text: "{{ menu_item }}"
+        description: "Clicar em {{ menu_item }}"
+      - action: wait
+        seconds: 0.5
+        description: "Aguardar carregamento do menu"
+

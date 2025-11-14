@@ -87,6 +87,12 @@ class RelationalFieldsHandler:
                     await add_input.fill(value)
                     await asyncio.sleep(0.05)
                     # Press Enter or click suggestion
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(
+                        "DEPRECATED: page.keyboard.press('Enter') usado sem cursor. "
+                        "Esta ação será removida em versão futura."
+                    )
                     await self.page.keyboard.press("Enter")
                     await asyncio.sleep(0.02)
             except Exception:

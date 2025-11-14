@@ -1,0 +1,212 @@
+name: Pedidos de Demonstração
+description: Visualiza os 6 pedidos de demo em diferentes estados (rascunho, confirmado, entregue).
+
+base_url: https://odoo.racco.com.br
+
+config:
+  video:
+    enabled: true
+    quality: high
+    codec: mp4
+    speed: 1.0
+    subtitles: true
+    hard_subtitles: false
+    audio: true
+    narration: true
+    narration_lang: pt-BR
+    narration_engine: gtts
+    narration_slow: false
+  debug:
+    enabled: true
+    pause_on_error: true
+    interactive_mode: true
+    hot_reload_enabled: true
+  logging:
+    level: DEBUG
+    console_output: true
+  browser:
+    headless: false
+    slow_mo: 50
+
+steps:
+  # Login
+  - action: login
+    login: admin
+    password: admin
+    database: devel
+    description: "Login como admin"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Acessa pedidos
+  - action: navigate_menu
+    menu_path: ["Vendas", "Pedidos"]
+    description: "Navegar para Pedidos"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 01_all_demo_orders
+    description: "Todos os Pedidos de Demo"
+  
+  # Filtra por estado - Rascunho
+  - action: search
+    search_text: "Rascunho"
+    description: "Buscar Rascunho"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 02_orders_draft
+    description: "Pedidos em Rascunho"
+  
+  # Abre um pedido em rascunho
+  - action: open_record
+    record_text: "Pedido"
+    position: primeiro
+    description: "Abrir pedido"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 03_order_draft_detail
+    description: "Detalhes do Pedido em Rascunho"
+  
+  # Volta para lista
+  - action: navigate_menu
+    menu_path: ["Vendas", "Pedidos"]
+    description: "Voltar para Pedidos"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Filtra por estado - Confirmado
+  - action: search
+    search_text: "Confirmado"
+    description: "Buscar Confirmado"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 04_orders_confirmed
+    description: "Pedidos Confirmados"
+  
+  # Abre um pedido confirmado
+  - action: open_record
+    record_text: "Pedido"
+    position: primeiro
+    description: "Abrir pedido"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 05_order_confirmed_detail
+    description: "Detalhes do Pedido Confirmado"
+  
+  # Volta para lista
+  - action: navigate_menu
+    menu_path: ["Vendas", "Pedidos"]
+    description: "Voltar para Pedidos"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Filtra por estado - Entregue
+  - action: search
+    search_text: "Entregue"
+    description: "Buscar Entregue"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 06_orders_delivered
+    description: "Pedidos Entregues"
+  
+  # Abre um pedido entregue
+  - action: open_record
+    record_text: "Pedido"
+    position: primeiro
+    description: "Abrir pedido"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 07_order_delivered_detail
+    description: "Detalhes do Pedido Entregue"
+  
+  # Volta para lista e mostra pedidos por cliente
+  - action: click_button
+    text: "Lista"
+    description: "Clicar em Lista"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Mostra pedidos de consumidor
+  - action: search
+    search_text: "Consumidor"
+    description: "Buscar Consumidor"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 08_orders_consumer
+    description: "Pedidos de Consumidores"
+  
+  # Mostra pedidos de revendedor Bronze
+  - action: search
+    search_text: "Bronze"
+    description: "Buscar Bronze"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 09_orders_bronze
+    description: "Pedidos de Revendedores Bronze"
+  
+  # Mostra pedidos de revendedor Prata
+  - action: search
+    search_text: "Prata"
+    description: "Buscar Prata"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 10_orders_prata
+    description: "Pedidos de Revendedores Prata"
+  
+  # Mostra pedidos de revendedor Ouro
+  - action: search
+    search_text: "Ouro"
+    description: "Buscar Ouro"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 11_orders_ouro
+    description: "Pedidos de Revendedores Ouro"
+  
+  # Mostra pedidos de revendedor Platinum
+  - action: search
+    search_text: "Platinum"
+    description: "Buscar Platinum"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 12_orders_platinum
+    description: "Pedidos de Revendedores Platinum"
+

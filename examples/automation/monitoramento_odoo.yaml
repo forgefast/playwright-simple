@@ -1,0 +1,67 @@
+name: Monitoramento Odoo - Pedidos Pendentes
+description: Verifica pedidos pendentes e envia alerta se necessário
+
+steps:
+  # Login
+  - action: login
+    login: monitor@empresa.com
+    password: "{{ env.ODOO_PASSWORD }}"
+    database: producao
+  
+  # Navegar para pedidos
+  - action: navigate_menu
+    menu_path: ["Vendas", "Pedidos"]
+  
+  # Filtrar pedidos pendentes
+  - action: filter_by
+    filter_text: "Pendente"
+  
+  # Contar pedidos pendentes
+  - action: evaluate
+    code: |
+      () => {
+        const rows = document.querySelectorAll('.o_list_table tbody tr');
+        return rows.length;
+      }
+    store_result: pedidos_pendentes
+  
+  # Verificar se há muitos pedidos pendentes
+  - if: "{{ pedidos_pendentes > 10 }}"
+    then:
+      # Coletar informações dos pedidos
+      - action: evaluate
+        code: |
+          () => {
+            const rows = document.querySelectorAll('.o_list_table tbody tr');
+            const pedidos = [];
+            rows.forEach(row => {
+              const cells = row.querySelectorAll('td');
+              pedidos.push({
+                numero: cells[0]?.textContent?.trim(),
+                cliente: cells[1]?.textContent?.trim(),
+                valor: cells[2]?.textContent?.trim(),
+                data: cells[3]?.textContent?.trim()
+              });
+            });
+            return JSON.stringify(pedidos);
+          }
+        store_result: dados_pedidos
+      
+      # Enviar alerta (via webhook ou email)
+      - action: request
+        method: POST
+        url: "{{ env.WEBHOOK_URL }}"
+        data:
+          tipo: "alerta"
+          assunto: "⚠️ Alerta: {{ pedidos_pendentes }} pedidos pendentes"
+          mensagem: |
+            Há {{ pedidos_pendentes }} pedidos pendentes no Odoo.
+            
+            Dados dos pedidos:
+            {{ dados_pedidos }}
+      
+      # Screenshot para evidência
+      - action: screenshot
+        name: "alerta_pedidos_pendentes_{{ datetime.now().strftime('%Y%m%d_%H%M%S') }}"
+        description: "Screenshot do alerta de pedidos pendentes"
+

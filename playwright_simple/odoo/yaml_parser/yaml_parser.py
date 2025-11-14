@@ -17,6 +17,7 @@ from ...core.cursor_transition import CursorTransitionManager
 from .action_parser import ActionParser
 from .action_validator import ActionValidator
 from .step_executor import StepExecutor
+from ...core.debug import DebugManager, QuitTestException
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +107,34 @@ class OdooYAMLParser(YAMLParser):
                         test.config.video.quality = video_data['quality']
                     if 'codec' in video_data:
                         test.config.video.codec = video_data['codec']
+                    if 'speed' in video_data:
+                        test.config.video.speed = float(video_data['speed'])
+                    if 'subtitles' in video_data:
+                        test.config.video.subtitles = bool(video_data['subtitles'])
+                    if 'hard_subtitles' in video_data:
+                        test.config.video.hard_subtitles = bool(video_data['hard_subtitles'])
+                    if 'audio' in video_data:
+                        test.config.video.audio = bool(video_data['audio'])
+                    if 'audio_engine' in video_data:
+                        test.config.video.audio_engine = video_data['audio_engine']
+                    if 'audio_lang' in video_data:
+                        test.config.video.audio_lang = video_data['audio_lang']
+                    if 'audio_voice' in video_data:
+                        test.config.video.audio_voice = video_data['audio_voice']
+                    if 'audio_rate' in video_data:
+                        test.config.video.audio_rate = video_data['audio_rate']
+                    if 'audio_pitch' in video_data:
+                        test.config.video.audio_pitch = video_data['audio_pitch']
+                    if 'audio_volume' in video_data:
+                        test.config.video.audio_volume = video_data['audio_volume']
+                    if 'narration' in video_data:
+                        test.config.video.narration = bool(video_data['narration'])
+                    if 'narration_lang' in video_data:
+                        test.config.video.narration_lang = video_data['narration_lang']
+                    if 'narration_engine' in video_data:
+                        test.config.video.narration_engine = video_data['narration_engine']
+                    if 'narration_slow' in video_data:
+                        test.config.video.narration_slow = bool(video_data['narration_slow'])
                 
                 if 'browser' in config_data:
                     browser_data = config_data['browser']
@@ -113,6 +142,49 @@ class OdooYAMLParser(YAMLParser):
                         test.config.browser.headless = browser_data['headless']
                     if 'slow_mo' in browser_data:
                         test.config.browser.slow_mo = browser_data['slow_mo']
+            
+            # Initialize debug manager (always create it, even if disabled, to support breakpoints)
+            debug_manager = None
+            debug_enabled = False
+            pause_on_actions = []
+            
+            if config_data and 'debug' in config_data:
+                debug_data = config_data['debug']
+                debug_enabled = debug_data.get('enabled', False)
+                pause_on_actions = debug_data.get('pause_on_actions', [])
+                fast_mode = debug_data.get('fast_mode', False)
+                # Set fast_mode on test config for easy access
+                test.config.fast_mode = fast_mode
+                if fast_mode:
+                    print("  ⚡ Modo RÁPIDO ativado - delays em passos static serão ignorados")
+            
+            # Check if there are any breakpoints in steps
+            has_breakpoints = False
+            if steps:
+                for step_dict in steps:
+                    if step_dict.get('debug', False) is True or step_dict.get('breakpoint', False) is True:
+                        has_breakpoints = True
+                        break
+            
+            # Create debug manager if debug is enabled OR if there are breakpoints
+            if debug_enabled or has_breakpoints:
+                debug_manager = DebugManager(
+                    enabled=debug_enabled,  # May be False, but breakpoints will still work via force=True
+                    pause_on_actions=pause_on_actions if pause_on_actions else None
+                )
+                # Force headless=False when debug is enabled or breakpoints exist (so user can see browser)
+                if debug_enabled or has_breakpoints:
+                    test.config.browser.headless = False
+                
+                if debug_enabled:
+                    print("  🔍 Modo DEBUG ativado - o teste pausará antes de cada ação")
+                    if pause_on_actions:
+                        print(f"  🔍 Pausando apenas em: {', '.join(pause_on_actions)}")
+                    else:
+                        print("  🔍 Pausando em todas as ações")
+                
+                if has_breakpoints:
+                    print("  🛑 Breakpoints detectados nos passos - o teste pausará nos breakpoints")
             
             # Execute setup steps first
             if setup_steps:
@@ -147,20 +219,23 @@ class OdooYAMLParser(YAMLParser):
                         
                         print(f"    ❌ Erro no setup passo {i}: {error_msg}")
                         
-                        # Take debug screenshot
+                        # Save HTML content of the page (more useful for debugging)
                         try:
-                            debug_screenshot = test.screenshot_manager.test_dir / f"debug_error_setup_step_{i}.png"
-                            await test.page.screenshot(path=str(debug_screenshot), full_page=True)
-                            print(f"    📸 Screenshot de debug salvo: {debug_screenshot}")
+                            debug_html = test.screenshot_manager.test_dir / f"debug_error_setup_step_{i}.html"
+                            debug_html.parent.mkdir(parents=True, exist_ok=True)
+                            html_content = await test.page.content()
+                            debug_html.write_text(html_content, encoding='utf-8')
+                            print(f"    📄 HTML da página de erro (setup) salvo: {debug_html}")
                             logger.error(
-                                f"Setup error screenshot captured",
+                                f"Setup error HTML captured",
                                 extra={
                                     "step_number": i,
-                                    "screenshot_path": str(debug_screenshot)
+                                    "html_path": str(debug_html)
                                 }
                             )
-                        except Exception as screenshot_error:
-                            logger.warning(f"Failed to capture setup error screenshot: {screenshot_error}")
+                        except Exception as html_error:
+                            logger.warning(f"Failed to capture setup error HTML: {html_error}")
+                            print(f"    ⚠️  Erro ao capturar HTML: {html_error}")
                         
                         raise RuntimeError(
                             f"Erro ao executar setup passo {i}: {step_str}\n"
@@ -174,11 +249,13 @@ class OdooYAMLParser(YAMLParser):
             if hasattr(test, 'cursor_manager'):
                 cursor_transition.set_cursor_manager(test.cursor_manager)
             
-            # Initialize step executor
-            step_executor = StepExecutor(test, cursor_transition)
+            # Initialize step executor (with debug manager if enabled)
+            step_executor = StepExecutor(test, cursor_transition, debug_manager=debug_manager)
             
             # Process shared subtitles: subtitle in first step applies to following steps
             current_subtitle: Optional[str] = None
+            # Process shared audio: audio in first step applies to following steps (until next audio is specified)
+            current_audio: Optional[str] = None
             
             # Execute main steps
             try:
@@ -186,9 +263,18 @@ class OdooYAMLParser(YAMLParser):
                 
                 for i, step_dict in enumerate(steps, 1):
                     try:
-                        # Process shared subtitles
+                        # Debug: Check for breakpoint in step_dict
+                        if step_dict.get('breakpoint', False) is True or step_dict.get('debug', False) is True:
+                            logger.info(f"YAML Parser: Breakpoint found in step {i}, step_dict: {step_dict}")
+                            print(f"  🛑 YAML Parser detectou breakpoint no passo {i}")
+                        
+                        # Process shared subtitles (inherited from previous step if not specified)
                         if 'subtitle' in step_dict or 'legend' in step_dict:
                             current_subtitle = step_dict.get('subtitle') or step_dict.get('legend')
+                        
+                        # Process shared audio (inherited from previous step if not specified)
+                        if 'audio' in step_dict or 'speech' in step_dict:
+                            current_audio = step_dict.get('audio') or step_dict.get('speech')
                         
                         # Create TestStep object
                         step = TestStep(
@@ -196,7 +282,8 @@ class OdooYAMLParser(YAMLParser):
                             action=step_dict,
                             subtitle=current_subtitle,
                             description=step_dict.get('description', current_subtitle),
-                            video_start_time=test_start_time
+                            video_start_time=test_start_time,
+                            audio=current_audio
                         )
                         
                         # Parse action function
@@ -217,6 +304,11 @@ class OdooYAMLParser(YAMLParser):
                         # Add step to test_steps list
                         test_steps.append(step)
                         
+                    except QuitTestException:
+                        # User requested to quit test
+                        print("  🛑 Teste interrompido pelo usuário")
+                        logger.info("Test quit by user via debug interface")
+                        break  # Exit the loop
                     except Exception as e:
                         # Mark step as failed if it exists
                         step_obj = None
@@ -243,30 +335,13 @@ class OdooYAMLParser(YAMLParser):
                         
                         print(f"    ❌ Erro no passo {i}: {error_msg}")
                         
-                        # Take debug screenshot with detailed info
-                        try:
-                            debug_screenshot = test.screenshot_manager.test_dir / f"debug_error_step_{i}.png"
-                            await test.page.screenshot(path=str(debug_screenshot), full_page=True)
-                            print(f"    📸 Screenshot de debug salvo: {debug_screenshot}")
-                            
-                            logger.error(
-                                f"Error screenshot captured for step {i}",
-                                extra={
-                                    "step_number": i,
-                                    "screenshot_path": str(debug_screenshot),
-                                    "error_type": type(e).__name__
-                                }
-                            )
-                        except Exception as screenshot_error:
-                            logger.warning(f"Failed to capture error screenshot: {screenshot_error}")
-                            print(f"    ⚠️  Erro ao capturar screenshot: {screenshot_error}")
-                        
-                        # Save HTML content of the page
+                        # Save HTML content of the page (more useful for debugging than screenshots)
                         try:
                             debug_html = test.screenshot_manager.test_dir / f"debug_error_step_{i}.html"
+                            debug_html.parent.mkdir(parents=True, exist_ok=True)
                             html_content = await test.page.content()
                             debug_html.write_text(html_content, encoding='utf-8')
-                            print(f"    📄 HTML da página salvo: {debug_html}")
+                            print(f"    📄 HTML da página de erro salvo: {debug_html}")
                             
                             logger.error(
                                 f"Error HTML captured for step {i}",

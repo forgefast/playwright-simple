@@ -1,0 +1,104 @@
+name: Certificação em Cursos
+description: Demonstra jornada completa de treinamento até certificação.
+
+base_url: https://odoo.racco.com.br
+
+config:
+  video:
+    enabled: true
+    quality: high
+    codec: mp4
+    speed: 1.0
+    subtitles: true
+    hard_subtitles: false
+    audio: true
+    narration: true
+    narration_lang: pt-BR
+    narration_engine: gtts
+    narration_slow: false
+  debug:
+    enabled: true
+    pause_on_error: true
+    interactive_mode: true
+    hot_reload_enabled: true
+  logging:
+    level: DEBUG
+    console_output: true
+  browser:
+    headless: false
+    slow_mo: 50
+
+steps:
+  # Login
+  - action: login
+    login: lucia.santos@exemplo.com
+    password: demo123
+    database: devel
+    description: "Login como revendedor"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Navega para Cursos
+  - action: navigate_menu
+    menu_path: ["Website", "Cursos"]
+    description: "Navegar para Cursos"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 01_available_courses
+    description: "Cursos Disponíveis"
+  
+  # Abre curso "Introdução aos Produtos Racco" (clique no link do curso)
+  - action: click_button
+    text: "Introdução aos Produtos Racco"
+    description: "Clicar em Introdução aos Produtos Racco"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 02_course_enrolled
+    description: "Curso Inscrito"
+  
+  # Volta para lista de cursos
+  - action: navigate_menu
+    menu_path: ["Website", "Cursos"]
+    description: "Voltar para Cursos"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Tenta abrir curso de Técnicas de Vendas (clique no link)
+  - action: click_button
+    text: "Técnicas de Vendas"
+    description: "Clicar em Técnicas de Vendas"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 06_sales_course
+    description: "Curso de Técnicas de Vendas"
+  
+  # Mostra certificação
+  - action: navigate_menu
+    menu_path: ["Portal"]
+    description: "Acessar Portal"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: click_button
+    text: "Certificados"
+    description: "Clicar em Certificados"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 07_certificates
+    description: "Certificados Obtidos"
+

@@ -1,0 +1,28 @@
+name: Teste Odoo Básico
+description: Teste para validar extensão Odoo
+steps:
+- caption: Iniciando teste Odoo
+- action: wait
+  seconds: 2
+  description: Aguardando elemento aparecer
+- action: login
+  login: admin
+  password: admin
+  database: devel
+  description: Fazer login no Odoo
+  timeout: 10
+- caption: Login realizado com sucesso
+- action: wait
+  seconds: 2
+  description: Aguardando elemento aparecer
+- action: go_to
+  go_to: Vendas > Pedidos
+  description: Navegar para módulo de Vendas
+  timeout: 10
+- caption: Acessando módulo de Vendas
+- action: wait
+  seconds: 2
+  description: Aguardar página carregar
+- action: assert_visible
+  selector: body
+  description: Verificar que página carregou

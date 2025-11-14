@@ -51,7 +51,8 @@ class AudioProcessor:
             tts_manager = TTSManager(
                 lang=self.config.video.narration_lang,
                 engine=self.config.video.narration_engine,
-                slow=self.config.video.narration_slow
+                slow=self.config.video.narration_slow,
+                voice=getattr(self.config.video, 'narration_voice', None)
             )
             
             narration_audio = await tts_manager.generate_narration(

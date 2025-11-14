@@ -1,0 +1,50 @@
+name: Coleta de Dados de Vendas
+description: Coleta dados de vendas do mês e prepara para relatório
+
+steps:
+  - action: login
+    login: relatorios@empresa.com
+    password: "{{ env.ODOO_PASSWORD }}"
+    database: producao
+  
+  - action: navigate_menu
+    menu_path: ["Vendas", "Relatórios", "Vendas do Mês"]
+  
+  # Filtrar por mês atual
+  - action: click
+    text: "Filtros"
+  
+  - action: fill_field
+    field_label: "Data"
+    field_value: "{{ datetime.now().strftime('%Y-%m') }}"
+  
+  - action: click
+    text: "Aplicar"
+  
+  # Coletar dados da tabela
+  - action: evaluate
+    code: |
+      () => {
+        const table = document.querySelector('.o_list_table');
+        if (!table) return JSON.stringify([]);
+        
+        const rows = table.querySelectorAll('tbody tr');
+        const dados = [];
+        rows.forEach(row => {
+          const cells = row.querySelectorAll('td');
+          dados.push({
+            produto: cells[0]?.textContent?.trim(),
+            quantidade: cells[1]?.textContent?.trim(),
+            valor: cells[2]?.textContent?.trim(),
+            vendedor: cells[3]?.textContent?.trim()
+          });
+        });
+        return JSON.stringify(dados);
+      }
+    store_result: dados_vendas
+  
+  # Salvar dados coletados (pode ser processado depois)
+  - action: screenshot
+    name: "relatorio_vendas_{{ datetime.now().strftime('%Y%m') }}"
+    description: "Screenshot do relatório de vendas"
+

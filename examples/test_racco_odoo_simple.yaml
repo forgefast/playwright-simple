@@ -1,0 +1,28 @@
+name: Teste Odoo Racco - Simples
+description: Teste básico do portal colaborador com debug
+
+base_url: https://odoo.racco.com.br
+
+config:
+  logging:
+    level: DEBUG
+    console_output: true
+  debug:
+    enabled: true
+    pause_on_error: true
+    interactive_mode: true
+    hot_reload_enabled: true
+  video:
+    enabled: false  # Começar sem vídeo
+  browser:
+    headless: false
+    slow_mo: 50
+
+steps:
+  # Login
+  - action: login
+    login: maria.santos@racco.com.br
+    password: demo123
+    database: devel
+    description: "Login no sistema Odoo"
+

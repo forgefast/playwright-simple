@@ -1,7 +1,7 @@
 # Handoff Note - Processamento de Vídeo e Legendas
 
 **Data**: 2025-11-13  
-**Status**: 🔧 Em Progresso - Problema Principal Identificado e Parcialmente Corrigido
+**Status**: ✅ CORRIGIDO - Biblioteca Funcionando (Intro Temporariamente Desabilitada)
 
 ---
 
@@ -63,15 +63,15 @@ Adicionados prints detalhados para rastrear a execução:
 ## 📊 STATUS ATUAL
 
 ### ✅ Funcionando
-- ✅ Tela inicial sendo criada corretamente (corrigido erro de sintaxe do `drawtext`)
-- ✅ Legendas sendo geradas (arquivo SRT criado)
-- ✅ FFmpeg sendo executado quando `use_fast_path=False` (com legendas)
-- ✅ Vídeo `_processed.mp4` sendo gerado (confirmado: arquivos de 1.6MB e 3.1MB encontrados)
+- ✅ **Legendas Soft Subtitles**: Implementadas como faixa separada (mov_text) - MUITO mais rápido que queimar legendas
+- ✅ **Processamento Rápido**: ~2.34s para vídeo com legendas (sem intro)
+- ✅ **Vídeo MP4 Gerado**: Arquivo final gerado corretamente com `{test_name}.mp4`
+- ✅ **Renomeação Automática**: Vídeo `_processed.mp4` renomeado automaticamente para nome final
+- ✅ **FFmpeg Otimizado**: Preset `ultrafast` + multi-threading (`-threads 0`) para máxima velocidade
 
-### ⚠️ Pendências
-- ⚠️ Vídeo final não está sendo renomeado de `*_processed.mp4` para `{test_name}.mp4`
-- ⚠️ Processamento está demorando muito (timeout após 120s, mas vídeo é gerado)
-- ⚠️ Teste simples (`test_simple_login.yaml`) criado para debug rápido, mas ainda precisa ser validado completamente
+### ⚠️ Temporariamente Desabilitado
+- ⚠️ **Tela Inicial (Intro)**: Desabilitada temporariamente para focar na correção da biblioteca
+  - Será reimplementada depois com otimização de concatenação em webm primeiro
 
 ---
 
@@ -223,7 +223,87 @@ timeout 600 python3 run_one_test.py 18
 
 O problema principal foi identificado e corrigido:
 - ✅ FFmpeg agora executa corretamente
-- ✅ Vídeo `_processed.mp4` está sendo gerado
-- ⚠️ Pendente: Renomeação do vídeo final e otimização de performance
+- ✅ Vídeo `_processed.mp4` está sendo gerado e renomeado automaticamente
+- ✅ **CORRIGIDO**: Renomeação do vídeo final implementada
+- ✅ **CORRIGIDO**: Lógica de processamento melhorada para sempre retornar arquivo processado
+- ✅ **OTIMIZADO**: Soft subtitles implementadas (muito mais rápido que queimar legendas)
+- ✅ **OTIMIZADO**: Preset `ultrafast` + multi-threading para máxima performance
 
-**Próximo passo crítico**: Verificar por que o vídeo não está sendo renomeado de `*_processed.mp4` para `{test_name}.mp4`.
+**Correções Aplicadas (2025-11-13)**:
+1. **Renomeação do Vídeo**: Corrigida lógica em `test_executor.py` para detectar vídeos com sufixo `_processed` e renomeá-los para `{test_name}.mp4`
+2. **Retorno Consistente**: `video_processor.py` agora sempre retorna o arquivo processado (`*_processed.*`) para o caller renomear
+3. **Conversão de Formato**: Corrigido bloco `else` que não tratava conversão webm->mp4 quando não havia filtros
+4. **Soft Subtitles**: Substituído filtro `subtitles` (que queima legendas e força re-encode) por soft subtitles (faixa separada, sem re-encode)
+5. **Performance**: Preset `ultrafast` + `-threads 0` para multi-threading em todas as operações de encoding
+6. **Intro Temporariamente Desabilitada**: Para focar na correção da biblioteca primeiro
+
+**Resultado Final**:
+- ✅ Processamento: **2.34s** (antes: timeout após 120s)
+- ✅ Vídeo gerado: `common_login.mp4` (2.1MB)
+- ✅ Legendas: Soft subtitles (mov_text) funcionando corretamente
+
+---
+
+## 🚨 PROBLEMA ATUAL (2025-11-13 - Última Sessão)
+
+### Contexto
+Estávamos tentando corrigir a navegação para Dashboard após login. O Odoo redireciona automaticamente para `/discuss` após login, e precisamos navegar para o Dashboard (menu de apps).
+
+### Problema Identificado
+1. **Navegação para Dashboard não funciona**: `go_to: "Dashboard"` não consegue navegar de `/discuss` para Dashboard
+2. **Tentativa de simplificação excessiva**: Tentamos remover abstrações e exigir seletores CSS no YAML, mas o usuário rejeitou isso
+3. **Requisito do usuário**: Manter abstrações amigáveis (ex: `go_to: "Dashboard"`, `go_to: "Contatos"`, `go_to: "Vendas > Pedidos"`), mas fazer funcionar corretamente via cursor
+
+### Estado Atual do Código
+- ✅ **Máquina de estados implementada**: `go_to` verifica se já está no destino antes de navegar
+- ✅ **Suporte a seletores CSS no `click`**: `action_parser.py` detecta seletores CSS e usa `test.click()` diretamente
+- ✅ **Suporte a `press` key**: Adicionado suporte para `press: "Escape"` no YAML
+- ❌ **Navegação para Dashboard falha**: `menu.go_to_dashboard()` não consegue navegar de `/discuss` para Dashboard
+- ❌ **YAML ainda tem seletores CSS**: `test_colaborador_portal.yaml` ainda usa seletores CSS explícitos (linhas 32, 37)
+
+### Arquivos Modificados Recentemente
+1. **`playwright-simple/playwright_simple/odoo/base.py`**:
+   - `go_to()` agora verifica estado antes de navegar (máquina de estados)
+   - `go_to: "Dashboard"` tenta usar `menu.go_to_dashboard()` mas falha
+
+2. **`playwright-simple/playwright_simple/odoo/menus.py`**:
+   - `go_to_dashboard()` tenta clicar no botão do menu de apps
+   - Não consegue navegar de `/discuss` para Dashboard (apenas abre/fecha menu)
+
+3. **`playwright-simple/playwright_simple/odoo/specific/logo.py`**:
+   - `_is_on_dashboard()` melhorado para detectar Dashboard mesmo quando URL ainda é `/discuss`
+   - Verifica se menu está fechado e não há conteúdo de discuss visível
+
+4. **`playwright-simple/playwright_simple/odoo/yaml_parser/action_parser.py`**:
+   - Adicionado suporte a seletores CSS no `click` (detecta `.`, `#`, `[`, etc.)
+   - Adicionado suporte a `press: "Escape"` para pressionar teclas
+
+5. **`playwright-simple/playwright_simple/odoo/yaml_parser/action_validator.py`**:
+   - Atualizado para detectar seletores CSS e validar elementos corretamente
+
+6. **`presentation/playwright/tests/yaml/test_colaborador_portal.yaml`**:
+   - Ainda contém seletores CSS explícitos (linhas 32, 37) - precisa ser convertido para abstrações amigáveis
+
+### Próximos Passos Necessários
+1. **Corrigir navegação para Dashboard**: Fazer `go_to: "Dashboard"` funcionar corretamente quando estiver em `/discuss`
+   - Possível solução: Clicar no botão do menu de apps, depois pressionar Escape, ou clicar em algum elemento que leve ao Dashboard
+   
+2. **Remover seletores CSS do YAML**: Converter `test_colaborador_portal.yaml` para usar apenas abstrações amigáveis
+   - `click: "button.o_grid_apps_menu__button"` → `go_to: "Dashboard"` ou similar
+   - `click: "a.o-app-menu-item[data-menu-xmlid='contacts.menu_contacts']"` → `go_to: "Contatos"`
+
+3. **Garantir que todas as abstrações funcionem via cursor**: Nenhuma navegação direta (sem cursor visual)
+
+4. **Testar fluxo completo**: Executar `test_colaborador_portal` e garantir que todos os passos funcionem
+
+### Comando para Testar
+```bash
+cd /home/gabriel/softhill/presentation/playwright
+timeout 300 python3 run_test.py test_colaborador_portal
+```
+
+### Observações Importantes
+- **Cursor é o protagonista**: Toda navegação deve ser feita via cursor visual, sem `page.goto()` direto
+- **Abstrações amigáveis**: Usuário não deve precisar inspecionar página ou usar seletores CSS
+- **Máquina de estados**: Se já está no destino, não tenta navegar novamente
+- **HTML de erro salvo**: Quando há erro, HTML da página é salvo em `screenshots/{test_name}/debug_error_step_{N}.html` (não screenshots)

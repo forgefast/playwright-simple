@@ -1,0 +1,135 @@
+name: Gestão de Rede
+description: Mostra revendedores por nível e estatísticas da rede MLM.
+
+base_url: https://odoo.racco.com.br
+
+config:
+  video:
+    enabled: true
+    quality: high
+    codec: mp4
+    speed: 1.0
+    subtitles: true
+    hard_subtitles: false
+    audio: true
+    narration: true
+    narration_lang: pt-BR
+    narration_engine: gtts
+    narration_slow: false
+  debug:
+    enabled: true
+    pause_on_error: true
+    interactive_mode: true
+    hot_reload_enabled: true
+  logging:
+    level: DEBUG
+    console_output: true
+  browser:
+    headless: false
+    slow_mo: 50
+
+steps:
+  # Login
+  - action: login
+    login: admin
+    password: admin
+    database: devel
+    description: "Login como admin"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Navega para Clientes
+  - action: navigate_menu
+    menu_path: ["Contatos", "Clientes"]
+    description: "Navegar para Clientes"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 01_all_partners
+    description: "Todos os Parceiros"
+  
+  # Filtra por revendedores
+  - action: search
+    search_text: "Revendedor"
+    description: "Buscar Revendedor"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 02_revendedores_all
+    description: "Todos os Revendedores"
+  
+  # Mostra diferentes níveis
+  - action: search
+    search_text: "Bronze"
+    description: "Buscar Bronze"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 03_revendedores_bronze
+    description: "Revendedores Bronze"
+  
+  - action: search
+    search_text: "Prata"
+    description: "Buscar Prata"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 03_revendedores_prata
+    description: "Revendedores Prata"
+  
+  - action: search
+    search_text: "Ouro"
+    description: "Buscar Ouro"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 03_revendedores_ouro
+    description: "Revendedores Ouro"
+  
+  - action: search
+    search_text: "Platinum"
+    description: "Buscar Platinum"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 03_revendedores_platinum
+    description: "Revendedores Platinum"
+  
+  # Mostra estatísticas - volta para todos os revendedores
+  - action: search
+    search_text: "Revendedor"
+    description: "Buscar Revendedor"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 04_network_statistics
+    description: "Estatísticas da Rede"
+  
+  # Abre um revendedor para ver rede
+  - action: open_record
+    record_text: "Revendedor"
+    position: primeiro
+    description: "Abrir revendedor"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 05_revendedor_network
+    description: "Rede do Revendedor"
+

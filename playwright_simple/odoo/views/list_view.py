@@ -54,10 +54,22 @@ class ListViewHandler:
         try:
             # Clear existing search first
             await search_input.click()
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                "DEPRECATED: search_input.fill() usado sem cursor. "
+                "Esta ação será removida em versão futura. "
+                "Use test.type() que utiliza cursor_manager."
+            )
             await search_input.fill("")
             await asyncio.sleep(0.1)
             
             # Type the search text
+            logger.warning(
+                "DEPRECATED: search_input.fill() usado sem cursor. "
+                "Esta ação será removida em versão futura. "
+                "Use test.type() que utiliza cursor_manager."
+            )
             await search_input.fill(search_text)
             await asyncio.sleep(0.2)  # Small delay for search to trigger
             
@@ -194,11 +206,24 @@ class ListViewHandler:
             # Try to close any open dropdowns
             try:
                 # Press Escape to close dropdowns
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(
+                    "DEPRECATED: page.keyboard.press('Escape') usado sem cursor. "
+                    "Esta ação será removida em versão futura."
+                )
                 await self.page.keyboard.press("Escape")
                 await asyncio.sleep(0.2)
             except Exception:
                 pass
         
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(
+            "DEPRECATED: record.click() usado sem cursor. "
+            "Esta ação será removida em versão futura. "
+            "Use test.click() que utiliza cursor_manager."
+        )
         await record.click(timeout=10000)
     
     async def _click_record_on_name(self, record) -> None:
@@ -216,6 +241,13 @@ class ListViewHandler:
             try:
                 name_element = record.locator(selector).first
                 if await name_element.count() > 0 and await name_element.is_visible():
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(
+                        "DEPRECATED: name_element.click() usado sem cursor. "
+                        "Esta ação será removida em versão futura. "
+                        "Use test.click() que utiliza cursor_manager."
+                    )
                     await name_element.click(timeout=10000)
                     return
             except Exception:

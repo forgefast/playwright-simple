@@ -1,0 +1,113 @@
+name: Portal do Colaborador Racco (Core Only)
+description: Teste reescrito usando apenas ações core - sem dependências do Odoo
+
+# Este teste demonstra como usar apenas ações core genéricas
+# para testar qualquer aplicação web, incluindo Odoo
+#
+# PROBLEMAS IDENTIFICADOS:
+# 1. Login core não suporta "database" (Odoo precisa)
+# 2. go_to core não entende "Vendas > Pedidos" (precisa de URL ou navigate com array)
+# 3. open_filters é específico do Odoo (precisa usar click com seletor CSS)
+# 4. Navegação por menu precisa usar navigate() com array ou URLs diretas
+
+steps:
+  # PROBLEMA 1: Login core não suporta "database"
+  # SOLUÇÃO TEMPORÁRIA: Usar URL direta e preencher campos manualmente
+  - action: go_to
+    url: /web/login
+  
+  - action: type
+    selector: input[name="login"]
+    text: maria.santos@racco.com.br
+    description: Campo de email
+  
+  - action: type
+    selector: input[name="password"]
+    text: demo123
+    description: Campo de senha
+  
+  - action: type
+    selector: input[name="db"]
+    text: devel
+    description: Campo de database
+  
+  - action: click
+    selector: button[type="submit"]
+    description: Botão de login
+  
+  - action: wait
+    seconds: 2.0
+  
+  # PROBLEMA 2: go_to core não entende "Dashboard"
+  # SOLUÇÃO: Usar navigate() com array ou URL direta
+  # Tentativa 1: Usar navigate com array (se funcionar)
+  - action: navigate
+    menu_path: ["Dashboard"]
+  
+  # Tentativa 2 (fallback): Usar URL direta
+  # - action: go_to
+  #   url: /web
+  
+  - action: screenshot
+    name: 01_colaborador_dashboard
+    description: Dashboard do Colaborador Racco
+  
+  # PROBLEMA 3: go_to core não entende "Contatos"
+  # SOLUÇÃO: Usar navigate com array ou URL direta
+  - action: navigate
+    menu_path: ["Contatos"]
+  
+  # Fallback: URL direta
+  # - action: go_to
+  #   url: /web#action=&model=res.partner&view_type=list
+  
+  - action: screenshot
+    name: 02_colaborador_clientes
+    description: Gestão de Clientes
+  
+  # PROBLEMA 4: open_filters é específico do Odoo
+  # SOLUÇÃO: Usar click com seletor CSS genérico
+  - action: click
+    selector: ".o_filters_menu button, .o_filters_menu .dropdown-toggle, button.o_filters_menu_button, .o_searchview_facet, .o_filters_menu .o_dropdown_toggler"
+    description: Botão de filtros
+  
+  - action: wait
+    seconds: 0.5
+  
+  - action: screenshot
+    name: 03_consumidores_view
+    description: Lista de Contatos com opções de filtro
+  
+  # PROBLEMA 5: go_to core não entende "Vendas > Pedidos"
+  # SOLUÇÃO: Usar navigate com array
+  - action: navigate
+    menu_path: ["Vendas", "Pedidos"]
+  
+  # Fallback: URL direta
+  # - action: go_to
+  #   url: /web#action=&model=sale.order&view_type=list
+  
+  - action: screenshot
+    name: 05_colaborador_pedidos
+    description: Gestão de Pedidos
+  
+  # Navegação para Produtos
+  - action: navigate
+    menu_path: ["Vendas", "Produtos"]
+  
+  # Fallback: URL direta
+  # - action: go_to
+  #   url: /web#action=&model=product.product&view_type=list
+  
+  - action: screenshot
+    name: 07_colaborador_produtos
+    description: Gestão de Produtos
+  
+  # Navegação para Portal (URL direta funciona)
+  - action: go_to
+    url: /my
+  
+  - action: screenshot
+    name: 10_colaborador_portal
+    description: Portal do Colaborador
+

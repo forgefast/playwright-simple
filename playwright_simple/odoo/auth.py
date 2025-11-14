@@ -61,10 +61,12 @@ class OdooAuthMixin:
         # Small delay to ensure typing is complete
         await asyncio.sleep(ACTION_DELAY * 2)
         
-        # Find submit button - try multiple selectors
+        # Find submit button - try multiple selectors (incluindo variações em português)
         submit_selectors = [
             'button[type="submit"]',
             'button:has-text("Entrar")',
+            'button:has-text("ENTRAR")',
+            'button:has-text("entrar")',
             'button:has-text("Log in")',
             'button:has-text("Login")',
             'button:has-text("Sign in")',
@@ -73,6 +75,9 @@ class OdooAuthMixin:
             'button.o_primary',
             'form button[type="submit"]',
             '.o_login_form button[type="submit"]',
+            # Tentar por texto parcial também
+            'button:has-text("Ent")',  # Pode ser "Entrar" ou "Entrar no sistema"
+            'button.o_login_submit',
         ]
         
         submit_btn = None
@@ -85,28 +90,46 @@ class OdooAuthMixin:
                     is_visible = await btn.is_visible()
                     if is_visible:
                         submit_btn = btn
+                        logger.info(f"Botão de login encontrado com seletor: {selector}")
                         break
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Erro ao tentar seletor {selector}: {e}")
                 continue
         
         if not submit_btn:
-            # Last resort: try to find ANY submit button
+            # Last resort: try to find ANY submit button or button with text containing "Entrar"
             all_buttons = self.page.locator('button, input[type="submit"]')
             count = await all_buttons.count()
+            logger.info(f"Tentando encontrar botão entre {count} botões disponíveis")
             
-            for i in range(min(count, 10)):  # Check first 10 buttons
+            for i in range(min(count, 20)):  # Check first 20 buttons
                 btn = all_buttons.nth(i)
                 try:
                     btn_type = await btn.get_attribute("type")
                     is_visible = await btn.is_visible()
-                    if btn_type == "submit" and is_visible:
+                    btn_text = await btn.text_content()
+                    logger.debug(f"Botão {i}: type={btn_type}, visible={is_visible}, text='{btn_text}'")
+                    
+                    if is_visible and (btn_type == "submit" or (btn_text and "entrar" in btn_text.lower())):
                         submit_btn = btn
+                        logger.info(f"Botão de login encontrado: text='{btn_text}', type={btn_type}")
                         break
-                except Exception:
+                except Exception as e:
+                    logger.debug(f"Erro ao verificar botão {i}: {e}")
                     continue
         
         if not submit_btn:
-            raise ValueError("Botão de login não encontrado após preencher senha")
+            # Última tentativa: usar click() do test que tem cursor
+            try:
+                # Tentar clicar em qualquer botão visível que possa ser o de login
+                await self.click('button[type="submit"]', "Botão de login")
+                await asyncio.sleep(ACTION_DELAY * 2)
+                await self.page.wait_for_load_state("load", timeout=5000)
+                await self.wait_until_ready(timeout=2000)
+                return self
+            except Exception as e:
+                logger.error(f"Erro ao tentar clicar no botão de login: {e}")
+                raise ValueError(f"Botão de login não encontrado após preencher senha. Erro: {e}")
         
         # Get button position for cursor movement
         try:

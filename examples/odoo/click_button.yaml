@@ -1,0 +1,16 @@
+name: Clicar Botão Odoo
+description: Clicar em um botão específico usando apenas ações core
+
+# Recebe parâmetros: button_text, context (opcional)
+
+steps:
+  # Clicar no botão
+  - action: click
+    text: "{{ button_text }}"
+    description: "Clicar no botão {{ button_text }}"
+  
+  # Aguardar ação completar
+  - action: wait
+    seconds: 0.3
+    description: "Aguardar ação completar"
+

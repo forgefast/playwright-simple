@@ -1,0 +1,26 @@
+name: Teste Auto-Fix Demo
+description: Teste para demonstrar rollback e auto-fix com erros propositais
+
+base_url: http://localhost:18069
+
+steps:
+  # Passo 1: Vai funcionar
+  - action: go_to
+    url: /
+    description: "Navegar para home"
+  
+  # Passo 2: Vai dar erro - elemento não existe
+  - action: click
+    text: "ElementoQueNaoExiste123"
+    description: "Tentar clicar em elemento que não existe"
+  
+  # Passo 3: Vai dar erro - action desconhecida
+  - action: click_button
+    text: "Login"
+    description: "Usar action desconhecida (será mapeada)"
+  
+  # Passo 4: Vai funcionar após correções
+  - action: screenshot
+    name: "after_fixes"
+    description: "Screenshot após todas as correções"
+

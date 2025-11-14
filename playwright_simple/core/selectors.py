@@ -53,6 +53,68 @@ class SelectorManager:
         self.timeout = timeout
         self.retry_count = retry_count
     
+    async def find_by_text(
+        self,
+        text: str,
+        description: str = "",
+        timeout: Optional[int] = None,
+        state: str = "visible"
+    ) -> Optional[Locator]:
+        """
+        Find element by visible text (user-friendly).
+        
+        Tries multiple text-based selectors to find an element containing the text.
+        This is the preferred method for user-friendly element finding.
+        
+        Args:
+            text: Visible text to search for
+            description: Optional description for logging and error messages
+            timeout: Timeout in milliseconds (uses instance default if None)
+            state: Element state to wait for: "visible", "hidden", "attached",
+                  or "detached" (default: "visible")
+            
+        Returns:
+            Playwright Locator if element is found, None otherwise
+            
+        Example:
+            ```python
+            locator = await selector_manager.find_by_text(
+                "Submit",
+                "Submit button",
+                timeout=5000
+            )
+            if locator:
+                await locator.click()
+            ```
+        """
+        if not text or not text.strip():
+            return None
+        
+        timeout = timeout or self.timeout
+        text_escaped = text.replace('"', '\\"')
+        
+        # Try multiple text-based selectors (in order of preference)
+        text_selectors = [
+            f'button:has-text("{text_escaped}")',
+            f'a:has-text("{text_escaped}")',
+            f'[role="button"]:has-text("{text_escaped}")',
+            f'[role="link"]:has-text("{text_escaped}")',
+            f'*:has-text("{text_escaped}")',  # Any element with text (last resort)
+        ]
+        
+        for selector in text_selectors:
+            try:
+                locator = self.page.locator(selector).first
+                await locator.wait_for(state=state, timeout=min(timeout, 5000))
+                if await locator.count() > 0 and await locator.is_visible():
+                    logger.debug(f"Found element by text '{text}' using selector '{selector}': {description}")
+                    return locator
+            except Exception as e:
+                logger.debug(f"Text selector '{selector}' failed: {e}")
+                continue
+        
+        return None
+    
     async def find_element(
         self,
         selector: str,
@@ -66,8 +128,11 @@ class SelectorManager:
         Attempts to find an element using the primary selector. If that fails,
         tries alternative selectors and retries with exponential backoff.
         
+        If selector doesn't look like CSS (doesn't start with #, ., [, or contain :),
+        tries to find by text first (user-friendly).
+        
         Args:
-            selector: Primary CSS selector or text selector
+            selector: Primary CSS selector or text of element
             description: Optional description for logging and error messages
             timeout: Timeout in milliseconds (uses instance default if None)
             state: Element state to wait for: "visible", "hidden", "attached",
@@ -88,6 +153,20 @@ class SelectorManager:
             ```
         """
         timeout = timeout or self.timeout
+        
+        # Detect if selector is text (not CSS)
+        # CSS selectors typically start with #, ., [, or contain : (for pseudo-classes)
+        is_likely_text = (
+            not selector.startswith(('#', '.', '[', '/')) and
+            ':' not in selector and
+            ' ' not in selector.strip() or len(selector.split()) == 1
+        )
+        
+        # If it looks like text, try finding by text first
+        if is_likely_text and not any(char in selector for char in ['#', '.', '[', ':', '(', ')', '>', '+', '~']):
+            text_locator = await self.find_by_text(selector, description, timeout, state)
+            if text_locator:
+                return text_locator
         
         # Try primary selector first
         try:

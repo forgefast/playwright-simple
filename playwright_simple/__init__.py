@@ -1,10 +1,19 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Playwright Simple - A simple and intuitive library for writing Playwright tests.
+Playwright Simple - Web automation simplified.
 
-Designed for QAs without deep programming knowledge, while maintaining
-flexibility for advanced use cases.
+A simple and intuitive library for web automation with Playwright.
+Perfect for:
+- Automated testing (QA, E2E, regression)
+- Task automation (scripts, bots, workflows)
+- Monitoring and data collection
+- System integration
+- Web scraping
+- Automated reporting
+
+Designed for QAs and developers without deep programming knowledge,
+while maintaining flexibility for advanced use cases.
 """
 
 __version__ = "0.1.0"
@@ -16,10 +25,10 @@ from .core import (
     TestRunner,
     CursorManager,
     ScreenshotManager,
-    VideoManager,
     SelectorManager,
     YAMLParser,
 )
+# VideoManager moved to extensions/video
 
 # Optional extensions (import only if available)
 try:
@@ -30,7 +39,6 @@ try:
         "TestRunner",
         "CursorManager",
         "ScreenshotManager",
-        "VideoManager",
         "SelectorManager",
         "YAMLParser",
         "ForgeERPTestBase",
@@ -43,7 +51,6 @@ except ImportError:
         "TestRunner",
         "CursorManager",
         "ScreenshotManager",
-        "VideoManager",
         "SelectorManager",
         "YAMLParser",
         "__version__",

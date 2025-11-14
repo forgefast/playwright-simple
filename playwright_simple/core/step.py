@@ -52,7 +52,8 @@ class TestStep(StateMachine):
         action: Dict[str, Any],
         subtitle: Optional[str] = None,
         description: Optional[str] = None,
-        video_start_time: Optional[datetime] = None
+        video_start_time: Optional[datetime] = None,
+        audio: Optional[str] = None
     ):
         """
         Initialize a test step.
@@ -63,6 +64,7 @@ class TestStep(StateMachine):
             subtitle: Subtitle text for this step (can be shared with following steps)
             description: Description of the step
             video_start_time: Reference time when video recording started
+            audio: Audio text for this step (can be shared with following steps, similar to subtitle)
         """
         super().__init__()
         self.step_number = step_number
@@ -70,6 +72,7 @@ class TestStep(StateMachine):
         self.subtitle = subtitle
         self.description = description or subtitle
         self.video_start_time = video_start_time or datetime.now()
+        self.audio = audio
         
         # Timing information
         self.start_time: Optional[datetime] = None

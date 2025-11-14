@@ -1,0 +1,119 @@
+name: Gamificação Completa
+description: Mostra badges e desafios disponíveis, rankings e conquistas.
+
+base_url: https://odoo.racco.com.br
+
+config:
+  video:
+    enabled: true
+    quality: high
+    codec: mp4
+    speed: 1.0
+    subtitles: true
+    hard_subtitles: false
+    audio: true
+    narration: true
+    narration_lang: pt-BR
+    narration_engine: gtts
+    narration_slow: false
+  debug:
+    enabled: true
+    pause_on_error: true
+    interactive_mode: true
+    hot_reload_enabled: true
+  logging:
+    level: DEBUG
+    console_output: true
+  browser:
+    headless: false
+    slow_mo: 50
+
+steps:
+  # Login
+  - action: login
+    login: lucia.santos@exemplo.com
+    password: demo123
+    database: devel
+    description: "Login como revendedor"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Navega para Badges via Portal
+  - action: navigate_menu
+    menu_path: ["Portal"]
+    description: "Acessar Portal"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: click_button
+    text: "Badges"
+    description: "Clicar em Badges"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 01_badges_list
+    description: "Lista de Badges"
+  
+  # Mostra badges disponíveis (sem tentar abrir detalhes se não disponível)
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 02_badge_detail
+    description: "Detalhes do Badge"
+  
+  # Filtra badges por categoria
+  - action: search
+    search_text: "Vendas"
+    description: "Buscar Vendas"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 03_badges_vendas
+    description: "Badges de Vendas"
+  
+  # Navega para Desafios via Portal
+  - action: navigate_menu
+    menu_path: ["Portal"]
+    description: "Voltar para Portal"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: click_button
+    text: "Desafios"
+    description: "Clicar em Desafios"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 04_challenges_list
+    description: "Lista de Desafios"
+  
+  # Mostra desafios disponíveis
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 05_challenge_detail
+    description: "Detalhes do Desafio"
+  
+  # Tenta acessar ranking via Portal (se disponível)
+  - action: navigate_menu
+    menu_path: ["Portal"]
+    description: "Voltar para Portal"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 06_rankings
+    description: "Rankings de Usuários"
+

@@ -90,6 +90,9 @@ class NavigationMixin:
     
     async def go_to(self, url: str) -> 'NavigationMixin':
         """
+        DEPRECATED: This method will be removed in a future version.
+        Use click() on links/menus for navigation instead.
+        
         Navigate to a URL by clicking on the corresponding link (cursor is the protagonist).
         
         If a link matching the URL is found on the current page, the cursor will:
@@ -112,6 +115,11 @@ class NavigationMixin:
             await test.go_to("https://example.com")
             ```
         """
+        logger.warning(
+            "DEPRECATED: go_to() será removido em versão futura. "
+            "Use click() em links/menus para navegação. "
+            f"Exemplo: await test.click('Dashboard') em vez de await test.go_to('/dashboard')"
+        )
         logger.info(f"Iniciando navegação para: {url}")
         current_url = self.page.url
         logger.debug(f"URL atual antes da navegação: {current_url}")
@@ -331,6 +339,9 @@ class NavigationMixin:
     
     async def navigate(self, menu_path: List[str]) -> 'NavigationMixin':
         """
+        DEPRECATED: This method will be removed in a future version.
+        Use multiple click() calls for menu navigation instead.
+        
         Navigate through a menu path.
         
         Clicks through a series of menu items in sequence. Useful for
@@ -352,6 +363,13 @@ class NavigationMixin:
             await test.navigate(["Vendas", "Pedidos"])
             ```
         """
+        logger.warning(
+            "DEPRECATED: navigate() será removido em versão futura. "
+            "Use múltiplos click() para navegar por menus. "
+            f"Exemplo: await test.click('Vendas'); await test.click('Pedidos') "
+            f"em vez de await test.navigate(['Vendas', 'Pedidos'])"
+        )
+        
         if not menu_path:
             raise ValueError("menu_path cannot be empty")
         

@@ -161,7 +161,10 @@ class TestExecutor:
         Returns:
             Dictionary with test results
         """
+        import time
+        test_start_time = time.time()
         print(f"\n🎬 Running test: {test_name}")
+        print(f"  ⏱️  Performance: Teste iniciado às {time.strftime('%H:%M:%S')}")
         _log_action("test_started", test_name, {
             "base_url": self.config.base_url,
             "headless": self.config.browser.headless,
@@ -231,6 +234,15 @@ class TestExecutor:
             test_type = type(test).__name__
             print(f"  ✅ Instância criada: {test_type}")
             _log_action("test_instance_created", test_name, {"test_type": test_type})
+            
+            # Inicializar control interface para comunicação externa
+            try:
+                from ..control_interface import ControlInterface
+                test._control_interface = ControlInterface(test_name)
+                logger.debug(f"Control interface initialized for {test_name}")
+            except Exception as e:
+                logger.debug(f"Could not initialize control interface: {e}")
+                test._control_interface = None
             
             # Inject cursor IMMEDIATELY after creating test instance (before navigation)
             # This ensures cursor is visible from the start of the video
@@ -412,6 +424,73 @@ class TestExecutor:
                 "traceback": traceback.format_exc()
             }, level="ERROR")
             
+            # Salvar erro no control interface
+            if 'test' in locals() and hasattr(test, '_control_interface') and test._control_interface:
+                try:
+                    step_number = len(test_steps) if test_steps else None
+                    test._control_interface.save_error(e, step_number)
+                    
+                    # Capturar HTML automaticamente para análise
+                    if 'page' in locals() and page:
+                        try:
+                            html = await page.content()
+                            html_file = Path("/tmp/playwright_html.html")
+                            html_file.write_text(html, encoding='utf-8')
+                            
+                            # Salvar versão simplificada
+                            try:
+                                simplified = await page.evaluate("""
+                                    () => {
+                                        const buttons = Array.from(document.querySelectorAll('button, a[role="button"], input[type="submit"], input[type="button"]'))
+                                            .map(btn => ({
+                                                text: btn.textContent?.trim() || btn.value || btn.getAttribute('aria-label') || '',
+                                                tag: btn.tagName.toLowerCase(),
+                                                id: btn.id || '',
+                                                class: btn.className || '',
+                                                visible: btn.offsetParent !== null
+                                            }))
+                                            .filter(btn => btn.visible && btn.text);
+                                        
+                                        const inputs = Array.from(document.querySelectorAll('input[type="text"], input[type="email"], input[type="password"], textarea'))
+                                            .map(inp => ({
+                                                type: inp.type,
+                                                placeholder: inp.placeholder || '',
+                                                name: inp.name || '',
+                                                id: inp.id || '',
+                                                label: inp.labels?.[0]?.textContent?.trim() || ''
+                                            }));
+                                        
+                                        return JSON.stringify({
+                                            buttons: buttons,
+                                            inputs: inputs,
+                                            url: window.location.href,
+                                            title: document.title
+                                        }, null, 2);
+                                    }
+                                """)
+                                simplified_file = Path("/tmp/playwright_html_simplified.json")
+                                simplified_file.write_text(simplified, encoding='utf-8')
+                            except Exception as html_error:
+                                logger.debug(f"Error capturing simplified HTML: {html_error}")
+                        except Exception as html_error:
+                            logger.debug(f"Error capturing HTML on error: {html_error}")
+                except Exception as save_error:
+                    logger.debug(f"Error saving error to control interface: {save_error}")
+            
+            # Try debug extension if available
+            if 'test' in locals() and hasattr(test, 'extensions'):
+                debug_ext = test.extensions.get('debug')
+                if debug_ext:
+                    should_continue = await debug_ext.on_error(
+                        error=e,
+                        page=page,
+                        step_number=len(test_steps) if test_steps else None,
+                        action=test_steps[-1].get('action') if test_steps else None
+                    )
+                    if should_continue:
+                        result["status"] = "continued"
+                        print(f"  🔄 Continuing after debug session...")
+            
             # Capture screenshot on failure
             if self.config.screenshots.on_failure and 'test' in locals():
                 try:
@@ -422,19 +501,8 @@ class TestExecutor:
                     logger.warning(f"Error capturing failure screenshot: {screenshot_error}")
                     print(f"  ⚠️  Erro ao capturar screenshot: {screenshot_error}")
             
-            # Also try to capture page screenshot directly
+            # Save HTML content of the page (more useful for debugging than screenshots)
             if 'page' in locals():
-                try:
-                    screenshots_dir = Path(self.config.screenshots.dir)
-                    error_screenshot = screenshots_dir / test_name / "error_page.png"
-                    error_screenshot.parent.mkdir(parents=True, exist_ok=True)
-                    await page.screenshot(path=str(error_screenshot), full_page=True)
-                    print(f"  📸 Screenshot da página de erro salvo: {error_screenshot}")
-                except Exception as e:
-                    logger.warning(f"Error capturing page screenshot: {e}")
-                    print(f"  ⚠️  Erro ao capturar screenshot da página: {e}")
-                
-                # Also save HTML content of the page
                 try:
                     screenshots_dir = Path(self.config.screenshots.dir)
                     error_html = screenshots_dir / test_name / "error_page.html"
@@ -523,20 +591,51 @@ class TestExecutor:
                                 logger.warning(f"Erro ao deletar vídeo antigo {video_file.name}: {e}")
                     
                     # Process video: speed, subtitles, and audio in ONE pass (much faster!)
+                    video_processing_start = time.time()
                     logger.info(f"Preparando processamento de vídeo: found_video={found_video.name if found_video else None}, expected_path={expected_path.name}, needs_conversion={needs_conversion}")
-                    # Generate narration if enabled
+                    print(f"  ⏱️  Performance: Iniciando processamento de vídeo às {time.strftime('%H:%M:%S')}")
+                    # Generate narration/audio if enabled
                     narration_audio = None
-                    if self.config.video.narration and test_steps:
+                    narration_start = time.time()
+                    # Use audio field from steps if config.video.audio is enabled, otherwise use narration
+                    if (self.config.video.audio or self.config.video.narration) and test_steps:
                         _log_action("narration_generation_started", test_name)
-                        narration_audio = await self.audio_processor.generate_narration(
-                            test_steps,
-                            expected_path.parent,
-                            test_name
-                        )
+                        # Use audio config if audio is enabled, otherwise use narration config
+                        if self.config.video.audio:
+                            # Create TTSManager with audio config
+                            from ..tts import TTSManager
+                            tts_manager = TTSManager(
+                                lang=self.config.video.audio_lang,
+                                engine=self.config.video.audio_engine,
+                                slow=False,
+                                voice=getattr(self.config.video, 'audio_voice', None),
+                                rate=getattr(self.config.video, 'audio_rate', None),
+                                pitch=getattr(self.config.video, 'audio_pitch', None),
+                                volume=getattr(self.config.video, 'audio_volume', None)
+                            )
+                            # Return timed audio list for synchronization with steps
+                            narration_audio = await tts_manager.generate_narration(
+                                test_steps,
+                                expected_path.parent,
+                                test_name,
+                                return_timed_audio=True  # Return list of (audio_path, start_time) tuples
+                            )
+                        else:
+                            # Use narration config
+                            narration_audio = await self.audio_processor.generate_narration(
+                                test_steps,
+                                expected_path.parent,
+                                test_name
+                            )
+                        narration_duration = time.time() - narration_start
                         if narration_audio:
+                            print(f"  ⏱️  Performance: Áudio gerado em {narration_duration:.2f}s")
                             _log_action("narration_generated", test_name, {
-                                "audio_path": str(narration_audio)
+                                "audio_path": str(narration_audio),
+                                "duration": narration_duration
                             })
+                        else:
+                            print(f"  ⏱️  Performance: Áudio não gerado (tempo: {narration_duration:.2f}s)")
                     
                     # Process if we need to add intro screen, modify video, or convert format
                     # Only process if there's actually something to do
@@ -545,6 +644,7 @@ class TestExecutor:
                         self.config.video.speed != 1.0 or
                         (self.config.video.subtitles and test_steps) or
                         self.config.video.audio_file or
+                        (self.config.video.audio and test_steps) or  # Audio from steps
                         narration_audio or
                         needs_conversion  # Always process if we need to convert webm to mp4
                     )
@@ -565,8 +665,10 @@ class TestExecutor:
                         # Use video_start_time for subtitle timing if available
                         subtitle_reference_time = video_start_time if video_start_time else start_time
                         try:
+                            process_all_start = time.time()
                             logger.info(f"Chamando process_all_in_one: video={video_to_process.name}, test_name={test_name}")
                             print(f"  🔍 DEBUG: Chamando process_all_in_one: video={video_to_process.name}, test_name={test_name}")
+                            print(f"  ⏱️  Performance: Chamando process_all_in_one às {time.strftime('%H:%M:%S')}")
                             final_path = await self.video_processor.process_all_in_one(
                                 video_to_process,
                                 test_steps,
@@ -576,7 +678,9 @@ class TestExecutor:
                                 narration_audio=narration_audio,
                                 test_name=test_name
                             )
-                            logger.info(f"process_all_in_one retornou: {final_path.name if final_path else None} (suffix={final_path.suffix if final_path else None})")
+                            process_all_duration = time.time() - process_all_start
+                            logger.info(f"process_all_in_one retornou: {final_path.name if final_path else None} (suffix={final_path.suffix if final_path else None}) em {process_all_duration:.2f}s")
+                            print(f"  ⏱️  Performance: process_all_in_one concluído em {process_all_duration:.2f}s")
                         except VideoProcessingError as e:
                             logger.error(f"Erro ao processar vídeo: {e}", exc_info=True)
                             if self.config.video.codec == "mp4":
@@ -589,12 +693,24 @@ class TestExecutor:
                                 raise RuntimeError(f"Falha ao processar vídeo para MP4: {e}") from e
                             final_path = video_to_process
                         if final_path and final_path.exists():
-                            # If we converted, rename to expected mp4 name
-                            if needs_conversion and final_path.suffix == ".mp4":
+                            # Rename processed video to expected name if needed
+                            rename_start = time.time()
+                            # Check if final_path is a processed file (_processed suffix) or different from expected
+                            needs_rename = (
+                                "_processed" in final_path.stem or  # Video has _processed in name
+                                final_path != expected_path  # Video name doesn't match expected
+                            )
+                            
+                            if needs_rename:
+                                logger.info(f"Renomeando vídeo processado: {final_path.name} -> {expected_path.name}")
+                                print(f"  📹 Renomeando vídeo: {final_path.name} -> {expected_path.name}")
                                 if expected_path.exists():
                                     expected_path.unlink()
                                 final_path.rename(expected_path)
                                 final_path = expected_path
+                                rename_duration = time.time() - rename_start
+                                print(f"  ✅ Vídeo renomeado com sucesso: {expected_path.name}")
+                                print(f"  ⏱️  Performance: Renomeação concluída em {rename_duration:.3f}s")
                             
                             # Verify final video exists and is valid
                             if not final_path.exists():
@@ -628,7 +744,12 @@ class TestExecutor:
         
         # Calculate duration
         end_time = datetime.now()
+        test_total_duration = time.time() - test_start_time
         result["duration"] = (end_time - start_time).total_seconds()
+        print(f"  ⏱️  Performance: Teste '{test_name}' concluído em {test_total_duration:.2f}s total")
+        if self.config.video.enabled and 'video_processing_start' in locals():
+            video_processing_total = time.time() - video_processing_start
+            print(f"  ⏱️  Performance: Processamento de vídeo total: {video_processing_total:.2f}s")
         
         # Calculate expected minimum duration based on test steps
         # This helps detect if test failed early or was too short

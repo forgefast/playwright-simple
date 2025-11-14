@@ -1,0 +1,36 @@
+name: Common Login
+description: Reusable login steps for Racco tests
+
+config:
+  video:
+    enabled: true
+    quality: high
+    codec: mp4
+    speed: 1.0
+    subtitles: true
+    hard_subtitles: false
+    audio: true
+    narration: true
+    narration_lang: pt-BR
+    narration_engine: gtts
+    narration_slow: false
+  debug:
+    enabled: true
+    pause_on_error: true
+    interactive_mode: true
+    hot_reload_enabled: true
+  logging:
+    level: DEBUG
+    console_output: true
+  browser:
+    headless: false
+    slow_mo: 50
+
+steps:
+  - action: login
+    login: admin
+    password: admin
+    database: devel
+    description: "Realizando login no sistema"
+    subtitle: "Realizando login no sistema"
+

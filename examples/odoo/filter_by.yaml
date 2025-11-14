@@ -1,0 +1,37 @@
+name: Filtrar por
+description: Filtrar lista por texto usando apenas ações core
+
+# Recebe parâmetros: filter_text, filter_button (opcional)
+
+steps:
+  # Abrir menu de filtros
+  - action: click
+    text: "Filtros"
+    description: "Clicar em Filtros"
+  
+  # Clicar no campo de busca/filtro
+  - action: click
+    text: "Buscar"
+    description: "Clicar no campo de busca"
+    optional: true
+  
+  # Digitar texto do filtro
+  - action: type
+    text: "{{ filter_text }}"
+    description: "Digitar texto do filtro"
+  
+  # Clicar no botão de aplicar filtro (se especificado)
+  - action: click
+    text: "{{ filter_button }}"
+    description: "Clicar no botão para aplicar filtro"
+    optional: true
+    condition: "{{ filter_button }}"
+  
+  # Ou apenas pressionar Enter (comportamento padrão)
+  - action: press
+    key: "Enter"
+    description: "Pressionar Enter para aplicar filtro"
+    optional: true
+    condition: "!{{ filter_button }}"
+
+

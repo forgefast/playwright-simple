@@ -1,0 +1,269 @@
+name: Introdução ao Sistema Racco - Visão Geral
+description: "Demonstra os principais fluxos do sistema MLM Racco: jornada do consumidor, revendedor e gestão administrativa."
+
+# Herda login comum
+extends: common_login.yaml
+
+base_url: https://odoo.racco.com.br
+
+config:
+  video:
+    enabled: true
+    quality: high
+    codec: mp4
+    speed: 1.0
+    subtitles: true
+    hard_subtitles: false
+    audio: true
+    narration: true
+    narration_lang: pt-BR
+    narration_engine: gtts
+    narration_slow: false
+  debug:
+    enabled: true
+    pause_on_error: true
+    interactive_mode: true
+    hot_reload_enabled: true
+  logging:
+    level: DEBUG
+    console_output: true
+  browser:
+    headless: false
+    slow_mo: 50
+
+steps:
+  # ============================================
+  # PARTE 1: VISÃO GERAL DO SISTEMA (Admin)
+  # ============================================
+  
+  # Login como administrador (via common_login.yaml)
+  - action: screenshot
+    name: 01_dashboard_admin
+    description: "Dashboard Administrador - Visão Geral do Sistema"
+  
+  # Mostra estrutura de níveis MLM - vai para Contatos
+  - action: navigate_menu
+    menu_path: ["Contatos"]
+    description: "Navegar para Contatos"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 02_contacts_menu
+    description: "Menu de Contatos - Acesso a Clientes e Categorias"
+  
+  # Mostra revendedores cadastrados
+  - action: search
+    search_text: "Revendedor"
+    description: "Buscar Revendedor"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 03_resellers_overview
+    description: "Revendedores Cadastrados no Sistema"
+  
+  # Mostra produtos disponíveis
+  - action: navigate_menu
+    menu_path: ["Vendas"]
+    description: "Navegar para Vendas"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 04_sales_menu
+    description: "Menu de Vendas - Acesso a Produtos e Pedidos"
+  
+  # ============================================
+  # PARTE 2: JORNADA DO CONSUMIDOR FINAL
+  # ============================================
+  
+  # Logout do admin antes de login como consumidor
+  - action: logout
+    description: "Logout do admin"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Login como consumidor final
+  - action: login
+    login: juliana.ferreira@gmail.com
+    password: demo123
+    database: devel
+    description: "Login como consumidor"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 05_consumer_dashboard
+    description: "Dashboard do Consumidor Final"
+  
+  # Acessa e-commerce
+  - action: navigate_menu
+    menu_path: ["Loja"]
+    description: "Acessar Loja"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 06_ecommerce_home
+    description: "E-commerce Racco - Página Inicial"
+  
+  # Navega no catálogo
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 07_product_catalog_view
+    description: "Catálogo de Produtos - Visualização do Consumidor"
+  
+  # Tenta clicar em um produto (se disponível)
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 08_ecommerce_products
+    description: "Produtos Disponíveis no E-commerce"
+  
+  # Acessa portal do consumidor
+  - action: navigate_menu
+    menu_path: ["Portal"]
+    description: "Acessar Portal"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 09_consumer_portal
+    description: "Portal do Consumidor - Acompanhamento de Pedidos"
+  
+  # ============================================
+  # PARTE 3: JORNADA DO REVENDEDOR
+  # ============================================
+  
+  # Logout do consumidor antes de login como revendedor
+  - action: logout
+    description: "Logout do consumidor"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Login como revendedor Bronze
+  - action: login
+    login: lucia.santos@exemplo.com
+    password: demo123
+    database: devel
+    description: "Login como revendedor"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 10_reseller_dashboard
+    description: "Dashboard do Revendedor Bronze"
+  
+  # Acessa portal do revendedor (mais confiável que menu interno)
+  - action: navigate_menu
+    menu_path: ["Portal"]
+    description: "Acessar Portal do Revendedor"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 11_reseller_portal
+    description: "Portal do Revendedor - Acesso Completo"
+  
+  # Mostra produtos disponíveis para revendedor
+  - action: navigate_menu
+    menu_path: ["Loja"]
+    description: "Acessar Loja"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 12_reseller_product_catalog
+    description: "Catálogo de Produtos - Preços para Revendedor"
+  
+  # Volta para dashboard
+  - action: navigate_menu
+    menu_path: ["Dashboard"]
+    description: "Voltar para Dashboard"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 13_reseller_dashboard_features
+    description: "Dashboard do Revendedor - Funcionalidades Disponíveis"
+  
+  # ============================================
+  # PARTE 4: VISÃO ADMINISTRATIVA
+  # ============================================
+  
+  # Logout do revendedor antes de login como admin
+  - action: logout
+    description: "Logout do revendedor"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Login como admin novamente
+  - action: login
+    login: admin
+    password: admin
+    database: devel
+    description: "Login como admin"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Mostra gestão de vendas - vai para Vendas
+  - action: navigate_menu
+    menu_path: ["Vendas"]
+    description: "Navegar para Vendas"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 14_admin_sales_overview
+    description: "Visão Administrativa - Menu de Vendas"
+  
+  # Mostra gestão de níveis e escalonamento
+  - action: navigate_menu
+    menu_path: ["Contatos"]
+    description: "Navegar para Contatos"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: search
+    search_text: "Bronze"
+    description: "Buscar Bronze"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 15_admin_level_management
+    description: "Gestão de Níveis - Revendedores por Categoria"
+  
+  # Dashboard final
+  - action: navigate_menu
+    menu_path: ["Dashboard"]
+    description: "Voltar para Dashboard"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 16_system_overview_final
+    description: "Visão Geral Final - Sistema Completo Racco MLM"
+

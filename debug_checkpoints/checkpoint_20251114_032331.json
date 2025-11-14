@@ -1,0 +1,46 @@
+{
+  "timestamp": "20251114_032331",
+  "step_number": null,
+  "url": "http://localhost:18069/",
+  "html_file": "debug_checkpoints/checkpoint_20251114_032331.html",
+  "state": {
+    "url": "http://localhost:18069/",
+    "title": "Home | My Website",
+    "viewport": {
+      "width": 1920,
+      "height": 1080
+    },
+    "cookies": [
+      {
+        "name": "frontend_lang",
+        "value": "pt_BR",
+        "domain": "localhost",
+        "path": "/",
+        "expires": 1794637096.424369,
+        "httpOnly": false,
+        "secure": false,
+        "sameSite": "Lax"
+      },
+      {
+        "name": "session_id",
+        "value": "fXezHQcP5Qa8VIrI6N1R5-hZqWGGlAOpM-isoeukfbQ_RdUEk1_B5ZqrII5MgrYCG5lD-dO26J2zEXHu1kZ8",
+        "domain": "localhost",
+        "path": "/",
+        "expires": 1763705897.424486,
+        "httpOnly": true,
+        "secure": false,
+        "sameSite": "Lax"
+      },
+      {
+        "name": "tz",
+        "value": "America/Sao_Paulo",
+        "domain": "localhost",
+        "path": "/",
+        "expires": -1,
+        "httpOnly": false,
+        "secure": false,
+        "sameSite": "Lax"
+      }
+    ]
+  }
+}

@@ -1,171 +1,218 @@
 # Playwright Simple
 
-A simple and intuitive library for writing Playwright tests, designed for QAs without deep programming knowledge.
+**Automação web simplificada com YAML e Python**
 
-## Features
+[![Status](https://img.shields.io/badge/status-completo-success)](IMPLEMENTATION_STATUS.md)
+[![Fases](https://img.shields.io/badge/fases-12%2F12-success)](IMPLEMENTATION_PLAN.md)
 
-- 🎯 **Simple API**: Easy-to-use methods that read like natural language
-- 🎨 **Customizable Cursor**: Visual cursor with customizable style, color, and size
-- 🎥 **Video Recording**: Automatic video recording with quality and codec options
-- 📸 **Screenshots**: Automatic and manual screenshots with smart organization
-- 🔍 **Smart Selectors**: Intelligent element location with automatic fallback
-- 📝 **Multiple Formats**: Write tests in Python or YAML
-- ⚙️ **Flexible Configuration**: YAML/JSON config files, environment variables, or code
+---
 
-## Installation
-
-### Basic Installation
+## 🚀 Início Rápido
 
 ```bash
-pip install playwright-simple
+# Instalar
+pip install -e ".[dev]"
+playwright install chromium
+
+# Gravar um teste
+playwright-simple record meu_teste.yaml --url https://example.com
+
+# Executar um teste
+playwright-simple run meu_teste.yaml --video
 ```
 
-### With Extras
+📖 **[Quick Start →](QUICK_START.md)** | 📚 **[Manual Completo →](USER_MANUAL.md)**
 
-Install with optional extras for specific frameworks:
+---
+
+## ✨ Funcionalidades Principais
+
+### 🎬 Gravação Interativa
+Grave suas interações no navegador e gere YAML automaticamente.
 
 ```bash
-# Odoo support
-pip install playwright-simple[odoo]
-
-# ForgeERP support
-pip install playwright-simple[forgeerp]
-
-# Development dependencies
-pip install playwright-simple[dev]
+playwright-simple record teste.yaml --url https://example.com
 ```
 
-### From Source
+### ▶️ Execução de Testes
+Execute testes YAML com vídeo, legendas e áudio.
 
 ```bash
-git clone https://github.com/forgeerp/playwright-simple.git
+playwright-simple run teste.yaml --video --subtitles --audio
+```
+
+### 🔧 Auto-Fix Inteligente
+Correção automática de erros usando contexto completo (HTML, estado, histórico).
+
+### 🔌 Extensão Odoo
+Ações específicas para Odoo com sintaxe amigável.
+
+```yaml
+- action: login
+  login: admin
+  password: admin
+  
+- action: go_to
+  go_to: "Vendas > Pedidos"
+  
+- action: fill
+  fill: "Cliente = João Silva"
+```
+
+### 📸 Comparação Visual
+Detecte regressões visuais comparando screenshots.
+
+### 🔄 Hot Reload
+Recarregue YAML e Python automaticamente durante execução.
+
+---
+
+## 📚 Documentação
+
+### Para Usuários
+- **[Quick Start](QUICK_START.md)** - Comece em 5 minutos
+- **[User Manual](USER_MANUAL.md)** - Manual completo do usuário
+- **[Validation Guide](VALIDATION_GUIDE.md)** - Guia de validação e testes
+- **[What You Can Use Now](WHAT_YOU_CAN_USE_NOW.md)** - O que está pronto
+- **[Hybrid Workflow](docs/HYBRID_WORKFLOW.md)** - Fluxo completo: gravar → editar → executar
+
+### Para Desenvolvedores
+- **[Implementation Plan](IMPLEMENTATION_PLAN.md)** - Plano de implementação completo
+- **[Implementation Status](IMPLEMENTATION_STATUS.md)** - Status atual das fases
+- **[API Reference](docs/API_REFERENCE.md)** - Referência completa da API
+- **[Performance Guide](docs/PERFORMANCE.md)** - Guia de performance
+
+### Tutoriais
+- **[Tutorial 1: Testes Básicos](examples/tutorials/tutorial_01_basic_testing.md)**
+- **[Tutorial 2: Testes Odoo](examples/tutorials/tutorial_02_odoo_testing.md)**
+- **[Tutorial 3: Gravação Interativa](examples/tutorials/tutorial_03_recording.md)**
+
+### Exemplos
+- **[Examples](examples/)** - Exemplos práticos
+- **[Odoo Examples](examples/odoo/)** - Exemplos específicos para Odoo
+
+---
+
+## 🎯 Status de Implementação
+
+| Fase | Status | Progresso |
+|------|--------|-----------|
+| FASE 0 | ✅ Completa | 100% |
+| FASE 1 | ✅ Completa | 100% |
+| FASE 6 | ✅ Completa | 100% |
+| FASE 7 | ✅ Completa | 100% |
+| FASE 8 | ✅ Completa | 100% |
+| FASE 9 | ✅ Completa | 100% |
+| FASE 10 | ✅ Completa | 100% |
+| FASE 11 | ✅ Completa | 100% |
+| FASE 12 | ✅ Completa | 100% |
+
+**Ver [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) para detalhes completos**
+
+---
+
+## 📖 Exemplos
+
+### Exemplo 1: Teste Simples
+
+```yaml
+name: Login Test
+steps:
+  - action: go_to
+    url: http://localhost:8069
+    
+  - action: click
+    text: Entrar
+    
+  - action: type
+    text: admin@example.com
+    selector: input[name="login"]
+    
+  - action: click
+    text: Login
+```
+
+### Exemplo 2: Teste Odoo
+
+```yaml
+name: Criar Pedido Odoo
+steps:
+  - action: login
+    login: admin
+    password: admin
+    
+  - action: go_to
+    go_to: "Vendas > Pedidos"
+    
+  - action: click
+    click: "Criar"
+    
+  - action: fill
+    fill: "Cliente = João Silva"
+    
+  - action: click
+    click: "Salvar"
+```
+
+---
+
+## 🛠️ Instalação
+
+```bash
+# Clonar repositório
+git clone <repo-url>
 cd playwright-simple
-pip install -e .
-```
 
-Don't forget to install Playwright browsers:
+# Instalar dependências
+pip install -e ".[dev]"
 
-```bash
+# Instalar browsers
 playwright install chromium
 ```
 
-## Extras
+---
 
-### Odoo Extra
+## 📝 Comandos Disponíveis
 
-The `[odoo]` extra provides specialized functionality for testing Odoo applications:
-
-```python
-from playwright_simple.odoo import OdooTestBase
-
-async def test_odoo(page, test: OdooTestBase):
-    await test.login("admin", "admin", database="devel")
-    await test.go_to_menu("Vendas", "Pedidos")
-    await test.create_record("sale.order", {
-        "partner_id": "Cliente Teste"
-    })
+### Gravar Interações
+```bash
+playwright-simple record <output.yaml> [--url URL] [--headless] [--debug]
 ```
 
-**Features:**
-- Automatic version detection (Odoo 14-18)
-- Menu navigation (Community/Enterprise)
-- Field interaction (Many2one, Many2many, One2many, etc.)
-- View manipulation (List, Kanban, Form, etc.)
-- Wizard and dialog handling
-- YAML support for QAs
-
-See [Odoo Documentation](docs/odoo/README.md) for more details.
-
-### ForgeERP Extra
-
-The `[forgeerp]` extra provides specialized functionality for testing ForgeERP applications:
-
-```python
-from playwright_simple.forgeerp import ForgeERPTestBase
-
-async def test_forgeerp(page, test: ForgeERPTestBase):
-    await test.go_to_provision()
-    await test.fill_provision_form("my-client", "dev")
-    await test.submit_form()
-    await test.assert_no_errors()
+### Executar Testes
+```bash
+playwright-simple run <test.yaml> [--video] [--subtitles] [--audio] [--debug]
 ```
 
-**Features:**
-- HTMX interaction helpers (wait for swaps, detect errors)
-- Form helpers (provision, deploy, diagnostics)
-- Navigation helpers (setup, provision, status, deploy, diagnostics)
-- Component helpers (modals, cards, buttons)
-- Complete workflows (provision, deploy, check status, diagnostics)
-- Automatic error detection and validation
-- ForgeERP-specific selectors
+---
 
-See [ForgeERP Documentation](docs/forgeerp/README.md) for more details.
+## 🧪 Validação
 
-## Quick Start
+Quer testar e validar? Consulte o **[Validation Guide](VALIDATION_GUIDE.md)** e use o **[Validation Checklist](VALIDATION_CHECKLIST.md)**.
 
-### Python Format
+---
 
-```python
-from playwright_simple import TestRunner, TestConfig
+## 🤝 Contribuindo
 
-# Configuration
-config = TestConfig(
-    base_url="http://localhost:8000",
-    cursor_style="arrow",
-    cursor_color="#007bff",
-)
+1. Leia o [Implementation Plan](IMPLEMENTATION_PLAN.md)
+2. Veja o [Implementation Status](IMPLEMENTATION_STATUS.md)
+3. Siga os padrões de código
+4. Adicione testes
 
-# Test function
-async def test_login(page, test):
-    await test.login("admin", "senha123")
-    await test.go_to("/dashboard")
-    await test.click('button:has-text("Criar")')
-    await test.type('input[name="name"]', "Item Teste")
-    await test.assert_text(".success-message", "Item criado com sucesso")
+---
 
-# Run test
-runner = TestRunner(config=config)
-await runner.run_all([("01_login", test_login)])
-```
+## 📄 Licença
 
-### YAML Format (Coming Soon)
+[Adicione sua licença aqui]
 
-```yaml
-name: "Login Test"
-steps:
-  - action: login
-    username: "admin"
-    password: "senha123"
-  - action: go_to
-    url: "/dashboard"
-  - action: click
-    selector: 'button:has-text("Criar")'
-```
+---
 
-## Documentation
+## 🔗 Links Úteis
 
-- [Full Documentation](docs/README.md)
-- [API Reference](docs/API.md)
-- [Configuration Guide](docs/CONFIGURATION.md)
-- [Examples](docs/EXAMPLES.md)
-- [Troubleshooting](docs/TROUBLESHOOTING.md)
+- [Playwright Documentation](https://playwright.dev/python/)
+- [YAML Specification](https://yaml.org/spec/)
 
-## Requirements
+---
 
-- Python 3.8+
-- Playwright 1.40+
-
-## License
-
-MIT License - see [LICENSE](LICENSE) file for details.
-
-## Contributing
-
-Contributions are welcome! Please read our contributing guidelines before submitting PRs.
-
-## Support
-
-- Issues: [GitHub Issues](https://github.com/forgeerp/playwright-simple/issues)
-- Documentation: [docs/](docs/)
-
-
+**Última Atualização**: Novembro 2024  
+**Status**: ✅ **Todas as fases completas - Pronto para validação**

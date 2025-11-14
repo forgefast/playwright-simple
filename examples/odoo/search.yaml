@@ -1,0 +1,35 @@
+name: Buscar Registros Odoo
+description: Buscar registros na lista usando apenas ações core
+
+# Recebe parâmetros: search_text, wait_for_results (opcional, default true)
+
+steps:
+  # Clicar no campo de busca
+  - action: click
+    text: "Buscar"
+    description: "Clicar no campo de busca"
+    optional: true
+  
+  # Limpar campo de busca
+  - action: clear
+    text: "Buscar"
+    description: "Limpar campo de busca"
+    optional: true
+  
+  # Digitar texto de busca
+  - action: type
+    text: "{{ search_text }}"
+    description: "Digitar texto de busca"
+  
+  # Pressionar Enter para confirmar busca
+  - action: press
+    key: "Enter"
+    description: "Confirmar busca"
+  
+  # Aguardar resultados (se solicitado)
+  - if: "{{ wait_for_results != false }}"
+    then:
+      - action: wait
+        seconds: 0.5
+        description: "Aguardar resultados da busca"
+

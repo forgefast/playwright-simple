@@ -2,6 +2,9 @@
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[project.scripts]
+playwright-simple = "playwright_simple.cli:main"
+
 [project]
 name = "playwright-simple"
 version = "0.1.0"

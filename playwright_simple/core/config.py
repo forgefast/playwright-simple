@@ -58,52 +58,22 @@ class CursorConfig:
             )
 
 
-@dataclass
-class VideoConfig:
-    """Configuration for video recording."""
-    enabled: bool = True
-    quality: str = "high"  # low, medium, high
-    codec: str = "webm"  # webm, mp4
-    dir: str = "videos"
-    record_per_test: bool = True  # One video per test vs one global video
-    pause_on_failure: bool = False
-    speed: float = 1.0  # Video playback speed (1.0 = normal, 2.0 = 2x faster, 0.5 = 2x slower)
-    subtitles: bool = False  # Enable automatic subtitles from test steps (default: disabled, must be explicitly enabled in YAML)
-    subtitle_min_duration: float = 0.5  # Minimum duration in seconds for subtitles (prevents glitches)
-    post_load_delay: float = 0.6  # Delay in seconds after screen loads before marking step as complete
-    static_step_duration: float = 2.0  # Duration for static steps (e.g., "Visualizando painel") - steps that just show something
-    audio_file: Optional[str] = None  # Optional background audio file path (mp3, wav, etc.)
-    narration: bool = False  # Enable text-to-speech narration (requires gTTS, edge-tts, or pyttsx3)
-    narration_lang: str = 'pt-br'  # Language for TTS narration (pt-br, en, es, etc.)
-    narration_engine: str = 'gtts'  # TTS engine ('gtts' for Google TTS, 'edge-tts' for Edge TTS, 'pyttsx3' for offline)
-    narration_slow: bool = False  # Speak slowly (gTTS only, ignored for other engines)
-    
-    def __post_init__(self):
-        """Validate configuration values."""
-        valid_qualities = ["low", "medium", "high"]
-        if self.quality not in valid_qualities:
-            from .exceptions import ConfigurationError
-            raise ConfigurationError(
-                f"Invalid video quality: {self.quality}. Must be one of {valid_qualities}"
-            )
-        
-        valid_codecs = ["webm", "mp4"]
-        if self.codec not in valid_codecs:
-            from .exceptions import ConfigurationError
-            raise ConfigurationError(
-                f"Invalid video codec: {self.codec}. Must be one of {valid_codecs}"
-            )
-        
-        if self.speed <= 0:
-            from .exceptions import ConfigurationError
-            raise ConfigurationError(f"Video speed must be positive, got: {self.speed}")
-        
-        valid_tts_engines = ["gtts", "edge-tts", "pyttsx3"]
-        if self.narration_engine not in valid_tts_engines:
-            from .exceptions import ConfigurationError
-            raise ConfigurationError(
-                f"Invalid TTS engine: {self.narration_engine}. Must be one of {valid_tts_engines}"
-            )
+# VideoConfig moved to extensions/video/config.py
+# Import here for backward compatibility (will be deprecated)
+try:
+    from ..extensions.video.config import VideoConfig
+except ImportError:
+    # Fallback if extension not available
+    @dataclass
+    class VideoConfig:
+        """Placeholder - VideoConfig moved to extensions/video/config.py"""
+        enabled: bool = False
+        quality: str = "high"
+        codec: str = "webm"
+        dir: str = "videos"
+        record_per_test: bool = True
+        pause_on_failure: bool = False
+        speed: float = 1.0
 
 
 @dataclass
@@ -134,8 +104,16 @@ class BrowserConfig:
     navigation_timeout: int = 30000
     locale: str = "pt-BR"
     viewport: Dict[str, int] = field(default_factory=lambda: {"width": 1920, "height": 1080})
+    wait_for_load: str = "load"  # load, domcontentloaded, networkidle - how to wait after each action
+    wait_timeout: int = 10000  # Timeout for wait_for_load_state in milliseconds
 
 
+@dataclass
+class StepConfig:
+    """Configuration for step execution."""
+    static_min_duration: float = 3.0  # Minimum duration in seconds for static steps
+    fast_mode: bool = False  # If True, ignores delays in static steps (for fast debugging)
+    
 @dataclass
 class TestConfig:
     """
@@ -162,9 +140,11 @@ class TestConfig:
     
     # Sub-configurations
     cursor: CursorConfig = field(default_factory=CursorConfig)
-    video: VideoConfig = field(default_factory=VideoConfig)
+    # video: VideoConfig - kept for backward compatibility, but use extensions/video for new code
+    video: 'VideoConfig' = field(default_factory=lambda: VideoConfig())
     screenshots: ScreenshotConfig = field(default_factory=ScreenshotConfig)
     browser: BrowserConfig = field(default_factory=BrowserConfig)
+    step: StepConfig = field(default_factory=StepConfig)
     
     def __post_init__(self):
         """Validate configuration after initialization."""
@@ -221,13 +201,11 @@ class TestConfig:
         
         # Extract sub-configs
         cursor_data = data.get('cursor', {})
-        video_data = data.get('video', {})
         screenshots_data = data.get('screenshots', {})
         browser_data = data.get('browser', {})
         
         # Create sub-configs
         cursor = CursorConfig(**cursor_data)
-        video = VideoConfig(**video_data)
         screenshots = ScreenshotConfig(**screenshots_data)
         
         # Ensure viewport is in browser_data
@@ -235,6 +213,50 @@ class TestConfig:
             browser_data['viewport'] = {"width": 1920, "height": 1080}
         
         browser = BrowserConfig(**browser_data)
+        
+        # Create video config if provided (for backward compatibility)
+        video_data = data.get('video', {})
+        try:
+            from ..extensions.video.config import VideoConfig
+            # Add all video config fields
+            video = VideoConfig(
+                enabled=video_data.get('enabled', True),
+                quality=video_data.get('quality', 'high'),
+                codec=video_data.get('codec', 'webm'),
+                dir=video_data.get('dir', 'videos'),
+                speed=video_data.get('speed', 1.0)
+            )
+            # Add extension-specific fields as attributes
+            video.subtitles = video_data.get('subtitles', False)
+            video.hard_subtitles = video_data.get('hard_subtitles', False)
+            video.audio = video_data.get('audio', False)
+            video.narration = video_data.get('narration', False)
+            video.narration_lang = video_data.get('narration_lang', 'pt-BR')
+            video.narration_engine = video_data.get('narration_engine', 'gtts')
+            video.narration_slow = video_data.get('narration_slow', False)
+            video.audio_file = video_data.get('audio_file')
+            video.audio_lang = video_data.get('audio_lang', 'pt-BR')
+            video.audio_engine = video_data.get('audio_engine', 'gtts')
+            video.audio_voice = video_data.get('audio_voice')
+            video.audio_rate = video_data.get('audio_rate')
+            video.audio_pitch = video_data.get('audio_pitch')
+            video.audio_volume = video_data.get('audio_volume')
+        except ImportError:
+            # Fallback
+            video = VideoConfig(
+                enabled=video_data.get('enabled', True),
+                quality=video_data.get('quality', 'high'),
+                codec=video_data.get('codec', 'webm'),
+                dir=video_data.get('dir', 'videos'),
+                speed=video_data.get('speed', 1.0)
+            )
+            video.subtitles = video_data.get('subtitles', False)
+            video.hard_subtitles = video_data.get('hard_subtitles', False)
+            video.audio = video_data.get('audio', False)
+            video.narration = video_data.get('narration', False)
+            video.narration_lang = video_data.get('narration_lang', 'pt-BR')
+            video.narration_engine = video_data.get('narration_engine', 'gtts')
+            video.narration_slow = video_data.get('narration_slow', False)
         
         return cls(
             base_url=base_url,
@@ -280,17 +302,8 @@ class TestConfig:
         if cursor_dict:
             config_dict['cursor'] = cursor_dict
         
-        # Video config
-        video_dict = {}
-        if enabled := os.getenv('PLAYWRIGHT_SIMPLE_VIDEO_ENABLED'):
-            video_dict['enabled'] = enabled.lower() in ('true', '1', 'yes')
-        if quality := os.getenv('PLAYWRIGHT_SIMPLE_VIDEO_QUALITY'):
-            video_dict['quality'] = quality
-        if codec := os.getenv('PLAYWRIGHT_SIMPLE_VIDEO_CODEC'):
-            video_dict['codec'] = codec
-        
-        if video_dict:
-            config_dict['video'] = video_dict
+        # Video config removed - use extensions/video instead
+        # Video config is now handled by extensions
         
         # Screenshots config
         screenshots_dict = {}
@@ -329,14 +342,13 @@ class TestConfig:
         
         # Merge sub-configs (simple merge for now)
         cursor = override.cursor if override.cursor != CursorConfig() else base.cursor
-        video = override.video if override.video != VideoConfig() else base.video
+        # video removed - use extensions/video instead
         screenshots = override.screenshots if override.screenshots != ScreenshotConfig() else base.screenshots
         browser = override.browser if override.browser != BrowserConfig() else base.browser
         
         return cls(
             base_url=base_url,
             cursor=cursor,
-            video=video,
             screenshots=screenshots,
             browser=browser,
         )
@@ -385,15 +397,12 @@ class TestConfig:
         if kwargs:
             # Handle nested configs
             cursor_kwargs = {}
-            video_kwargs = {}
             screenshots_kwargs = {}
             browser_kwargs = {}
             
             for key, value in kwargs.items():
                 if key.startswith('cursor_'):
                     cursor_kwargs[key[7:]] = value  # Remove 'cursor_' prefix
-                elif key.startswith('video_'):
-                    video_kwargs[key[6:]] = value  # Remove 'video_' prefix
                 elif key.startswith('screenshots_'):
                     screenshots_kwargs[key[11:]] = value  # Remove 'screenshots_' prefix
                 elif key.startswith('browser_'):
@@ -406,11 +415,6 @@ class TestConfig:
                 for k, v in cursor_kwargs.items():
                     if hasattr(config.cursor, k):
                         setattr(config.cursor, k, v)
-            
-            if video_kwargs:
-                for k, v in video_kwargs.items():
-                    if hasattr(config.video, k):
-                        setattr(config.video, k, v)
             
             if screenshots_kwargs:
                 for k, v in screenshots_kwargs.items():
@@ -450,7 +454,7 @@ class TestConfig:
         return {
             'base_url': self.base_url,
             'cursor': asdict(self.cursor),
-            'video': asdict(self.video),
+            # 'video' removed - use extensions/video instead
             'screenshots': asdict(self.screenshots),
             'browser': {
                 **asdict(self.browser),

@@ -20,6 +20,10 @@ except ImportError:
 
 from .base import SimpleTestBase
 from .exceptions import ElementNotFoundError, NavigationError
+from .state import WebState
+from .yaml_expressions import ExpressionEvaluator
+from .yaml_resolver import YAMLResolver
+from .yaml_executor import StepExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -48,153 +52,55 @@ class YAMLParser:
             data = yaml.safe_load(f)
         
         # Resolve inheritance and composition
-        data = YAMLParser._resolve_inheritance(data, base_dir)
-        data = YAMLParser._resolve_includes(data, base_dir)
+        data = YAMLResolver.resolve_inheritance(data, base_dir)
+        data = YAMLResolver.resolve_includes(data, base_dir)
+        data = YAMLResolver.resolve_compose(data, base_dir)
         
         return data
+    
+    # Note: The following methods have been moved to YAMLResolver for better organization.
+    # They are kept here for backward compatibility but delegate to the new module.
     
     @staticmethod
     def _resolve_inheritance(data: Dict[str, Any], base_dir: Path) -> Dict[str, Any]:
-        """
-        Resolve extends (inheritance) in YAML data.
-        
-        Args:
-            data: YAML data dictionary
-            base_dir: Base directory for resolving relative paths
-            
-        Returns:
-            Resolved YAML data with parent steps merged
-        """
-        if 'extends' not in data:
-            return data
-        
-        extends_path = data['extends']
-        if not extends_path:
-            return data
-        
-        # Resolve path
-        if not Path(extends_path).is_absolute():
-            extends_path = base_dir / extends_path
-        else:
-            extends_path = Path(extends_path)
-        
-        if not extends_path.exists():
-            raise FileNotFoundError(f"Extended YAML file not found: {extends_path}")
-        
-        # Load parent data
-        with open(extends_path, 'r', encoding='utf-8') as f:
-            parent_data = yaml.safe_load(f)
-        
-        # Recursively resolve parent's inheritance
-        parent_data = YAMLParser._resolve_inheritance(parent_data, extends_path.parent)
-        parent_data = YAMLParser._resolve_includes(parent_data, extends_path.parent)
-        
-        # Merge: child overrides parent
-        merged = parent_data.copy()
-        
-        # Merge config (child overrides parent)
-        if 'config' in data:
-            if 'config' in merged:
-                # Deep merge config
-                merged_config = merged['config'].copy()
-                merged_config.update(data['config'])
-                merged['config'] = merged_config
-            else:
-                merged['config'] = data['config']
-        
-        # Merge steps: parent steps come first, then child steps (inheritance)
-        parent_steps = merged.get('steps', [])
-        child_steps = data.get('steps', [])
-        merged['steps'] = parent_steps + child_steps  # Parent first, then child
-        
-        # Merge setup: parent setup first, then child setup
-        parent_setup = merged.get('setup', [])
-        child_setup = data.get('setup', [])
-        if parent_setup or child_setup:
-            merged['setup'] = parent_setup + child_setup
-        
-        # Merge teardown: child teardown first, then parent teardown (reverse order)
-        parent_teardown = merged.get('teardown', [])
-        child_teardown = data.get('teardown', [])
-        if parent_teardown or child_teardown:
-            merged['teardown'] = child_teardown + parent_teardown
-        
-        # Merge other fields (child overrides)
-        for key in data:
-            if key not in ['extends', 'config', 'steps', 'setup', 'teardown']:
-                merged[key] = data[key]
-        
-        # Remove extends after resolution
-        if 'extends' in merged:
-            del merged['extends']
-        
-        return merged
+        """Backward compatibility: delegate to YAMLResolver."""
+        return YAMLResolver.resolve_inheritance(data, base_dir)
     
     @staticmethod
     def _resolve_includes(data: Dict[str, Any], base_dir: Path) -> Dict[str, Any]:
-        """
-        Resolve include (composition) in YAML data.
-        
-        Args:
-            data: YAML data dictionary
-            base_dir: Base directory for resolving relative paths
-            
-        Returns:
-            Resolved YAML data with included steps added
-        """
-        if 'include' not in data:
-            return data
-        
-        include_paths = data['include']
-        if not include_paths:
-            return data
-        
-        # Support both single include and list of includes
-        if isinstance(include_paths, str):
-            include_paths = [include_paths]
-        
-        # Get base steps
-        steps = data.get('steps', [])
-        
-        # Process each include
-        for include_path in include_paths:
-            # Resolve path
-            if not Path(include_path).is_absolute():
-                include_path = base_dir / include_path
-            else:
-                include_path = Path(include_path)
-            
-            if not include_path.exists():
-                raise FileNotFoundError(f"Included YAML file not found: {include_path}")
-            
-            # Load included data
-            with open(include_path, 'r', encoding='utf-8') as f:
-                included_data = yaml.safe_load(f)
-            
-            # Recursively resolve included file's inheritance/includes
-            included_data = YAMLParser._resolve_inheritance(included_data, include_path.parent)
-            included_data = YAMLParser._resolve_includes(included_data, include_path.parent)
-            
-            # Add included steps to beginning (composition)
-            included_steps = included_data.get('steps', [])
-            steps = included_steps + steps
-        
-        # Update steps
-        data['steps'] = steps
-        
-        # Remove include after resolution
-        if 'include' in data:
-            del data['include']
-        
-        return data
+        """Backward compatibility: delegate to YAMLResolver."""
+        return YAMLResolver.resolve_includes(data, base_dir)
     
     @staticmethod
-    def to_python_function(yaml_data: Dict[str, Any]) -> Callable[..., Any]:
+    def _resolve_compose(data: Dict[str, Any], base_dir: Path) -> Dict[str, Any]:
+        """Backward compatibility: delegate to YAMLResolver."""
+        return YAMLResolver.resolve_compose(data, base_dir)
+    
+    @staticmethod
+    def _substitute_variables(obj: Any, params: Dict[str, Any]) -> Any:
+        """Backward compatibility: delegate to ExpressionEvaluator."""
+        context = {'vars': {}, 'params': params}
+        return ExpressionEvaluator.substitute_variables(obj, context)
+    
+    @staticmethod
+    def _resolve_yaml_path(file_path: str, base_dir: Path) -> Optional[Path]:
+        """Backward compatibility: delegate to YAMLResolver."""
+        return YAMLResolver.resolve_yaml_path(file_path, base_dir)
+    
+    @staticmethod
+    def _find_action_yaml(action_name: str, base_dir: Path) -> Optional[Path]:
+        """Backward compatibility: delegate to YAMLResolver."""
+        return YAMLResolver.find_action_yaml(action_name, base_dir)
+    
+    @staticmethod
+    def to_python_function(yaml_data: Dict[str, Any], base_dir: Optional[Path] = None, yaml_path: Optional[Path] = None) -> Callable[..., Any]:
         """
         Convert YAML test definition to Python function.
         
         Args:
             yaml_data: YAML test data
+            base_dir: Base directory for resolving YAML paths (optional)
+            yaml_path: Path to YAML file (for hot reload)
             
         Returns:
             Python async function (page, test) -> None
@@ -208,81 +114,234 @@ class YAMLParser:
         save_session = yaml_data.get('save_session', False)
         load_session = yaml_data.get('load_session')
         
+        # Use provided base_dir or fallback to cwd
+        function_base_dir = base_dir or Path.cwd()
+        
+        # Store YAML path and initial mtime for hot reload
+        yaml_file_path = yaml_path
+        yaml_mtime = yaml_file_path.stat().st_mtime if yaml_file_path and yaml_file_path.exists() else None
+        
         async def test_function(page: Page, test: SimpleTestBase) -> None:
             """Generated test function from YAML."""
+            # Declare nonlocal variables that will be modified
+            nonlocal steps, yaml_mtime
+            
+            # Initialize context for variables
+            context = {
+                'vars': {},
+                'params': {}  # Will be populated from compose params
+            }
+            
             # Apply configuration from YAML if provided
             if config_data:
-                from .config import TestConfig
-                # Merge config with existing config
-                if 'cursor' in config_data:
-                    cursor_data = config_data['cursor']
-                    if 'style' in cursor_data:
-                        test.config.cursor.style = cursor_data['style']
-                    if 'color' in cursor_data:
-                        test.config.cursor.color = cursor_data['color']
-                    if 'size' in cursor_data:
-                        test.config.cursor.size = cursor_data['size']
-                    if 'click_effect' in cursor_data:
-                        test.config.cursor.click_effect = cursor_data['click_effect']
-                    if 'animation_speed' in cursor_data:
-                        test.config.cursor.animation_speed = cursor_data['animation_speed']
-                
-                if 'video' in config_data:
-                    video_data = config_data['video']
-                    if 'enabled' in video_data:
-                        test.config.video.enabled = video_data['enabled']
-                    if 'quality' in video_data:
-                        test.config.video.quality = video_data['quality']
-                    if 'codec' in video_data:
-                        test.config.video.codec = video_data['codec']
-                    if 'speed' in video_data:
-                        test.config.video.speed = float(video_data['speed'])
-                    if 'subtitles' in video_data:
-                        test.config.video.subtitles = bool(video_data['subtitles'])
-                    if 'narration' in video_data:
-                        test.config.video.narration = bool(video_data['narration'])
-                    if 'narration_lang' in video_data:
-                        test.config.video.narration_lang = video_data['narration_lang']
-                    if 'narration_engine' in video_data:
-                        test.config.video.narration_engine = video_data['narration_engine']
-                    if 'narration_slow' in video_data:
-                        test.config.video.narration_slow = bool(video_data['narration_slow'])
-                
-                if 'browser' in config_data:
-                    browser_data = config_data['browser']
-                    if 'headless' in browser_data:
-                        test.config.browser.headless = browser_data['headless']
-                    if 'slow_mo' in browser_data:
-                        test.config.browser.slow_mo = browser_data['slow_mo']
+                from .yaml_config import YAMLConfigManager
+                YAMLConfigManager.apply_config(config_data, test)
             
             # Set base URL if provided
             if base_url:
                 test.config.base_url = base_url
             
+            # Use base_dir from closure
+            base_dir = function_base_dir
+            
+            # Initialize state
+            current_state = None
+            
             # Execute setup steps first
             if setup_steps:
                 for step in setup_steps:
                     action = step.get('action')
-                    if not action:
+                    if not action and 'compose' not in step and 'for' not in step and 'if' not in step and 'set' not in step and 'try' not in step:
                         continue
-                    await YAMLParser._execute_step(step, test)
+                    current_state = await StepExecutor.execute_step(step, test, base_dir, context, current_state)
             
-            # Execute main steps
+            # Setup Python hot reload
+            from .python_reloader import get_reloader
+            python_reloader = get_reloader(auto_reload=True)
+            
+            # Execute main steps with hot reload support
             try:
-                for step in steps:
+                current_step_index = 0
+                while current_step_index < len(steps):
+                    # Verificar comandos externos (control interface)
+                    if hasattr(test, '_control_interface') and test._control_interface:
+                        try:
+                            cmd = test._control_interface.wait_for_command(timeout=0.1)
+                            if cmd and cmd.get('command') == 'reload':
+                                test._yaml_reload_requested = True
+                                logger.info("Reload command received from control interface")
+                        except:
+                            pass
+                    
+                    # Check for Python module reload (antes de verificar YAML)
+                    try:
+                        reloaded_count = python_reloader.check_and_reload_all()
+                        if reloaded_count > 0:
+                            logger.info(f"🔄 Python hot reload: {reloaded_count} módulo(s) recarregado(s)")
+                            print(f"  🔄 Python hot reload: {reloaded_count} módulo(s) recarregado(s)")
+                    except Exception as e:
+                        logger.debug(f"Erro ao verificar reload Python: {e}")
+                    
+                    # Check for YAML reload before each step
+                    if yaml_file_path and yaml_file_path.exists():
+                        current_mtime = yaml_file_path.stat().st_mtime
+                        # Check if file was modified or if reload was requested
+                        reload_requested = getattr(test, '_yaml_reload_requested', False)
+                        if reload_requested or (yaml_mtime and current_mtime > yaml_mtime):
+                            logger.info(f"🔄 Hot reload: YAML file modified, reloading...")
+                            print(f"  🔄 Hot reload: Recarregando YAML...")
+                            
+                            try:
+                                # Reload YAML
+                                reloaded_data = YAMLParser.parse_file(yaml_file_path)
+                                reloaded_steps = reloaded_data.get('steps', [])
+                                
+                                # Update steps (keep executed ones, replace remaining)
+                                steps = steps[:current_step_index] + reloaded_steps
+                                
+                                # Update mtime
+                                yaml_mtime = current_mtime
+                                
+                                # Clear reload flag
+                                if hasattr(test, '_yaml_reload_requested'):
+                                    test._yaml_reload_requested = False
+                                
+                                print(f"  ✅ YAML recarregado! {len(reloaded_steps)} steps disponíveis")
+                                logger.info(f"Hot reload: {len(reloaded_steps)} steps loaded")
+                                
+                                # If we're past the end, break
+                                if current_step_index >= len(steps):
+                                    break
+                            except Exception as e:
+                                logger.error(f"Error reloading YAML: {e}")
+                                print(f"  ⚠️  Erro ao recarregar YAML: {e}")
+                                # Continue with old steps
+                    
+                    step = steps[current_step_index]
+                    current_step_index += 1
+                    
                     action = step.get('action')
-                    if not action:
+                    if not action and 'compose' not in step and 'for' not in step and 'if' not in step and 'set' not in step and 'try' not in step:
                         continue
-                    await YAMLParser._execute_step(step, test)
+                    
+                    # Update step number in context for debug
+                    if current_state:
+                        current_state.step_number = current_step_index
+                    context['step_number'] = current_step_index
+                    
+                    # Executar passo com rollback e auto-fix
+                    state_before_step = current_state
+                    max_retries = 5
+                    retry_count = 0
+                    step_success = False
+                    
+                    while retry_count < max_retries and not step_success:
+                        try:
+                            # Tentar executar passo
+                            current_state = await StepExecutor.execute_step(step, test, base_dir, context, current_state)
+                            step_success = True
+                        except Exception as e:
+                            retry_count += 1
+                            error_type = type(e).__name__
+                            error_message = str(e)
+                            
+                            logger.warning(f"Erro no passo {current_step_index} (tentativa {retry_count}/{max_retries}): {error_type}: {error_message}")
+                            print(f"  ⚠️  Erro no passo {current_step_index}: {error_type}: {error_message[:100]}")
+                            
+                            # Salvar erro no control interface
+                            if hasattr(test, '_control_interface') and test._control_interface:
+                                try:
+                                    test._control_interface.save_error(e, current_step_index)
+                                except:
+                                    pass
+                            
+                            # Tentar corrigir automaticamente
+                            from .auto_fixer import AutoFixer
+                            from .html_analyzer import HTMLAnalyzer
+                            
+                            if yaml_file_path:
+                                fixer = AutoFixer(yaml_file_path)
+                                error_data = {
+                                    'error_type': error_type,
+                                    'error_message': error_message
+                                }
+                                
+                                # Coletar contexto adicional
+                                page_state = None
+                                html_analyzer = None
+                                action_history = []
+                                
+                                # Capturar estado da página se disponível
+                                if current_state:
+                                    page_state = {
+                                        'url': current_state.url,
+                                        'title': current_state.title,
+                                        'scroll_x': current_state.scroll_x,
+                                        'scroll_y': current_state.scroll_y
+                                    }
+                                
+                                # Criar HTML analyzer se HTML disponível
+                                try:
+                                    html_analyzer = HTMLAnalyzer()
+                                except:
+                                    pass
+                                
+                                # Coletar histórico de ações (últimos 5 passos)
+                                if hasattr(test, '_action_history'):
+                                    action_history = test._action_history[-5:] if len(test._action_history) > 5 else test._action_history
+                                
+                                fix_result = fixer.fix_error(
+                                    error_data, 
+                                    step, 
+                                    current_step_index,
+                                    page_state=page_state,
+                                    html_analyzer=html_analyzer,
+                                    action_history=action_history
+                                )
+                                
+                                if fix_result.get('fixed'):
+                                    print(f"  🔧 Correção automática aplicada: {fix_result.get('message')}")
+                                    
+                                    # Recarregar YAML se foi corrigido
+                                    if fix_result.get('fix_type') == 'yaml':
+                                        try:
+                                            reloaded_data = YAMLParser.parse_file(yaml_file_path)
+                                            reloaded_steps = reloaded_data.get('steps', [])
+                                            # Atualizar step atual com versão corrigida
+                                            if current_step_index <= len(reloaded_steps):
+                                                step = reloaded_steps[current_step_index - 1]
+                                                steps[current_step_index - 1] = step
+                                        except Exception as reload_error:
+                                            logger.debug(f"Erro ao recarregar YAML após correção: {reload_error}")
+                                    
+                                    # Aguardar um pouco para hot reload processar
+                                    await asyncio.sleep(0.5)
+                                    
+                                    # Fazer rollback: restaurar estado antes do passo
+                                    if state_before_step:
+                                        current_state = await StepExecutor._rollback_state(test, state_before_step)
+                                    
+                                    # Tentar novamente
+                                    continue
+                                else:
+                                    print(f"  ⚠️  Não foi possível corrigir automaticamente: {fix_result.get('message')}")
+                            
+                            # Se não conseguiu corrigir e esgotou tentativas, relançar erro
+                            if retry_count >= max_retries:
+                                print(f"  ❌ Máximo de tentativas ({max_retries}) atingido para passo {current_step_index}")
+                                raise
+                            
+                            # Aguardar antes de tentar novamente
+                            await asyncio.sleep(1)
             finally:
                 # Execute teardown steps (always, even on error)
                 if teardown_steps:
                     for step in teardown_steps:
                         try:
                             action = step.get('action')
-                            if not action:
+                            if not action and 'compose' not in step and 'for' not in step and 'if' not in step and 'set' not in step and 'try' not in step:
                                 continue
-                            await YAMLParser._execute_step(step, test)
+                            current_state = await StepExecutor.execute_step(step, test, base_dir, context, current_state)
                         except Exception as e:
                             # Log but don't fail on teardown errors
                             logger.warning(f"Teardown step failed: {e}")
@@ -296,150 +355,30 @@ class YAMLParser:
         test_function.__name__ = test_name
         return test_function
     
+    # Note: _evaluate_expression, _substitute_variables_with_context, and _execute_step
+    # have been moved to yaml_expressions.py, yaml_resolver.py, and yaml_executor.py respectively.
+    # These methods are kept here for backward compatibility but delegate to the new modules.
+    
     @staticmethod
-    async def _execute_step(step: Dict[str, Any], test: SimpleTestBase) -> None:
-        """
-        Execute a single step from YAML.
-        
-        Supports both standard actions (action: go_to) and direct method calls (go_to_setup:).
-        
-        Args:
-            step: Step dictionary
-            test: Test base instance
-        """
-        # Check if this is a direct method call (e.g., go_to_setup:)
-        # If step has only one key and it's not 'action', treat it as a method name
-        if len(step) == 1:
-            method_name = list(step.keys())[0]
-            if method_name != 'action' and hasattr(test, method_name):
-                # Direct method call (e.g., go_to_setup:)
-                method = getattr(test, method_name)
-                if callable(method):
-                    # Check if it's async
-                    if asyncio.iscoroutinefunction(method):
-                        await method()
-                    else:
-                        method()
-                    return
-        
-        # Standard action format
-        action = step.get('action')
-        if not action:
-            return
-        
-        # Map action to method
-        if action == 'login':
-            username = step.get('username', '')
-            password = step.get('password', '')
-            login_url = step.get('login_url', '/login')
-            show_process = step.get('show_process', False)
-            await test.login(username, password, login_url, show_process)
-        
-        elif action == 'go_to':
-            url = step.get('url', '/')
-            await test.go_to(url)
-        
-        elif action == 'click':
-            selector = step.get('selector', '')
-            description = step.get('description', '')
-            await test.click(selector, description)
-        
-        elif action == 'type':
-            selector = step.get('selector', '')
-            text = step.get('text', '')
-            description = step.get('description', '')
-            await test.type(selector, text, description)
-        
-        elif action == 'select':
-            selector = step.get('selector', '')
-            option = step.get('option', '')
-            description = step.get('description', '')
-            await test.select(selector, option, description)
-        
-        elif action == 'hover':
-            selector = step.get('selector', '')
-            description = step.get('description', '')
-            await test.hover(selector, description)
-        
-        elif action == 'drag':
-            source = step.get('source', '')
-            target = step.get('target', '')
-            description = step.get('description', '')
-            await test.drag(source, target, description)
-        
-        elif action == 'scroll':
-            selector = step.get('selector')
-            direction = step.get('direction', 'down')
-            amount = step.get('amount', 500)
-            await test.scroll(selector, direction, amount)
-        
-        elif action == 'wait':
-            seconds = step.get('seconds', 1.0)
-            await test.wait(seconds)
-        
-        elif action == 'wait_for':
-            selector = step.get('selector', '')
-            state = step.get('state', 'visible')
-            timeout = step.get('timeout')
-            description = step.get('description', '')
-            await test.wait_for(selector, state, timeout, description)
-        
-        elif action == 'wait_for_url':
-            url_pattern = step.get('url_pattern', '')
-            timeout = step.get('timeout')
-            await test.wait_for_url(url_pattern, timeout)
-        
-        elif action == 'wait_for_text':
-            selector = step.get('selector', '')
-            text = step.get('text', '')
-            timeout = step.get('timeout')
-            description = step.get('description', '')
-            await test.wait_for_text(selector, text, timeout, description)
-        
-        elif action == 'assert_text':
-            selector = step.get('selector', '')
-            expected = step.get('expected', '')
-            description = step.get('description', '')
-            await test.assert_text(selector, expected, description)
-        
-        elif action == 'assert_visible':
-            selector = step.get('selector', '')
-            description = step.get('description', '')
-            await test.assert_visible(selector, description)
-        
-        elif action == 'assert_url':
-            pattern = step.get('pattern', '')
-            await test.assert_url(pattern)
-        
-        elif action == 'assert_count':
-            selector = step.get('selector', '')
-            expected_count = step.get('expected_count', 0)
-            description = step.get('description', '')
-            await test.assert_count(selector, expected_count, description)
-        
-        elif action == 'assert_attr':
-            selector = step.get('selector', '')
-            attribute = step.get('attribute', '')
-            expected = step.get('expected', '')
-            description = step.get('description', '')
-            await test.assert_attr(selector, attribute, expected, description)
-        
-        elif action == 'fill_form':
-            fields = step.get('fields', {})
-            await test.fill_form(fields)
-        
-        elif action == 'screenshot':
-            name = step.get('name')
-            full_page = step.get('full_page')
-            element = step.get('element')
-            await test.screenshot(name, full_page, element)
-        
-        elif action == 'navigate':
-            menu_path = step.get('menu_path', [])
-            await test.navigate(menu_path)
-        
-        else:
-            print(f"  ⚠️  Unknown action: {action}")
+    def _evaluate_expression(expr: str, context: Dict[str, Any]) -> Any:
+        """Backward compatibility: delegate to ExpressionEvaluator."""
+        return ExpressionEvaluator.evaluate(expr, context)
+    
+    @staticmethod
+    def _substitute_variables_with_context(obj: Any, context: Dict[str, Any]) -> Any:
+        """Backward compatibility: delegate to ExpressionEvaluator."""
+        return ExpressionEvaluator.substitute_variables(obj, context)
+    
+    @staticmethod
+    async def _execute_step(
+        step: Dict[str, Any], 
+        test: SimpleTestBase, 
+        base_dir: Optional[Path] = None, 
+        context: Optional[Dict[str, Any]] = None,
+        previous_state: Optional[WebState] = None
+    ) -> WebState:
+        """Backward compatibility: delegate to StepExecutor."""
+        return await StepExecutor.execute_step(step, test, base_dir, context, previous_state)
                 
     
     @staticmethod
@@ -455,7 +394,14 @@ class YAMLParser:
         """
         data = YAMLParser.parse_file(yaml_path)
         test_name = data.get('name', yaml_path.stem)
-        test_function = YAMLParser.to_python_function(data)
+        
+        # Pass base_dir and yaml_path to to_python_function for hot reload
+        base_dir = yaml_path.parent
+        test_function = YAMLParser.to_python_function(data, base_dir, yaml_path=yaml_path)
+        
+        # Store yaml_path in function for external access
+        test_function._yaml_path = yaml_path
+        
         return (test_name, test_function)
     
     @staticmethod

@@ -54,22 +54,14 @@ class NavigationError(PlaywrightSimpleError):
     pass
 
 
-class VideoProcessingError(PlaywrightSimpleError):
-    """
-    Raised when video processing fails.
-    
-    This exception is raised when video recording, processing, or conversion
-    fails (e.g., FFmpeg errors, file system errors).
-    
-    Example:
-        ```python
-        try:
-            await runner.run_test(test_func)
-        except VideoProcessingError as e:
-            print(f"Video processing failed: {e}")
-        ```
-    """
-    pass
+# VideoProcessingError moved to extensions/video
+# Import here for backward compatibility
+try:
+    from ..extensions.video.exceptions import VideoProcessingError
+except ImportError:
+    class VideoProcessingError(PlaywrightSimpleError):
+        """Placeholder - VideoProcessingError moved to extensions/video/exceptions.py"""
+        pass
 
 
 class ConfigurationError(PlaywrightSimpleError):
@@ -90,22 +82,14 @@ class ConfigurationError(PlaywrightSimpleError):
     pass
 
 
-class TTSGenerationError(PlaywrightSimpleError):
-    """
-    Raised when TTS (Text-to-Speech) generation fails.
-    
-    This exception is raised when TTS audio generation fails (e.g., API errors,
-    file system errors, unsupported languages).
-    
-    Example:
-        ```python
-        try:
-            await tts_manager.generate("Hello world")
-        except TTSGenerationError as e:
-            print(f"TTS generation failed: {e}")
-        ```
-    """
-    pass
+# TTSGenerationError moved to extensions/audio
+# Import here for backward compatibility
+try:
+    from ..extensions.audio.exceptions import TTSGenerationError
+except ImportError:
+    class TTSGenerationError(PlaywrightSimpleError):
+        """Placeholder - TTSGenerationError moved to extensions/audio/exceptions.py"""
+        pass
 
 
 class ActionValidationError(PlaywrightSimpleError):

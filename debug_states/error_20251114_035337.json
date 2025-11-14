@@ -1,0 +1,10 @@
+{
+  "timestamp": "20251114_035337",
+  "error_type": "TypeError",
+  "error_message": "LogContext.__init__() got an unexpected keyword argument 'description'",
+  "step_number": null,
+  "action": null,
+  "url": "http://localhost:18069/",
+  "html_file": "debug_states/error_20251114_035337.html",
+  "screenshot": null
+}

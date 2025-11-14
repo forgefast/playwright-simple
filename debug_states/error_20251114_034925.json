@@ -1,0 +1,10 @@
+{
+  "timestamp": "20251114_034925",
+  "error_type": "TypeError",
+  "error_message": "StructuredLogger.element() missing 1 required positional argument: 'element'",
+  "step_number": null,
+  "action": null,
+  "url": "http://localhost:18069/",
+  "html_file": "debug_states/error_20251114_034925.html",
+  "screenshot": null
+}

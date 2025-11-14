@@ -20,11 +20,10 @@ wheels/
 .installed.cfg
 *.egg
 
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
+# Virtual environments
+venv/
+env/
+ENV/
 
 # IDE
 .vscode/
@@ -33,15 +32,28 @@ htmlcov/
 *.swo
 *~
 
-# Screenshots and videos
-screenshots/
-videos/
-*.webm
-*.mp4
-*.png
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
 
-# Environment
-.env
-.venv
-venv/
-ENV/
+# Playwright
+playwright-report/
+test-results/
+
+# Temporary files
+*.tmp
+*.log
+*.yaml.bak
+*.html
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+/tmp/
+*.yaml
+!examples/**/*.yaml
+!validation/**/*.yaml

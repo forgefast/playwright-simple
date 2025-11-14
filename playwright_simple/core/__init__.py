@@ -11,18 +11,16 @@ from .base import SimpleTestBase
 from .runner import TestRunner
 from .cursor import CursorManager
 from .screenshot import ScreenshotManager
-from .video import VideoManager
 from .selectors import SelectorManager
 from .yaml_parser import YAMLParser
-from .tts import TTSManager
+# VideoManager and TTSManager moved to extensions
 from .exceptions import (
     PlaywrightSimpleError,
     ElementNotFoundError,
     NavigationError,
-    VideoProcessingError,
     ConfigurationError,
-    TTSGenerationError,
 )
+# VideoProcessingError and TTSGenerationError moved to extensions
 
 # Optional HTMX helper (for apps using HTMX)
 try:
@@ -33,17 +31,13 @@ try:
         "TestRunner",
         "CursorManager",
         "ScreenshotManager",
-        "VideoManager",
         "SelectorManager",
         "YAMLParser",
-        "TTSManager",
         "HTMXHelper",
         "PlaywrightSimpleError",
         "ElementNotFoundError",
         "NavigationError",
-        "VideoProcessingError",
         "ConfigurationError",
-        "TTSGenerationError",
     ]
 except ImportError:
     __all__ = [
@@ -52,15 +46,11 @@ except ImportError:
         "TestRunner",
         "CursorManager",
         "ScreenshotManager",
-        "VideoManager",
         "SelectorManager",
         "YAMLParser",
-        "TTSManager",
         "PlaywrightSimpleError",
         "ElementNotFoundError",
         "NavigationError",
-        "VideoProcessingError",
         "ConfigurationError",
-        "TTSGenerationError",
     ]
 

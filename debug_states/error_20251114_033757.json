@@ -1,0 +1,10 @@
+{
+  "timestamp": "20251114_033757",
+  "error_type": "UnboundLocalError",
+  "error_message": "cannot access local variable 'steps' where it is not associated with a value",
+  "step_number": null,
+  "action": null,
+  "url": "http://localhost:18069/",
+  "html_file": "debug_states/error_20251114_033757.html",
+  "screenshot": null
+}
