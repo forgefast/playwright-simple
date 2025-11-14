@@ -187,10 +187,23 @@ class TestExecutor:
         create_context = context is None
         
         try:
+            # Create browser if needed
+            if browser is None:
+                from playwright.async_api import async_playwright
+                playwright = await async_playwright().start()
+                browser = await playwright.chromium.launch(
+                    headless=self.config.browser.headless,
+                    slow_mo=self.config.browser.slow_mo
+                )
+                # Store playwright instance for cleanup
+                self._playwright = playwright
+                self._browser_created = True
+            else:
+                self._playwright = None
+                self._browser_created = False
+            
             # Create context if needed
             if create_context:
-                if browser is None:
-                    raise ValueError("If context is not provided, browser must be provided")
                 
                 # Get video options - pass viewport to ensure video size matches viewport
                 video_options = self.video_manager.get_context_options(
@@ -523,6 +536,13 @@ class TestExecutor:
             if create_context and context:
                 await asyncio.sleep(CLEANUP_DELAY)
                 await context.close()
+            
+            # Cleanup browser and playwright if we created them
+            if hasattr(self, '_browser_created') and self._browser_created:
+                if browser:
+                    await browser.close()
+                if hasattr(self, '_playwright') and self._playwright:
+                    await self._playwright.stop()
             
             # Get video path and rename to test name
             # Playwright creates videos with hash in record_video_dir, we rename after

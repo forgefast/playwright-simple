@@ -20,15 +20,16 @@ async def replay_yaml(yaml_path: Path):
     
     # Criar configuração
     config = TestConfig(
-        base_url="http://localhost:18069",
-        headless=False,
-        step_fast_mode=True  # Usar fast mode na reprodução também
+        base_url="http://localhost:18069"
     )
+    # Configurar opções
+    config.browser.headless = False
+    config.step.fast_mode = True  # Usar fast mode na reprodução também
     
     # Criar runner
-    runner = TestRunner(config=config)
+    runner = TestRunner(config=config, headless=False)
     
-    # Executar teste
+    # Executar teste (browser será criado automaticamente se não fornecido)
     print(f"▶️  Executando teste...")
     result = await runner.run_test(test_name, test_func)
     
