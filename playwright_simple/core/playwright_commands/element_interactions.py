@@ -285,6 +285,20 @@ class ElementInteractions:
                                 }
                             """)
                             
+                            # CRITICAL: Mark this as a programmatic click so event_capture ignores it
+                            # We add the step directly to YAML, so we don't want event_capture to also capture it
+                            await element.evaluate("""
+                                (el) => {
+                                    // Set a flag on the element to mark it as programmatic
+                                    el.__playwright_programmatic_click = true;
+                                    // Also set a global flag temporarily
+                                    window.__playwright_programmatic_click_active = true;
+                                    setTimeout(() => {
+                                        window.__playwright_programmatic_click_active = false;
+                                    }, 100);
+                                }
+                            """)
+                            
                             await element.click()
                             
                             # If it's a link, we need to ensure the event is captured before navigation

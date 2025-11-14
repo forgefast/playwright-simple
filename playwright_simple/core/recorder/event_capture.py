@@ -407,6 +407,11 @@ class EventCapture:
                                     return; // Ignore clicks without target
                                 }
                                 
+                                // NOTE: We capture ALL clicks, including programmatic ones
+                                // This unifies YAML generation - all events go through event_capture
+                                // The programmatic flag can be used for other purposes (e.g., different descriptions)
+                                // but we still capture the event to generate YAML consistently
+                                
                                 // Find the actual interactive element
                                 const interactiveEl = findInteractiveElement(e.target);
                                 

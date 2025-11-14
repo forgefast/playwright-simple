@@ -244,30 +244,10 @@ class PlaywrightHandlers:
             
             # CRITICAL: Add action directly to YAML for programmatic clicks
             # This is the standard pattern - programmatic actions don't depend on event_capture
-            if element_info and self.yaml_writer:
-                # Get action_converter from recorder if available
-                action_converter = None
-                if self._recorder:
-                    action_converter = getattr(self._recorder, 'action_converter', None)
-                
-                if action_converter:
-                    # Create event_data in the same format as event_capture
-                    event_data = {
-                        'element': element_info,
-                        'timestamp': None  # Not needed for programmatic actions
-                    }
-                    
-                    # Convert to YAML action
-                    action = action_converter.convert_click(event_data)
-                    if action:
-                        self.yaml_writer.add_step(action)
-                        print(f"📝 Click: {action.get('description', '')}")
-                    else:
-                        import logging
-                        logging.getLogger(__name__).warning(f"Failed to convert programmatic click to action: {element_info}")
-                else:
-                    import logging
-                    logging.getLogger(__name__).warning("ActionConverter not available for programmatic click")
+            # UNIFIED YAML GENERATION: Let event_capture handle all YAML generation
+            # Programmatic clicks trigger DOM events that event_capture will capture
+            # This ensures consistent YAML generation for both user and programmatic actions
+            # No need to add to YAML directly here - event_capture will do it
         else:
             print(f"❌ Failed to click")
             print("   Usage examples:")
@@ -421,33 +401,18 @@ class PlaywrightHandlers:
             import logging
             logging.getLogger(__name__).debug(f"Error getting field element info before type: {e}")
         
-        # STEP 1: Click on the field first (like a real user would)
-        # This focuses the field and ensures it's ready for typing
-        if field_element_info:
-            # Click on the field using unified_click
-            field_clicked = await unified_click(
-                page=page,
-                text=parsed['into'],
-                selector=parsed['selector'],
-                cursor_controller=cursor_controller,
-                fast_mode=fast_mode
-            )
-            
-            if field_clicked and self.yaml_writer:
-                # Add click step to YAML
-                action_converter = None
-                if self._recorder:
-                    action_converter = getattr(self._recorder, 'action_converter', None)
-                
-                if action_converter:
-                    event_data = {
-                        'element': field_element_info,
-                        'timestamp': None
-                    }
-                    click_action = action_converter.convert_click(event_data)
-                    if click_action:
-                        self.yaml_writer.add_step(click_action)
-                        print(f"📝 Click: {click_action.get('description', '')}")
+            # STEP 1: Click on the field first (like a real user would)
+            # This focuses the field and ensures it's ready for typing
+            # UNIFIED YAML GENERATION: event_capture will capture this click and add to YAML
+            if field_element_info:
+                # Click on the field using unified_click
+                field_clicked = await unified_click(
+                    page=page,
+                    text=parsed['into'],
+                    selector=parsed['selector'],
+                    cursor_controller=cursor_controller,
+                    fast_mode=fast_mode
+                )
         
         # STEP 2: Type the text
         success = await unified_type(
@@ -463,37 +428,9 @@ class PlaywrightHandlers:
             field = parsed['selector'] or parsed['into'] or 'field'
             print(f"✅ Typed '{parsed['text']}' into '{field}'")
             
-            # STEP 3: Add type step to YAML
-            if field_element_info and self.yaml_writer:
-                action_converter = None
-                if self._recorder:
-                    action_converter = getattr(self._recorder, 'action_converter', None)
-                
-                if action_converter:
-                    # Create input event data (same format as event_capture)
-                    input_event_data = {
-                        'element': field_element_info,
-                        'value': parsed['text'],
-                        'timestamp': None
-                    }
-                    
-                    # Use convert_input to create the action
-                    # But we need to finalize it immediately since it's programmatic
-                    action_converter.convert_input(input_event_data)
-                    
-                    # Finalize the input immediately (don't wait for blur)
-                    element_id = field_element_info.get('id', '')
-                    element_name = field_element_info.get('name', '')
-                    element_type = field_element_info.get('type', '')
-                    element_key = f"{element_id}:{element_name}:{element_type}"
-                    
-                    type_action = action_converter.finalize_input(element_key)
-                    if type_action:
-                        self.yaml_writer.add_step(type_action)
-                        value_preview = type_action.get('text', '')[:50]
-                        if len(type_action.get('text', '')) > 50:
-                            value_preview += '...'
-                        print(f"📝 Type: {type_action.get('description', '')} = '{value_preview}'")
+            # UNIFIED YAML GENERATION: event_capture will capture the input events
+            # and add the type step to YAML automatically
+            # No need to add manually here
         else:
             field = parsed['selector'] or parsed['into'] or 'field'
             print(f"❌ Failed to type into '{field}'")
@@ -611,39 +548,10 @@ class PlaywrightHandlers:
             else:
                 print("✅ Form submitted")
             
-            # CRITICAL: Add submit action directly to YAML for programmatic submits
-            # This is the standard pattern - programmatic actions don't depend on event_capture
-            if submit_element_info and self.yaml_writer:
-                # Get action_converter from recorder if available
-                action_converter = None
-                if self._recorder:
-                    action_converter = getattr(self._recorder, 'action_converter', None)
-                
-                if action_converter:
-                    # Create event_data in the same format as event_capture
-                    # Mark as submit button explicitly
-                    submit_element_info['type'] = 'submit'  # Ensure it's marked as submit
-                    event_data = {
-                        'element': submit_element_info,
-                        'timestamp': None  # Not needed for programmatic actions
-                    }
-                    
-                    # Convert to YAML action (should create 'submit' action, not 'click')
-                    action = action_converter.convert_click(event_data)
-                    if action:
-                        # Ensure it's a submit action, not click
-                        if action.get('action') != 'submit':
-                            # Force it to be submit if it's a submit button
-                            action['action'] = 'submit'
-                            action['description'] = f"Submeter formulário: {action.get('description', '')}"
-                        self.yaml_writer.add_step(action)
-                        print(f"📝 Submit: {action.get('description', '')}")
-                    else:
-                        import logging
-                        logging.getLogger(__name__).warning(f"Failed to convert programmatic submit to action: {submit_element_info}")
-                else:
-                    import logging
-                    logging.getLogger(__name__).warning("ActionConverter not available for programmatic submit")
+            # UNIFIED YAML GENERATION: Let event_capture handle all YAML generation
+            # Programmatic submits trigger DOM events that event_capture will capture
+            # This ensures consistent YAML generation for both user and programmatic actions
+            # No need to add to YAML directly here - event_capture will do it
         else:
             if button_text:
                 print(f"❌ Failed to submit form (button: '{button_text}' not found)")
