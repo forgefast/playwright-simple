@@ -134,14 +134,31 @@ async def test_cursor_position_saved_before_link_click(browser_page: Page):
     
     assert pos_after is not None, "Cursor deve existir após navegação"
     
+    # CRITICAL: Verificar que NÃO está no centro
+    viewport = browser_page.viewport_size
+    center_x = viewport['width'] / 2
+    center_y = viewport['height'] / 2
+    
+    x_diff_from_center = abs(pos_after['x'] - center_x)
+    y_diff_from_center = abs(pos_after['y'] - center_y)
+    is_at_center = x_diff_from_center < 30 and y_diff_from_center < 30
+    
+    assert not is_at_center, \
+        f"❌ PROBLEMA DETECTADO: Cursor está no centro após navegação! " \
+        f"Posição: ({pos_after['x']}, {pos_after['y']}), " \
+        f"Centro: ({center_x}, {center_y}), " \
+        f"Esperado próximo de: ({target_x}, {target_y})"
+    
     # CRITICAL: Cursor deve estar na mesma posição (não no centro)
     x_diff = abs(pos_after['x'] - target_x)
     y_diff = abs(pos_after['y'] - target_y)
     
     assert x_diff < 20, \
-        f"Cursor X deve manter posição após navegação. Esperado: {target_x}, Atual: {pos_after['x']}, Diferença: {x_diff}"
+        f"❌ PROBLEMA DETECTADO: Cursor X não manteve posição após navegação. " \
+        f"Esperado: {target_x}, Atual: {pos_after['x']}, Diferença: {x_diff}"
     assert y_diff < 20, \
-        f"Cursor Y deve manter posição após navegação. Esperado: {target_y}, Atual: {pos_after['y']}, Diferença: {y_diff}"
+        f"❌ PROBLEMA DETECTADO: Cursor Y não manteve posição após navegação. " \
+        f"Esperado: {target_y}, Atual: {pos_after['y']}, Diferença: {y_diff}"
 
 
 @pytest.mark.asyncio
@@ -328,7 +345,9 @@ async def test_label_click_filters_associated_input_click(browser_page: Page):
     # Deve ser filtrado
     input_action = converter.convert_click(input_event)
     assert input_action is None, \
-        "Clique no input após clique no label associado deve ser FILTRADO"
+        f"❌ PROBLEMA DETECTADO: Clique no input após clique no label NÃO foi filtrado! " \
+        f"Label: '{label_event['element']['text']}', Input: '{input_event['element']['name'] or input_event['element']['id']}', " \
+        f"Time diff: {input_event['timestamp'] - label_event['timestamp']}ms"
 
 
 @pytest.mark.asyncio
@@ -391,6 +410,20 @@ async def test_cursor_position_persisted_across_multiple_navigations(browser_pag
     """)
     
     assert pos2 is not None, "Cursor deve existir após segunda navegação"
-    assert abs(pos2['x'] - target_x) < 20, f"Posição X deve ser mantida após segunda navegação"
-    assert abs(pos2['y'] - target_y) < 20, f"Posição Y deve ser mantida após segunda navegação"
+    
+    # Verificar que NÃO está no centro
+    x_diff_from_center2 = abs(pos2['x'] - center_x)
+    y_diff_from_center2 = abs(pos2['y'] - center_y)
+    is_at_center2 = x_diff_from_center2 < 30 and y_diff_from_center2 < 30
+    
+    assert not is_at_center2, \
+        f"❌ PROBLEMA DETECTADO: Cursor está no centro após segunda navegação! " \
+        f"Posição: ({pos2['x']}, {pos2['y']}), Centro: ({center_x}, {center_y})"
+    
+    assert abs(pos2['x'] - target_x) < 20, \
+        f"❌ PROBLEMA DETECTADO: Posição X não foi mantida após segunda navegação. " \
+        f"Esperado: {target_x}, Atual: {pos2['x']}"
+    assert abs(pos2['y'] - target_y) < 20, \
+        f"❌ PROBLEMA DETECTADO: Posição Y não foi mantida após segunda navegação. " \
+        f"Esperado: {target_y}, Atual: {pos2['y']}"
 
