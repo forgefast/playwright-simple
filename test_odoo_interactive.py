@@ -287,26 +287,13 @@ async def test_odoo_login():
                 except:
                     print("   ⚠️  Continuando mesmo sem aguardar completamente")
             
-            # Aguardar um pouco após carregamento para passo estático
-            # (será capturado automaticamente pelo event_capture como passo estático)
-            print("   ⏸️  Aguardando tela estabilizar (passo estático)...")
-            # Usar wait dinâmico baseado em condições reais
-            try:
-                # Wait for page to be interactive (no loading indicators, etc)
-                await asyncio.wait_for(
-                    page.wait_for_function(
-                        "document.readyState === 'complete' && (document.querySelector('.o_loading') === null || document.querySelector('.o_loading').style.display === 'none')",
-                        timeout=10000
-                    ),
-                    timeout=12.0
-                )
-            except:
-                # Fallback: wait a bit for page to stabilize
-                if recorder.fast_mode:
-                    await asyncio.sleep(0.5)  # Delay mínimo em fast mode
-                else:
-                    await asyncio.sleep(1.0)  # Delay para passo estático
-            print("   ✅ Tela estabilizada")
+            # Passo estático: delay simples para feedback visual após tela carregar
+            print("   ⏸️  Passo estático (feedback visual)...")
+            if recorder.fast_mode:
+                await asyncio.sleep(0.5)  # Delay mínimo em fast mode
+            else:
+                await asyncio.sleep(2.0)  # Delay de 2 segundos para feedback visual
+            print("   ✅ Passo estático concluído")
     except Exception as e:
         print(f"   ⚠️  Erro aguardando próxima tela: {e}")
         # Wait a bit anyway
