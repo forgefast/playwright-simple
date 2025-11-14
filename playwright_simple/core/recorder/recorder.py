@@ -131,7 +131,8 @@ class Recorder:
             
             # Initialize event capture EARLY - before navigation if possible
             # This allows script injection to happen as soon as page loads
-            self.event_capture = EventCapture(page, debug=self.debug)
+            # Pass event_handlers so event_capture can process events immediately
+            self.event_capture = EventCapture(page, debug=self.debug, event_handlers_instance=self.event_handlers)
             self._setup_event_handlers()
             
             # Store initial URL for first step

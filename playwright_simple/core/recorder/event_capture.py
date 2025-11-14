@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class EventCapture:
     """Captures browser events for recording."""
     
-    def __init__(self, page: Page, debug: bool = False):
+    def __init__(self, page: Page, debug: bool = False, event_handlers_instance=None):
         """Initialize event capture."""
         self.page = page
         self.debug = debug
@@ -29,6 +29,8 @@ class EventCapture:
         self.recent_link_clicks: List[Dict[str, Any]] = []  # List of recent link clicks with timestamp
         # Track pending navigation requests to process events before navigation
         self._pending_navigation_request = None
+        # Store reference to event handlers for immediate processing
+        self._event_handlers_instance = event_handlers_instance
     
     def on_event(self, event_type: str, handler: Callable):
         """Register event handler."""
