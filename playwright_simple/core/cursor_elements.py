@@ -7,10 +7,13 @@ Contains methods for creating, removing, and managing cursor DOM elements.
 """
 
 import logging
+import logging
 from typing import Dict, Any
 from playwright.async_api import Page
 
 from .config import CursorConfig
+
+logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
 from .constants import (
