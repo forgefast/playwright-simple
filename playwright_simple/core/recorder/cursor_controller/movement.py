@@ -29,12 +29,20 @@ class CursorMovement:
             self.current_y = y
             
             # Store position for persistence across navigations
+            # Use both window property and sessionStorage for reliability
             await self.page.evaluate(f"""
                 () => {{
-                    window.__playwright_cursor_last_position = {{
+                    const position = {{
                         x: {x},
                         y: {y}
                     }};
+                    window.__playwright_cursor_last_position = position;
+                    // Also store in sessionStorage for persistence across navigations
+                    try {{
+                        sessionStorage.setItem('__playwright_cursor_last_position', JSON.stringify(position));
+                    }} catch (e) {{
+                        // sessionStorage might not be available in some contexts
+                    }}
                 }}
             """)
             

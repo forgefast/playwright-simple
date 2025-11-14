@@ -42,8 +42,19 @@ class CursorController:
         self.is_active = self._visual.is_active
         
         # Always update position from page storage (for navigation persistence)
+        # Try sessionStorage first, then window property
         position = await self.page.evaluate("""
             () => {
+                // Try sessionStorage first (more reliable across navigations)
+                try {
+                    const stored = sessionStorage.getItem('__playwright_cursor_last_position');
+                    if (stored) {
+                        return JSON.parse(stored);
+                    }
+                } catch (e) {
+                    // sessionStorage might not be available
+                }
+                // Fallback to window property
                 return window.__playwright_cursor_last_position || null;
             }
         """)

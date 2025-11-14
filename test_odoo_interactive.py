@@ -80,7 +80,21 @@ async def test_odoo_login():
         await recorder.stop(save=False)
         return
     print("   ✅ Clique executado")
-    await asyncio.sleep(2)
+    
+    # Aguardar página de login carregar completamente
+    print("   ⏳ Aguardando página de login carregar...")
+    try:
+        page = recorder.page
+        if page:
+            # Aguardar inputs aparecerem na página
+            await asyncio.wait_for(
+                page.wait_for_selector('input[type="text"], input[type="email"], input[name*="login"], input[id*="login"]', timeout=10000),
+                timeout=12.0
+            )
+            print("   ✅ Campos de login detectados")
+    except Exception as e:
+        print(f"   ⚠️  Timeout aguardando campos: {e}")
+    await asyncio.sleep(1)
     
     # 3. Encontrar campo Email
     print("\n3️⃣  Procurando campo 'Email'...")

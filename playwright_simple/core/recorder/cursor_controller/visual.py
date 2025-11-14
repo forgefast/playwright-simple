@@ -64,9 +64,20 @@ class CursorVisual:
             cursor_x = initial_x if initial_x is not None else screen_center_x
             cursor_y = initial_y if initial_y is not None else screen_center_y
             
-            # Try to get last cursor position from window storage (for navigation persistence)
+            # Try to get last cursor position from storage (for navigation persistence)
+            # Try sessionStorage first (more reliable across navigations), then window property
             last_position = await self.page.evaluate("""
                 () => {
+                    // Try sessionStorage first
+                    try {
+                        const stored = sessionStorage.getItem('__playwright_cursor_last_position');
+                        if (stored) {
+                            return JSON.parse(stored);
+                        }
+                    } catch (e) {
+                        // sessionStorage might not be available
+                    }
+                    // Fallback to window property
                     return window.__playwright_cursor_last_position || null;
                 }
             """)
@@ -76,13 +87,20 @@ class CursorVisual:
                 cursor_x = last_position.get('x', cursor_x)
                 cursor_y = last_position.get('y', cursor_y)
             
-            # Store position for next navigation
+            # Store position for next navigation (both window and sessionStorage)
             await self.page.evaluate(f"""
                 () => {{
-                    window.__playwright_cursor_last_position = {{
+                    const position = {{
                         x: {cursor_x},
                         y: {cursor_y}
                     }};
+                    window.__playwright_cursor_last_position = position;
+                    // Also store in sessionStorage for persistence across navigations
+                    try {{
+                        sessionStorage.setItem('__playwright_cursor_last_position', JSON.stringify(position));
+                    }} catch (e) {{
+                        // sessionStorage might not be available in some contexts
+                    }}
                 }}
             """)
             

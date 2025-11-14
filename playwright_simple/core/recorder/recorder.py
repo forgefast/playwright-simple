@@ -218,20 +218,30 @@ class Recorder:
                             # Get last position from storage (persists across navigations)
                             # Try multiple times as storage might not be immediately available after navigation
                             position = None
-                            for attempt in range(3):
+                            for attempt in range(5):  # More attempts for reliability
                                 try:
                                     position = await page.evaluate("""
                                         () => {
+                                            // Try sessionStorage first (more reliable across navigations)
+                                            try {
+                                                const stored = sessionStorage.getItem('__playwright_cursor_last_position');
+                                                if (stored) {
+                                                    return JSON.parse(stored);
+                                                }
+                                            } catch (e) {
+                                                // sessionStorage might not be available
+                                            }
+                                            // Fallback to window property
                                             return window.__playwright_cursor_last_position || null;
                                         }
                                     """)
-                                    if position:
+                                    if position and position.x && position.y:
                                         break
                                     # Wait for storage to be available using dynamic wait
                                     try:
                                         await page.wait_for_function(
-                                            "window.__playwright_cursor_last_position !== undefined",
-                                            timeout=200
+                                            "(() => { try { return sessionStorage.getItem('__playwright_cursor_last_position') !== null; } catch(e) { return window.__playwright_cursor_last_position !== undefined; } })()",
+                                            timeout=300
                                         )
                                     except:
                                         pass  # Continue to next attempt
