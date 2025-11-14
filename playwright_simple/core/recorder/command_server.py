@@ -16,6 +16,14 @@ from pathlib import Path
 from typing import Optional, Dict, Any, Callable
 from datetime import datetime, timedelta
 
+# Try to import psutil for process checking
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    psutil = None
+    PSUTIL_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
