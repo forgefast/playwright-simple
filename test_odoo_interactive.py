@@ -298,11 +298,11 @@ async def test_odoo_login():
                         ),
                         timeout=2.0
                 )
-                print("   ✅ Navegação detectada")
-            except:
-                # Fallback: wait for load state
-                pass
-            
+                    print("   ✅ Navegação detectada")
+                except:
+                    # Fallback: wait for load state
+                    pass
+                
                 # Wait for new page to be loaded (shorter timeouts, skip networkidle)
                 try:
                     await asyncio.wait_for(
