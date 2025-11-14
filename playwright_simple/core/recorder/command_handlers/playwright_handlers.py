@@ -139,8 +139,15 @@ class PlaywrightHandlers:
             print(f"❌ No elements found")
     
     async def handle_pw_click(self, args: str) -> None:
-        """Handle pw-click command using unified function."""
+        """
+        Handle pw-click command using unified function.
+        
+        IMPORTANT: Programmatic clicks (CLI commands) should add directly to YAML,
+        not depend on event_capture. This is the standard pattern for test automation.
+        """
         from ...playwright_commands.unified import unified_click, parse_click_args
+        from ..action_converter import ActionConverter
+        from ..element_identifier import ElementIdentifier
         
         page = self._get_page()
         if not page:
@@ -164,6 +171,63 @@ class PlaywrightHandlers:
         # Parse arguments using unified parser
         parsed = parse_click_args(args)
         
+        # CRITICAL: Get element information BEFORE clicking
+        # This allows us to create YAML action directly, without depending on event_capture
+        element_info = None
+        try:
+            # Find the element and get its information
+            element_info = await page.evaluate("""
+                ({text, selector, role, index}) => {
+                    let elements = [];
+                    
+                    if (selector) {
+                        elements = Array.from(document.querySelectorAll(selector));
+                    } else if (role) {
+                        elements = Array.from(document.querySelectorAll(`[role="${role}"]`));
+                    } else if (text) {
+                        const textLower = text.toLowerCase();
+                        // Find by text - same logic as click
+                        const allClickable = document.querySelectorAll('button, a, input[type="button"], input[type="submit"], [role="button"], [role="link"]');
+                        for (const el of allClickable) {
+                            if (el.offsetParent === null || el.style.display === 'none') continue;
+                            const elText = (el.textContent || el.innerText || el.value || '').trim().toLowerCase();
+                            if (elText === textLower || elText.includes(textLower)) {
+                                elements.push(el);
+                            }
+                        }
+                    }
+                    
+                    // Filter visible elements
+                    elements = elements.filter(el => el.offsetParent !== null && el.style.display !== 'none');
+                    
+                    if (elements.length > index && elements[index]) {
+                        const el = elements[index];
+                        // Serialize element info (same format as event_capture)
+                        return {
+                            tagName: el.tagName || '',
+                            text: (el.textContent || el.innerText || el.value || '').trim(),
+                            id: el.id || '',
+                            className: el.className || '',
+                            href: el.href || el.getAttribute('href') || '',
+                            type: el.type || '',
+                            name: el.name || '',
+                            value: el.value || '',
+                            role: el.getAttribute('role') || '',
+                            ariaLabel: el.getAttribute('aria-label') || ''
+                        };
+                    }
+                    return null;
+                }
+            """, {
+                'text': parsed.get('text'),
+                'selector': parsed.get('selector'),
+                'role': parsed.get('role'),
+                'index': parsed.get('index', 0)
+            })
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).debug(f"Error getting element info before click: {e}")
+        
         # Use unified click function
         success = await unified_click(
             page=page,
@@ -177,6 +241,33 @@ class PlaywrightHandlers:
         
         if success:
             print(f"✅ Clicked successfully")
+            
+            # CRITICAL: Add action directly to YAML for programmatic clicks
+            # This is the standard pattern - programmatic actions don't depend on event_capture
+            if element_info and self.yaml_writer:
+                # Get action_converter from recorder if available
+                action_converter = None
+                if self._recorder:
+                    action_converter = getattr(self._recorder, 'action_converter', None)
+                
+                if action_converter:
+                    # Create event_data in the same format as event_capture
+                    event_data = {
+                        'element': element_info,
+                        'timestamp': None  # Not needed for programmatic actions
+                    }
+                    
+                    # Convert to YAML action
+                    action = action_converter.convert_click(event_data)
+                    if action:
+                        self.yaml_writer.add_step(action)
+                        print(f"📝 Click: {action.get('description', '')}")
+                    else:
+                        import logging
+                        logging.getLogger(__name__).warning(f"Failed to convert programmatic click to action: {element_info}")
+                else:
+                    import logging
+                    logging.getLogger(__name__).warning("ActionConverter not available for programmatic click")
         else:
             print(f"❌ Failed to click")
             print("   Usage examples:")

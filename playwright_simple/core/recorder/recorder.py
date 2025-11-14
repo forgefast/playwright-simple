@@ -77,7 +77,8 @@ class Recorder:
             cursor_controller_getter=lambda: self.cursor_controller,
             recording_state_setter=lambda v: setattr(self, 'is_recording', v),
             paused_state_setter=lambda v: setattr(self, 'is_paused', v),
-            page_getter=lambda: self.page if hasattr(self, 'page') else None
+            page_getter=lambda: self.page if hasattr(self, 'page') else None,
+            recorder=self  # Pass recorder so handlers can access action_converter for programmatic actions
         )
         
         self._setup_console_commands()

@@ -24,7 +24,8 @@ class CommandHandlers:
         cursor_controller_getter: Callable,
         recording_state_setter: Callable,
         paused_state_setter: Callable,
-        page_getter: Optional[Callable] = None
+        page_getter: Optional[Callable] = None,
+        recorder = None
     ):
         """
         Initialize command handlers.
@@ -36,6 +37,7 @@ class CommandHandlers:
             recording_state_setter: Callable to set recording state
             paused_state_setter: Callable to set paused state
             page_getter: Optional callable that returns Playwright Page instance
+            recorder: Optional Recorder instance (for accessing action_converter)
         """
         self.yaml_writer = yaml_writer
         
@@ -57,7 +59,8 @@ class CommandHandlers:
         self._playwright = PlaywrightHandlers(
             yaml_writer=yaml_writer,
             page_getter=page_getter,
-            cursor_controller_getter=cursor_controller_getter
+            cursor_controller_getter=cursor_controller_getter,
+            recorder=recorder  # Pass recorder so handlers can access action_converter
         )
     
     # Recording control
