@@ -61,9 +61,66 @@ Se ainda houver problemas com ações do usuário real em links, podemos conside
 
 ### Status
 
-- ✅ Solução temporária implementada (processar eventos pendentes antes da navegação)
+- ✅ **Ações programáticas (CLI)**: Implementado - adicionam diretamente ao YAML
+- ❌ **Ações do usuário real em links**: AINDA NÃO FUNCIONA - clique não é capturado
 - ⚠️ Solução ideal ainda não implementada
 - 📝 Documentado para futura refatoração
+
+### Tentativas de Solução Implementadas (Nenhuma funcionou para usuário real)
+
+1. **Processar eventos pendentes antes da navegação**: Implementado mas não resolve o problema
+2. **Marcação de prioridade para links**: Implementado mas não resolve o problema
+3. **Redução de delay no polling para links**: Implementado mas não resolve o problema
+4. **preventDefault() + setTimeout para navegação**: Implementado mas não resolve o problema
+   - O preventDefault() impede a navegação, mas o evento ainda não é processado a tempo
+   - O setTimeout de 50ms não é suficiente para garantir processamento
+
+### Problema Atual (Crítico)
+
+**Quando um usuário real clica em um link (`<a href="...">`) com o mouse:**
+- O evento é capturado pelo listener JavaScript ✅
+- O evento é adicionado ao array `window.__playwright_recording_events` ✅
+- Mas a navegação acontece ANTES do polling processar o evento ❌
+- Resultado: O clique não aparece no YAML gerado ❌
+
+**Evidência:**
+- YAML gerado contém apenas `go_to` inicial
+- Logs mostram "Cursor restored after navigation" (navegação aconteceu)
+- Mas não há step de `click` no YAML
+
+### Análise do Problema
+
+O problema fundamental é que:
+1. O listener JavaScript captura o clique e adiciona ao array
+2. Mas o polling Python roda em um loop assíncrono com delay (0.05s - 0.1s)
+3. A navegação do navegador acontece IMEDIATAMENTE após o clique
+4. Quando o polling tenta processar, o contexto JavaScript já foi destruído pela navegação
+
+**Soluções testadas que NÃO funcionaram:**
+- `preventDefault()` + `setTimeout(50ms)`: Ainda não dá tempo suficiente
+- Processar eventos pendentes antes da navegação: O evento já foi perdido
+- Marcação de prioridade: Não ajuda se o contexto já foi destruído
+
+### Solução Necessária (Urgente)
+
+**Opção 1: Processamento Síncrono Imediato (Recomendado)**
+- Quando detectar clique em link, processar o evento IMEDIATAMENTE via `page.evaluate()`
+- Não depender do polling assíncrono
+- Processar antes de permitir a navegação
+
+**Opção 2: Interceptar Navegação com `page.route()`**
+- Usar `page.route()` do Playwright para interceptar requisições de navegação
+- Verificar se há eventos pendentes antes de permitir a navegação
+- Processar eventos antes de continuar
+
+**Opção 3: Usar `page.on('request')` para detectar navegação**
+- Interceptar requisições HTTP antes da navegação
+- Processar eventos pendentes imediatamente
+- Permitir navegação apenas após processamento
+
+### Prioridade
+
+🔴 **CRÍTICA** - Bloqueia funcionalidade principal (gravação de cliques do usuário em links)
 
 ### Notas
 
