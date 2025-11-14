@@ -67,9 +67,19 @@ class EventHandlers:
             logger.debug("Input ignored: not recording or paused")
             return
         
+        element_info = event_data.get('element', {})
+        element_id = element_info.get('id', '')
+        element_name = element_info.get('name', '')
+        element_type = element_info.get('type', '')
+        value = event_data.get('value', '')
+        
+        logger.info(f"Input event received: id={element_id}, name={element_name}, type={element_type}, value_length={len(value)}")
         logger.debug(f"Processing input event (accumulating): {event_data}")
         # convert_input now accumulates and returns None
         self.action_converter.convert_input(event_data)
+        # Log pending inputs after accumulation
+        element_key = f"{element_id}:{element_name}:{element_type}"
+        logger.info(f"Input accumulated for {element_key}. Pending inputs: {list(self.action_converter.pending_inputs.keys())}")
         # Action will be created on blur or Enter
     
     def handle_blur(self, event_data: dict) -> None:
