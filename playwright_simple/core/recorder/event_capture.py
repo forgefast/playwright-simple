@@ -371,6 +371,12 @@ class EventCapture:
                                         };
                                         window.__playwright_recording_events.push(eventData);
                                         console.log('[Playwright] Click captured (LINK):', serialized.tagName, serialized.href, serialized.text?.substring(0, 50) || 'no text', 'Events in queue:', window.__playwright_recording_events.length);
+                                        
+                                        // CRITICAL: For links, mark as high priority and try to process immediately
+                                        // This helps ensure the event is processed before navigation
+                                        window.__playwright_recording_link_click = true;
+                                        window.__playwright_recording_link_click_time = Date.now();
+                                        
                                         return; // Early return for links
                                     }
                                     
