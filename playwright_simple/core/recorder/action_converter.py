@@ -49,13 +49,19 @@ class ActionConverter:
         text = (element_info.get('text', '') or element_info.get('value', '') or '').lower()
         href = element_info.get('href', '') or ''
         is_link = tag_name == 'A' and bool(href)
+        is_in_form = element_info.get('isInForm', False)
         
         # IMPORTANT: Links (href) should ALWAYS be treated as 'click', never 'submit'
         # Even if they look like buttons to the user, they are navigation links
         # Only actual buttons can be submit buttons
+        # A button is a submit button if:
+        # 1. It has type="submit" explicitly, OR
+        # 2. It's a BUTTON tag inside a form (default behavior is submit), OR
+        # 3. It's an INPUT with type="submit"
         is_submit_button = (
             element_type == 'submit' or
-            (tag_name == 'BUTTON' and element_type in ('submit', ''))
+            (tag_name == 'BUTTON' and (element_type in ('submit', '') or is_in_form)) or
+            (tag_name == 'INPUT' and element_type == 'submit')
         )
         # Links are never submit buttons, they are always clicks
         

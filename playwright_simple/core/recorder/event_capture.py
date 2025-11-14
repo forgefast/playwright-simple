@@ -288,6 +288,23 @@ class EventCapture:
                                     label = (element.labels[0].textContent || '').trim();
                                 }
                                 
+                                // Check if element is inside a form (for submit detection)
+                                let isInForm = false;
+                                let formId = '';
+                                try {
+                                    let parent = element.parentElement;
+                                    while (parent && parent !== document.body) {
+                                        if (parent.tagName && parent.tagName.toUpperCase() === 'FORM') {
+                                            isInForm = true;
+                                            formId = parent.id || '';
+                                            break;
+                                        }
+                                        parent = parent.parentElement;
+                                    }
+                                } catch (e) {
+                                    // Ignore errors
+                                }
+                                
                                 return {
                                     tagName: element.tagName || '',
                                     text: text,
@@ -300,7 +317,9 @@ class EventCapture:
                                     role: (element.getAttribute && element.getAttribute('role')) || '',
                                     ariaLabel: (element.getAttribute && element.getAttribute('aria-label')) || '',
                                     placeholder: element.placeholder || '',
-                                    label: label
+                                    label: label,
+                                    isInForm: isInForm,
+                                    formId: formId
                                 };
                             } catch (e) {
                                 return null;
@@ -550,6 +569,38 @@ class EventCapture:
                                     value: target.value || ''
                                 });
                                 console.log('[Playwright] Input captured:', tag, inputType || '', serialized.name || serialized.id || '');
+                            }
+                        }, true);
+                        
+                        // Also capture blur to finalize input
+                        document.addEventListener('blur', function(e) {
+                            const target = e.target;
+                            
+                            // Only capture blur events on actual input/textarea elements
+                            if (!target) {
+                                return; // Ignore if no target
+                            }
+                            
+                            const tag = target.tagName?.toUpperCase();
+                            if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
+                                return; // Ignore blur events on non-input elements
+                            }
+                            
+                            // Skip hidden inputs
+                            const inputType = target.type?.toLowerCase();
+                            if (inputType === 'hidden') {
+                                return;
+                            }
+                            
+                            const serialized = serializeElement(target);
+                            if (serialized) {
+                                window.__playwright_recording_events.push({
+                                    type: 'blur',
+                                    timestamp: Date.now(),
+                                    element: serialized,
+                                    value: target.value || ''
+                                });
+                                console.log('[Playwright] Blur captured:', tag, inputType || '', serialized.name || serialized.id || '');
                             }
                         }, true);
                         

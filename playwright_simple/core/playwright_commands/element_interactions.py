@@ -646,6 +646,7 @@ class ElementInteractions:
                 if self.fast_mode:
                     # In fast mode: focus and type instantly in one operation (no click animation)
                     text_str = str(text)
+                    logger.debug(f"Fast mode typing: Setting value '{text_str[:50]}...' and dispatching input event")
                     await element.evaluate("""
                         (el, value) => {
                             // Focus element (triggers focus event)
@@ -660,14 +661,19 @@ class ElementInteractions:
                             el.dispatchEvent(changeEvent);
                         }
                     """, text_str)
-                    # Small delay to allow event_capture to process input before blur
-                    await asyncio.sleep(0.05)
+                    # Increased delay to allow event_capture to process input before blur
+                    # This ensures the input event is captured and processed before blur is triggered
+                    logger.debug("Fast mode typing: Waiting for event_capture to process input event")
+                    await asyncio.sleep(0.15)  # Increased from 0.05s to 0.15s for better reliability
                     # Trigger blur to finalize (after event_capture has processed input)
+                    logger.debug("Fast mode typing: Triggering blur to finalize input")
                     await element.evaluate("""
                         (el) => {
                             el.blur();
                         }
                     """)
+                    # Small additional delay to ensure blur event is captured
+                    await asyncio.sleep(0.05)
                 else:
                     # Normal mode: click on field before typing (for better UX in videos)
                     if element_coords:
