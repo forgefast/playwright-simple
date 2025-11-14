@@ -160,7 +160,7 @@ class CursorVisual:
                         x: {cursor_x},
                         y: {cursor_y}
                     }};
-                    console.log('[Playwright Cursor] Injected and initialized at (' + String({cursor_x}) + ', ' + String({cursor_y}) + ').');
+                    console.log('[Playwright Cursor] Injected and initialized at (' + {cursor_x} + ', ' + {cursor_y} + ').');
                 }})();
             """)
             self.is_active = True
