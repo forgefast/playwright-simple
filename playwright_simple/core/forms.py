@@ -64,7 +64,7 @@ class FormsMixin:
     
     async def submit(self, button_text: Optional[str] = None, description: str = "") -> 'FormsMixin':
         """
-        Submit a form by clicking the submit button.
+        Submit a form by clicking the submit button using unified function.
         
         Args:
             button_text: Optional text to identify specific submit button (e.g., "Entrar", "Login")
@@ -75,11 +75,17 @@ class FormsMixin:
         """
         await self._ensure_cursor()
         
-        # Use PlaywrightCommands to submit form
-        from ..playwright_commands import PlaywrightCommands
-        commands = PlaywrightCommands(self.page, fast_mode=self.config.step.fast_mode)
+        # Use unified submit function (same code as recording and replay)
+        from ..playwright_commands.unified import unified_submit
         
-        success = await commands.submit_form(button_text=button_text)
+        fast_mode = getattr(self.config.step, 'fast_mode', False) if hasattr(self, 'config') else False
+        
+        success = await unified_submit(
+            page=self.page,
+            button_text=button_text,
+            fast_mode=fast_mode
+        )
+        
         if not success:
             raise ElementNotFoundError(
                 f"Botão de submit não encontrado{f' (texto: {button_text})' if button_text else ''}"
