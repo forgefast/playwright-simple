@@ -287,13 +287,16 @@ async def test_odoo_login():
                 except:
                     print("   ⚠️  Continuando mesmo sem aguardar completamente")
             
-            # Passo estático: delay simples para feedback visual após tela carregar
-            print("   ⏸️  Passo estático (feedback visual)...")
-            if recorder.fast_mode:
-                await asyncio.sleep(0.5)  # Delay mínimo em fast mode
-            else:
-                await asyncio.sleep(2.0)  # Delay de 2 segundos para feedback visual
-            print("   ✅ Passo estático concluído")
+            # Adicionar passo estático ao YAML (modelagem, não execução)
+            print("   ⏸️  Adicionando passo estático ao YAML...")
+            static_step = {
+                'action': 'wait',
+                'seconds': 0.5 if recorder.fast_mode else 2.0,
+                'description': 'Passo estático (feedback visual)',
+                'static': True
+            }
+            recorder.yaml_writer.add_step(static_step)
+            print(f"   ✅ Passo estático adicionado ({static_step['seconds']}s)")
     except Exception as e:
         print(f"   ⚠️  Erro aguardando próxima tela: {e}")
         # Wait a bit anyway
