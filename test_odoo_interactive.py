@@ -28,43 +28,57 @@ async def test_odoo_login():
     # Executar recorder em background
     recorder_task = asyncio.create_task(run_recorder())
     
-    # Aguardar recorder iniciar (com timeout dinâmico)
+    # Aguardar recorder iniciar (com espera dinâmica baseada em condições reais)
+    print("⏳ Aguardando recorder estar pronto...")
     try:
-        # Wait for recorder to be ready using dynamic wait
+        # Wait for recorder to be ready using dynamic conditions
         page = None
-        for attempt in range(20):  # Try up to 20 times (4s total)
+        max_attempts = 30  # Up to 6 seconds total
+        for attempt in range(max_attempts):
             try:
+                # Check if recorder has page attribute and it's set
                 if hasattr(recorder, 'page') and recorder.page:
                     page = recorder.page
-                    # Check if page is ready
+                    # Check if page is ready using dynamic wait
                     try:
+                        # Wait for page to be in a ready state
                         await asyncio.wait_for(
-                            page.wait_for_load_state('domcontentloaded', timeout=1000),
-                            timeout=1.5
+                            page.wait_for_load_state('domcontentloaded', timeout=2000),
+                            timeout=2.5
                         )
-                        # Page is ready
-                        break
-                    except:
-                        # Page exists but not ready yet, continue waiting
+                        # Check if recording has actually started
+                        if hasattr(recorder, 'is_recording') and recorder.is_recording:
+                            # Recorder is ready!
+                            print("✅ Recorder iniciado e pronto!")
+                            break
+                    except asyncio.TimeoutError:
+                        # Page not ready yet, continue waiting
                         pass
-            except:
+                    except Exception as e:
+                        # Other error, might be navigation, continue waiting
+                        pass
+            except Exception as e:
+                # Recorder not ready yet, continue waiting
                 pass
-            await asyncio.sleep(0.2)  # Small delay between attempts
+            
+            # Small delay between attempts (dynamic, not static)
+            await asyncio.sleep(0.2)
         
-        if page:
-            print("✅ Recorder iniciado!")
-            # Wait a bit more for page to be fully interactive
-            if not recorder.fast_mode:
-                await asyncio.sleep(1)
-            else:
-                await asyncio.sleep(0.2)
+        if page and hasattr(recorder, 'is_recording') and recorder.is_recording:
+            print("✅ Recorder pronto para interações!")
         else:
-            print("⚠️  Recorder iniciado (página ainda carregando)")
-            # Wait a bit anyway
-            await asyncio.sleep(1 if not recorder.fast_mode else 0.3)
+            print("⚠️  Recorder pode não estar totalmente pronto, continuando...")
+            # Wait a bit more using dynamic wait
+            if page:
+                try:
+                    await asyncio.wait_for(
+                        page.wait_for_load_state('networkidle', timeout=5000),
+                        timeout=6.0
+                    )
+                except:
+                    pass  # Continue anyway
     except Exception as e:
-        print(f"⚠️  Erro ao iniciar recorder: {e}")
-        await asyncio.sleep(1 if not recorder.fast_mode else 0.3)
+        print(f"⚠️  Erro ao aguardar recorder: {e}")
     
     print("📝 Testando comandos diretamente...\n")
     
@@ -110,21 +124,47 @@ async def test_odoo_login():
         return
     print("   ✅ Clique executado")
     
-    # Aguardar página de login carregar completamente
+    # Aguardar página de login carregar completamente (espera dinâmica)
     print("   ⏳ Aguardando página de login carregar...")
     try:
         page = recorder.page
         if page:
-            # Aguardar inputs aparecerem na página
-            await asyncio.wait_for(
-                page.wait_for_selector('input[type="text"], input[type="email"], input[name*="login"], input[id*="login"]', timeout=10000),
-                timeout=12.0
-            )
-            print("   ✅ Campos de login detectados")
+            # Wait for page to be ready (dynamic wait)
+            try:
+                await asyncio.wait_for(
+                    page.wait_for_load_state('networkidle', timeout=10000),
+                    timeout=12.0
+                )
+            except:
+                # Fallback: wait for domcontentloaded
+                try:
+                    await asyncio.wait_for(
+                        page.wait_for_load_state('domcontentloaded', timeout=5000),
+                        timeout=6.0
+                    )
+                except:
+                    pass
+            
+            # Aguardar inputs aparecerem na página (dynamic wait)
+            try:
+                await asyncio.wait_for(
+                    page.wait_for_selector('input[type="text"], input[type="email"], input[name*="login"], input[id*="login"], input[type="password"]', timeout=10000, state='visible'),
+                    timeout=12.0
+                )
+                print("   ✅ Campos de login detectados")
+            except Exception as e:
+                print(f"   ⚠️  Campos não detectados ainda: {e}")
+                # Try alternative selectors
+                try:
+                    await asyncio.wait_for(
+                        page.wait_for_selector('input', timeout=5000, state='visible'),
+                        timeout=6.0
+                    )
+                    print("   ✅ Inputs detectados (seletores alternativos)")
+                except:
+                    print("   ⚠️  Continuando mesmo sem detectar campos explicitamente")
     except Exception as e:
-            print(f"   ⚠️  Timeout aguardando campos: {e}")
-    if not recorder.fast_mode:
-        await asyncio.sleep(1)
+        print(f"   ⚠️  Erro aguardando página: {e}")
     
     # 3. Encontrar campo Email
     print("\n3️⃣  Procurando campo 'Email'...")
