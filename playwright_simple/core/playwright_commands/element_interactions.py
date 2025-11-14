@@ -511,12 +511,11 @@ class ElementInteractions:
                 if self.fast_mode:
                     # In fast mode, use fill() for instant typing, then trigger events manually
                     text_str = str(text)
-                    await element.fill(text_str)
-                    # Trigger input events manually so event_capture can catch them
-                    # Use JSON.stringify to safely pass text to JavaScript
+                    # Use evaluate to set value instantly (faster than fill())
                     await element.evaluate("""
                         (el, value) => {
-                            // Trigger input event for each character (for event_capture)
+                            el.value = value;
+                            // Trigger input events for each character (for event_capture)
                             for (let i = 0; i < value.length; i++) {
                                 const inputEvent = new Event('input', { bubbles: true });
                                 el.dispatchEvent(inputEvent);
