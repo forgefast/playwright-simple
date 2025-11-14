@@ -277,7 +277,7 @@ async def test_odoo_login():
                         f"window.location.href !== '{initial_url}'",
                         timeout=10000
                     ),
-                    timeout=12.0
+                    timeout=1.0
                 )
                 print("   ✅ Navegação detectada")
             except:

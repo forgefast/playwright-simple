@@ -538,6 +538,22 @@ class PlaywrightHandlers:
         except Exception as e:
             logger.debug(f"Error getting submit element info before submit: {e}")
         
+        # CRITICAL: Finalize all pending inputs BEFORE adding submit step
+        # This ensures inputs (like password) are captured before submit
+        if self.yaml_writer and hasattr(self._recorder, 'event_handlers'):
+            pending_inputs = self._recorder.action_converter.pending_inputs
+            if pending_inputs:
+                logger.info(f"Submit detected: finalizing {len(pending_inputs)} pending input(s) before submit")
+                for element_key in list(pending_inputs.keys()):
+                    action = self._recorder.action_converter.finalize_input(element_key)
+                    if action:
+                        self.yaml_writer.add_step(action)
+                        value_preview = action.get('text', '')[:50]
+                        if len(action.get('text', '')) > 50:
+                            value_preview += '...'
+                        logger.info(f"Finalized input before submit: {action.get('description', '')} = '{value_preview}'")
+                        print(f"📝 Type: {action.get('description', '')} = '{value_preview}'")
+        
         # CRITICAL: Add submit step to YAML BEFORE submitting
         # This ensures the step is captured even if event_capture misses the click
         if submit_element_info and self.yaml_writer:
