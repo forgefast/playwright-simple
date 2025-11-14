@@ -188,7 +188,7 @@ async def test_cursor_position_after_navigation(browser_page: Page):
     # Verificar posição inicial
     initial_pos = await browser_page.evaluate("""
         () => {
-            const cursor = document.getElementById('__playwright_cursor');
+            const cursor = document.getElementById('playwright-cursor');
             if (!cursor) return null;
             return {
                 x: parseFloat(cursor.style.left) || 0,
@@ -220,7 +220,7 @@ async def test_cursor_position_after_navigation(browser_page: Page):
     
     final_pos = await browser_page.evaluate("""
         () => {
-            const cursor = document.getElementById('__playwright_cursor');
+            const cursor = document.getElementById('playwright-cursor');
             if (!cursor) return null;
             return {
                 x: parseFloat(cursor.style.left) || 0,
@@ -345,7 +345,7 @@ async def test_cursor_not_created_at_center_after_navigation(browser_page: Page)
     # Verificar posição do cursor
     cursor_pos = await browser_page.evaluate("""
         () => {
-            const cursor = document.getElementById('__playwright_cursor');
+            const cursor = document.getElementById('playwright-cursor');
             if (!cursor) return null;
             return {
                 x: parseFloat(cursor.style.left) || 0,
