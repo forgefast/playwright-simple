@@ -857,7 +857,9 @@ class ElementInteractions:
                                 cursor_controller
                             )
                         # Click on element to focus
+                        logger.debug(f"[CLICK] Clicking element at ({element_coords['x']}, {element_coords['y']}) [normal mode, before typing]")
                         await self.page.mouse.click(element_coords['x'], element_coords['y'])
+                        logger.debug(f"[CLICK] Click completed at ({element_coords['x']}, {element_coords['y']})")
                     else:
                         # Fallback: try to get coordinates from element
                         try:
@@ -867,33 +869,47 @@ class ElementInteractions:
                                     'x': int(box['x'] + box['width'] / 2),
                                     'y': int(box['y'] + box['height'] / 2)
                                 }
+                                logger.debug(f"[CLICK] Got coordinates from bounding_box: ({coords['x']}, {coords['y']})")
                                 if visual_feedback and cursor_controller:
                                     await visual_feedback.show_click_feedback(
                                         coords['x'],
                                         coords['y'],
                                         cursor_controller
                                     )
+                                logger.debug(f"[CLICK] Clicking element at ({coords['x']}, {coords['y']}) [normal mode, before typing]")
                                 await self.page.mouse.click(coords['x'], coords['y'])
+                                logger.debug(f"[CLICK] Click completed at ({coords['x']}, {coords['y']})")
                             else:
+                                logger.debug(f"[CLICK] No bounding_box, using element.click() [normal mode, before typing]")
                                 await element.click()
-                        except:
+                                logger.debug(f"[CLICK] element.click() completed")
+                        except Exception as e:
+                            logger.debug(f"[CLICK] Exception getting coordinates, using element.click(): {e}")
                             await element.click()
+                            logger.debug(f"[CLICK] element.click() completed [exception fallback]")
                     
                     # Small delay after click
                     await asyncio.sleep(0.1)
                     
                     # Type text character by character to trigger input events
                     # This ensures events are captured by event_capture
-                    if clear:
-                        await element.fill('')
                     text_str = str(text)
-                    for char in text_str:
+                    logger.debug(f"[TYPE] Normal mode: Typing '{text_str[:50]}...' character by character (length={len(text_str)})")
+                    if clear:
+                        logger.debug(f"[TYPE] Clearing field before typing")
+                        await element.fill('')
+                    for i, char in enumerate(text_str):
+                        logger.debug(f"[TYPE] Typing character {i+1}/{len(text_str)}: '{char}'")
                         await element.type(char, delay=10)
                         await asyncio.sleep(0.01)
+                    logger.debug(f"[TYPE] All characters typed")
                     
                     # Trigger blur event to finalize input (so it's captured)
+                    logger.debug(f"[TYPE] Triggering blur to finalize input")
                     await element.evaluate('el => el.blur()')
+                    logger.debug(f"[TYPE] Blur triggered")
                     await asyncio.sleep(0.1)
+                    logger.debug(f"[TYPE] Normal mode: Typing completed, value='{text_str[:50]}...'")
                 
                 return True
             
