@@ -125,6 +125,54 @@ class EventCapture:
             """)
             logger.info(f"🔍 DEBUG: Click listener test: {test_result}")
         
+        # CRITICAL: Intercept navigation requests to process events BEFORE navigation
+        # This is the key to capturing link clicks before context is destroyed
+        async def on_request(request):
+            """Intercept navigation requests to process events before navigation."""
+            # Only intercept navigation requests (not resources like CSS, JS, images)
+            if request.resource_type in ['document']:
+                try:
+                    # Check if there are pending events that need processing
+                    pending_result = await self.page.evaluate("""
+                        () => {
+                            const events = window.__playwright_recording_events || [];
+                            const hasLinkClick = window.__playwright_recording_link_click || false;
+                            return {
+                                events: events.slice(),  // Copy array
+                                hasLinkClick: hasLinkClick,
+                                count: events.length
+                            };
+                        }
+                    """)
+                    
+                    # If we have pending events (especially link clicks), process them NOW
+                    pending_events = pending_result.get('events', [])
+                    if pending_events and len(pending_events) > 0:
+                        logger.info(f"🚨 Navigation request intercepted! Processing {len(pending_events)} event(s) before navigation")
+                        # Process events immediately before navigation
+                        for event in pending_events:
+                            try:
+                                await self._process_event(event)
+                            except Exception as e:
+                                logger.debug(f"Error processing event before navigation: {e}")
+                        
+                        # Clear events after processing
+                        try:
+                            await self.page.evaluate("""
+                                () => {
+                                    window.__playwright_recording_events = [];
+                                    window.__playwright_recording_link_click = false;
+                                }
+                            """)
+                        except:
+                            pass  # Context might be destroyed
+                except Exception as e:
+                    if "Execution context was destroyed" not in str(e):
+                        logger.debug(f"Error intercepting navigation request: {e}")
+        
+        # Register request interceptor BEFORE navigation listener
+        self.page.on('request', on_request)
+        
         self.page.on('framenavigated', self._handle_navigation)
         
         # Start polling tasks
