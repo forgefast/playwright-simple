@@ -54,7 +54,9 @@ class PlaywrightHandlers:
         if self._recorder:
             fast_mode = getattr(self._recorder, 'fast_mode', False)
         
-        self._playwright_commands = PlaywrightCommands(page, fast_mode=fast_mode)
+        # During recording, always enable animations for better video quality
+        # fast_mode reduces delays but keeps visual animations
+        self._playwright_commands = PlaywrightCommands(page, fast_mode=fast_mode, enable_animations=True)
         return self._playwright_commands
     
     async def handle_find(self, args: str) -> None:

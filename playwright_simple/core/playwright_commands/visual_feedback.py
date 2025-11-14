@@ -29,7 +29,6 @@ class VisualFeedback:
         self.page = page
         self.fast_mode = fast_mode
         self.enable_animations = enable_animations
-        self.fast_mode = fast_mode
     
     async def show_click_feedback(
         self,
