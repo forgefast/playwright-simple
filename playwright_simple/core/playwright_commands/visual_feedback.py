@@ -84,6 +84,9 @@ class VisualFeedback:
                         if DEBUG_CURSOR_MOVEMENT:
                             logger.info(f"🖱️  [DEBUG] Waiting for smooth animation to complete (0.3s)")
                         await asyncio.sleep(0.3)  # Smooth animation takes ~0.3s
+                    else:
+                        # Even without animation, wait a bit for cursor to be positioned
+                        await asyncio.sleep(0.1)
                     
                     # Use CursorManager's show_click_effect if available
                     if hasattr(cursor_controller, 'show_click_effect'):
@@ -93,7 +96,11 @@ class VisualFeedback:
                         await cursor_controller.show_click_effect(x, y)
                         if self.enable_animations:
                             await asyncio.sleep(0.1)  # Small delay for animation
-                        return  # CursorManager handles click effect, no need for manual animation
+                        # Don't return - we still need to ensure mouse is synced
+                    # CRITICAL: After moving cursor visual, we need to ensure mouse is synced
+                    # This is done by the caller (element_interactions), but we can add a small delay here
+                    if DEBUG_CURSOR_MOVEMENT:
+                        logger.info(f"🖱️  [DEBUG] Cursor visual moved to ({x}, {y}), waiting for mouse sync")
                 
                 # Show click animation manually (for CursorController or fallback)
                 if self.enable_animations and has_move:  # Only for CursorController

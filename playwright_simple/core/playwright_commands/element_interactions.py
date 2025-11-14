@@ -229,7 +229,8 @@ class ElementInteractions:
                     if DEBUG_CLICKS:
                         logger.info(f"🖱️  [DEBUG] Element found at ({x}, {y}), preparing to click")
                     
-                    # Show visual feedback
+                    # CRITICAL: Show visual feedback FIRST, then sync mouse, then click
+                    # This ensures cursor visual is at the right position before mouse click
                     if visual_feedback and cursor_controller:
                         if DEBUG_CURSOR:
                             logger.info(f"🖱️  [DEBUG] Showing visual feedback for click at ({x}, {y})")
@@ -239,12 +240,19 @@ class ElementInteractions:
                         if DEBUG_CURSOR:
                             logger.info(f"🖱️  [DEBUG] Syncing Playwright mouse to ({x}, {y})")
                         await self.page.mouse.move(x, y)
-                        await asyncio.sleep(0.05)  # Small delay to ensure mouse is positioned
+                        await asyncio.sleep(0.1)  # Increased delay to ensure mouse is positioned and cursor animation completed
                         if DEBUG_CLICKS:
                             logger.info(f"🖱️  [DEBUG] Executing mouse.click at ({x}, {y})")
                         await self.page.mouse.click(x, y)
                         if DEBUG_CLICKS:
                             logger.info(f"🖱️  [DEBUG] Mouse click completed at ({x}, {y})")
+                    else:
+                        # No visual feedback - just click directly
+                        if DEBUG_CLICKS:
+                            logger.info(f"🖱️  [DEBUG] No visual feedback, clicking directly at ({x}, {y})")
+                        await self.page.mouse.move(x, y)
+                        await asyncio.sleep(0.05)
+                        await self.page.mouse.click(x, y)
                     
                     # Try to find element via Playwright and click it directly (dispatches DOM events that event_capture can catch)
                     # This is more reliable than JavaScript element.click() inside page.evaluate()
@@ -322,6 +330,32 @@ class ElementInteractions:
                                 }
                             """)
                             
+                            # CRITICAL: Get element coordinates before clicking to move cursor first
+                            # This ensures cursor visual is at the right position before mouse click
+                            element_coords = None
+                            try:
+                                box = await element.bounding_box()
+                                if box:
+                                    element_coords = {
+                                        'x': int(box['x'] + box['width'] / 2),
+                                        'y': int(box['y'] + box['height'] / 2)
+                                    }
+                                    # Move cursor visual FIRST if available
+                                    if visual_feedback and cursor_controller:
+                                        if DEBUG_CURSOR:
+                                            logger.info(f"🖱️  [DEBUG] Moving cursor to element at ({element_coords['x']}, {element_coords['y']})")
+                                        await visual_feedback.show_click_feedback(element_coords['x'], element_coords['y'], cursor_controller)
+                                        # Sync Playwright mouse to cursor visual position
+                                        if DEBUG_CURSOR:
+                                            logger.info(f"🖱️  [DEBUG] Syncing Playwright mouse to ({element_coords['x']}, {element_coords['y']})")
+                                        await self.page.mouse.move(element_coords['x'], element_coords['y'])
+                                        await asyncio.sleep(0.1)  # Wait for cursor animation and mouse positioning
+                            except Exception as e:
+                                logger.debug(f"Error getting element coordinates: {e}")
+                            
+                            # Now click the element (mouse is already positioned)
+                            if DEBUG_CLICKS:
+                                logger.info(f"🖱️  [DEBUG] Clicking element (mouse already positioned)")
                             await element.click()
                             
                             # If it's a link, we need to ensure the event is captured before navigation
