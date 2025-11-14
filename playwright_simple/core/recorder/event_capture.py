@@ -354,6 +354,14 @@ class EventCapture:
                                     if (tag === 'A' && hasHref) {
                                         // Always capture links, even if they don't have visible text
                                         // (text might be in child elements or CSS)
+                                        // Also check for text in child elements if not in direct text
+                                        if (!serialized.text || serialized.text.trim().length === 0) {
+                                            // Try to get text from child elements
+                                            const childText = interactiveEl.textContent || interactiveEl.innerText || '';
+                                            if (childText.trim().length > 0) {
+                                                serialized.text = childText.trim();
+                                            }
+                                        }
                                         const eventData = {
                                             type: 'click',
                                             timestamp: Date.now(),
