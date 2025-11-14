@@ -220,11 +220,28 @@ async def test_odoo_login():
     
     # 6. Digitar senha
     print("\n6️⃣  Digitando senha...")
+    # Try multiple variations to find password field
     success, error = await run_with_timeout(
-        handlers.handle_pw_type('admin into "Password"'),
+        handlers.handle_pw_type('admin into "Senha"'),
         timeout_seconds=10.0,
         step_name="type password"
     )
+    if not success:
+        # Fallback: try with "Password" or "password"
+        print("   ⚠️  Tentando variações...")
+        success, error = await run_with_timeout(
+            handlers.handle_pw_type('admin into "Password"'),
+            timeout_seconds=10.0,
+            step_name="type password (fallback)"
+        )
+    if not success:
+        # Fallback: try with selector
+        print("   ⚠️  Tentando com selector...")
+        success, error = await run_with_timeout(
+            handlers.handle_pw_type('admin into selector "[name=\'password\']"'),
+            timeout_seconds=10.0,
+            step_name="type password (selector)"
+        )
     if not success:
         print(f"   ❌ Erro: {error}")
         await recorder.stop(save=False)
