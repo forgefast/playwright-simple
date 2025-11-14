@@ -193,24 +193,41 @@ class Recorder:
                         if frame != page.main_frame:
                             return
                         
-                        if self.cursor_controller and self.cursor_controller.is_active:
-                            # Wait a bit for page to be ready
-                            await asyncio.sleep(0.2)
+                        if self.cursor_controller:
+                            # Wait for page to be ready (longer delay for dynamic pages)
+                            await asyncio.sleep(0.5)
                             
-                            # Get last position
+                            # Wait for DOM to be ready
+                            try:
+                                await page.wait_for_load_state('domcontentloaded', timeout=3000)
+                            except:
+                                pass  # Continue even if timeout
+                            
+                            # Get last position from storage (persists across navigations)
                             position = await page.evaluate("""
                                 () => {
                                     return window.__playwright_cursor_last_position || null;
                                 }
                             """)
+                            
                             if position:
                                 x = position.get('x')
                                 y = position.get('y')
-                                # Restore cursor position
+                                # Always restore cursor (force=True to reinject even if "active")
                                 await self.cursor_controller.start(force=True, initial_x=x, initial_y=y)
-                                logger.debug(f"Cursor position restored after navigation: ({x}, {y})")
+                                logger.info(f"Cursor restored after navigation: ({x}, {y})")
+                            else:
+                                # No saved position, start at center
+                                await self.cursor_controller.start(force=True)
+                                logger.info("Cursor restored after navigation (center)")
                     except Exception as e:
-                        logger.debug(f"Error restoring cursor after navigation: {e}")
+                        logger.warning(f"Error restoring cursor after navigation: {e}")
+                        # Try to restore anyway, even if there was an error
+                        try:
+                            if self.cursor_controller:
+                                await self.cursor_controller.start(force=True)
+                        except:
+                            pass
                 
                 # Listen for navigation events
                 page.on('framenavigated', on_navigation)

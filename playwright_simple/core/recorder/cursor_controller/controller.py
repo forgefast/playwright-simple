@@ -40,19 +40,24 @@ class CursorController:
         """
         await self._visual.start(force, initial_x, initial_y)
         self.is_active = self._visual.is_active
-        # Update current position from movement module
-        if self._movement.current_x == 0 and self._movement.current_y == 0:
-            # Get position from page if available
-            position = await self.page.evaluate("""
-                () => {
-                    return window.__playwright_cursor_last_position || null;
-                }
-            """)
-            if position:
-                self.current_x = position.get('x', 0)
-                self.current_y = position.get('y', 0)
-                self._movement.current_x = self.current_x
-                self._movement.current_y = self.current_y
+        
+        # Always update position from page storage (for navigation persistence)
+        position = await self.page.evaluate("""
+            () => {
+                return window.__playwright_cursor_last_position || null;
+            }
+        """)
+        if position:
+            self.current_x = position.get('x', 0)
+            self.current_y = position.get('y', 0)
+            self._movement.current_x = self.current_x
+            self._movement.current_y = self.current_y
+        elif initial_x is not None and initial_y is not None:
+            # Use provided initial position
+            self.current_x = initial_x
+            self.current_y = initial_y
+            self._movement.current_x = initial_x
+            self._movement.current_y = initial_y
     
     async def show(self):
         """Show cursor overlay."""
