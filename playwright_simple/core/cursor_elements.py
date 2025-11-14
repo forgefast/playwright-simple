@@ -174,14 +174,23 @@ class CursorElements:
                     cursor.style.opacity = '1';
                     // Disable transitions during creation to prevent animation from center
                     cursor.style.transition = 'none';
+                    
+                    // Try to append to body, or documentElement if body doesn't exist
                     if (document.body) {{
                         document.body.appendChild(cursor);
                         // Re-enable transitions after cursor is positioned (for future movements)
                         setTimeout(() => {{
                             cursor.style.transition = '';
                         }}, 0);
+                    }} else if (document.documentElement) {{
+                        // If body doesn't exist, append to documentElement
+                        document.documentElement.appendChild(cursor);
+                        // Re-enable transitions after cursor is positioned
+                        setTimeout(() => {{
+                            cursor.style.transition = '';
+                        }}, 0);
                     }} else {{
-                        // If body doesn't exist yet, wait for it
+                        // If neither exists, wait for body
                         const observer = new MutationObserver(() => {{
                             // Check again for duplicates before appending
                             const cursors = document.querySelectorAll('#' + CURSOR_ID);
@@ -199,7 +208,7 @@ class CursorElements:
                                 observer.disconnect();
                             }}
                         }});
-                        observer.observe(document.documentElement, {{ childList: true }});
+                        observer.observe(document.documentElement || document, {{ childList: true }});
                     }}
                 }} else {{
                     // Ensure cursor is visible but PRESERVE current position - never reset to center
