@@ -681,7 +681,15 @@ class ElementInteractions:
                     }
                     
                     if (element) {
-                        // Click via DOM to trigger events that event_capture can catch
+                        // Dispatch click event first (for event_capture), then do actual click
+                        const clickEvent = new MouseEvent('click', {
+                            bubbles: true,
+                            cancelable: true,
+                            view: window,
+                            detail: 1
+                        });
+                        element.dispatchEvent(clickEvent);
+                        // Then do actual click
                         element.click();
                         return true;
                     }
@@ -691,7 +699,7 @@ class ElementInteractions:
             """, {'x': x, 'y': y, 'buttonText': button_text})
             
             if not button_found:
-                # Fallback: use mouse click
+                # Fallback: use mouse click (this should also trigger DOM events)
                 await self.page.mouse.click(x, y)
             
             # Small delay to ensure click event is captured (reduced in fast mode)
