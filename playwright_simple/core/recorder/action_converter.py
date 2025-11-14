@@ -47,13 +47,17 @@ class ActionConverter:
         element_type = element_info.get('type', '').lower()
         tag_name = element_info.get('tagName', '').upper()
         text = (element_info.get('text', '') or element_info.get('value', '') or '').lower()
+        href = element_info.get('href', '') or ''
+        is_link = tag_name == 'A' and bool(href)
         
-        # Check if this is a submit button (including links with submit-like text)
+        # IMPORTANT: Links (href) should ALWAYS be treated as 'click', never 'submit'
+        # Even if they look like buttons to the user, they are navigation links
+        # Only actual buttons can be submit buttons
         is_submit_button = (
             element_type == 'submit' or
-            (tag_name == 'BUTTON' and element_type in ('submit', '')) or
-            any(keyword in text for keyword in ['entrar', 'login', 'submit', 'enviar', 'salvar', 'save', 'confirmar', 'confirm', 'log in', 'sign in'])
+            (tag_name == 'BUTTON' and element_type in ('submit', ''))
         )
+        # Links are never submit buttons, they are always clicks
         
         # Identify element
         identification = ElementIdentifier.identify(element_info)
@@ -85,7 +89,7 @@ class ActionConverter:
                 action['selector'] = identification['selector']
             # If no text or selector, still create action (description is enough)
         else:
-            # Convert to click action
+            # Convert to click action (this includes all links)
             action = {
                 'action': 'click',
                 'description': identification['description']
@@ -101,6 +105,9 @@ class ActionConverter:
                 href = element_info.get('href', '')
                 if href:
                     action['selector'] = f"a[href='{href}']"
+            
+            # For links in header/nav, we can add context to description if needed
+            # But the action is always 'click', never 'submit'
         
         # ALWAYS return an action if we got here (element_info exists)
         logger.debug(f"convert_click: Created action - {action.get('action')}: {action.get('description')}")

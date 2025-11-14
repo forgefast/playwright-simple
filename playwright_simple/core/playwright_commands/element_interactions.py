@@ -277,9 +277,56 @@ class ElementInteractions:
                         if element_handle and await element_handle.as_element():
                             # Use Playwright's element.click() which dispatches DOM events that event_capture can catch
                             element = await element_handle.as_element()
+                            
+                            # Check if this is a link (has href) - links cause navigation and need immediate processing
+                            is_link = await element.evaluate("""
+                                (el) => {
+                                    return el.tagName?.toUpperCase() === 'A' && (el.href || el.getAttribute('href'));
+                                }
+                            """)
+                            
                             await element.click()
-                            # Small delay to ensure event is captured before navigation (if link causes navigation)
-                            await asyncio.sleep(0.1)
+                            
+                            # If it's a link, we need to ensure the event is captured before navigation
+                            # Since links cause immediate navigation, we need to manually dispatch the click event
+                            # to ensure it's captured by the event_capture listener
+                            if is_link:
+                                # Manually dispatch a click event to ensure it's captured
+                                # This is necessary because Playwright's element.click() might not trigger
+                                # the DOM event listener in time before navigation
+                                try:
+                                    await element.evaluate("""
+                                        (el) => {
+                                            // Dispatch a synthetic click event that will be captured by our listener
+                                            const clickEvent = new MouseEvent('click', {
+                                                bubbles: true,
+                                                cancelable: true,
+                                                view: window,
+                                                detail: 1
+                                            });
+                                            el.dispatchEvent(clickEvent);
+                                        }
+                                    """)
+                                    logger.debug(f"[ELEMENT_INTERACTIONS] Manually dispatched click event for link")
+                                except Exception as e:
+                                    logger.debug(f"[ELEMENT_INTERACTIONS] Error dispatching click event: {e}")
+                                
+                                # Give time for the event to be added to the array
+                                await asyncio.sleep(0.15)
+                                
+                                # Check if event was captured
+                                try:
+                                    event_count = await self.page.evaluate("""
+                                        () => {
+                                            return (window.__playwright_recording_events || []).length;
+                                        }
+                                    """)
+                                    logger.debug(f"[ELEMENT_INTERACTIONS] Link clicked, {event_count} event(s) in queue (will be processed during navigation)")
+                                except Exception as e:
+                                    logger.debug(f"[ELEMENT_INTERACTIONS] Error checking link events: {e}")
+                            else:
+                                # Small delay for non-links
+                                await asyncio.sleep(0.1)
                             return True
                     except Exception as e:
                         logger.debug(f"[ELEMENT_INTERACTIONS] Erro ao clicar via element.click(), usando fallback: {e}")
