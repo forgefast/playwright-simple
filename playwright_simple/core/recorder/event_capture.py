@@ -61,6 +61,27 @@ class EventCapture:
         self.is_capturing = True
         self.last_url = self.page.url
         
+        # CRITICAL: Expose function for immediate event processing from JavaScript
+        # This allows JavaScript to call Python directly when link is clicked
+        # This is the key to processing events BEFORE navigation destroys context
+        async def process_link_click_immediately(event_data: Dict[str, Any]):
+            """Process link click event immediately - called directly from JavaScript."""
+            try:
+                logger.info(f"🚨 Immediate link click processing triggered from JavaScript")
+                # Process event immediately via event handlers
+                if self._event_handlers_instance:
+                    # Call handle_click directly (synchronous, immediate)
+                    self._event_handlers_instance.handle_click(event_data)
+                else:
+                    # Fallback: emit event normally
+                    self._emit_event('click', event_data)
+            except Exception as e:
+                logger.error(f"Error in immediate link click processing: {e}", exc_info=True)
+        
+        # Expose function to JavaScript - survives navigations
+        await self.page.expose_function("__playwright_process_link_click", process_link_click_immediately)
+        logger.debug("Exposed __playwright_process_link_click function to JavaScript")
+        
         # Inject script and wait a bit for it to initialize
         # CRITICAL: Inject script immediately to catch early clicks
         await self._inject_capture_script()
