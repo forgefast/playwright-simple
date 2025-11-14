@@ -1,5 +1,49 @@
 # Contribuindo para Playwright Simple
 
+## TDD (Test-Driven Development) - OBRIGATÓRIO
+
+**TODAS as funcionalidades devem ser testadas ANTES de serem implementadas.**
+
+### Regra de Ouro
+> Se não está no teste, não existe. Se não passa no teste, não funciona.
+
+### Processo TDD
+1. **Escrever teste primeiro** - Defina o comportamento esperado no teste
+2. **Teste deve falhar** - Confirme que o teste detecta o problema
+3. **Implementar mínimo** - Implemente apenas o necessário para passar
+4. **Refatorar** - Melhore o código mantendo o teste passando
+
+### Antes de Implementar Qualquer Funcionalidade
+- [ ] Teste TDD escrito e falhando
+- [ ] Comportamento esperado documentado no teste
+- [ ] Teste cobre casos de sucesso e erro
+
+### Antes de Commitar
+- [ ] Todos os testes TDD passam
+- [ ] Testes existentes ainda passam (sem regressões)
+- [ ] Comportamento documentado no README correspondente
+
+### Exemplo de Teste TDD
+
+```python
+@pytest.mark.asyncio
+async def test_novo_comportamento(browser_page: Page):
+    """
+    TDD: Descrição do comportamento esperado.
+    
+    Comportamento esperado:
+    - Condição 1
+    - Condição 2
+    - Resultado esperado
+    """
+    # Arrange
+    # Act
+    # Assert
+```
+
+### Testes do Cursor
+Ver `playwright_simple/core/cursor/README.md` para comportamentos críticos do cursor definidos por testes.
+
 ## Prevenção de Regressões
 
 ### Executar Testes Antes de Commitar
