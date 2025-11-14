@@ -389,8 +389,26 @@ async def test_cursor_position_persisted_across_multiple_navigations(browser_pag
     """)
     
     assert pos1 is not None, "Cursor deve existir após primeira navegação"
-    assert abs(pos1['x'] - target_x) < 20, f"Posição X deve ser mantida após primeira navegação"
-    assert abs(pos1['y'] - target_y) < 20, f"Posição Y deve ser mantida após primeira navegação"
+    
+    # Verificar que NÃO está no centro
+    viewport = browser_page.viewport_size
+    center_x = viewport['width'] / 2
+    center_y = viewport['height'] / 2
+    
+    x_diff_from_center1 = abs(pos1['x'] - center_x)
+    y_diff_from_center1 = abs(pos1['y'] - center_y)
+    is_at_center1 = x_diff_from_center1 < 30 and y_diff_from_center1 < 30
+    
+    assert not is_at_center1, \
+        f"❌ PROBLEMA DETECTADO: Cursor está no centro após primeira navegação! " \
+        f"Posição: ({pos1['x']}, {pos1['y']}), Centro: ({center_x}, {center_y})"
+    
+    assert abs(pos1['x'] - target_x) < 20, \
+        f"❌ PROBLEMA DETECTADO: Posição X não foi mantida após primeira navegação. " \
+        f"Esperado: {target_x}, Atual: {pos1['x']}"
+    assert abs(pos1['y'] - target_y) < 20, \
+        f"❌ PROBLEMA DETECTADO: Posição Y não foi mantida após primeira navegação. " \
+        f"Esperado: {target_y}, Atual: {pos1['y']}"
     
     # Segunda navegação
     await browser_page.set_content("<html><body><h1>Page 3</h1></body></html>")

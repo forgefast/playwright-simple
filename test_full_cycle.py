@@ -12,7 +12,10 @@ Este script executa o ciclo completo:
 import asyncio
 import sys
 import subprocess
+import yaml
+import re
 from pathlib import Path
+from typing import List, Dict, Any
 
 # Adicionar o diretório do projeto ao path
 project_root = Path(__file__).parent
@@ -33,6 +36,106 @@ def print_step(step_num: int, description: str):
     print(f"\n{'─' * 80}")
     print(f"  PASSO {step_num}: {description}")
     print(f"{'─' * 80}\n")
+
+
+def validate_yaml_for_duplicate_clicks(yaml_path: Path) -> tuple[bool, List[str]]:
+    """
+    TDD: Valida YAML para detectar cliques duplicados.
+    
+    Retorna: (is_valid, error_messages)
+    """
+    errors = []
+    
+    if not yaml_path.exists():
+        return False, ["YAML não existe"]
+    
+    try:
+        with open(yaml_path, 'r') as f:
+            yaml_content = yaml.safe_load(f)
+        
+        if not yaml_content or 'steps' not in yaml_content:
+            return False, ["YAML inválido: sem 'steps'"]
+        
+        steps = yaml_content['steps']
+        click_steps = [s for s in steps if s.get('action') == 'click']
+        
+        # Verificar cliques duplicados no password
+        password_clicks = []
+        for i, step in enumerate(click_steps):
+            description = step.get('description', '').lower()
+            selector = step.get('selector', '').lower()
+            if 'password' in description or 'senha' in description or 'password' in selector:
+                password_clicks.append((i, step))
+        
+        # Verificar se há múltiplos cliques no password muito próximos
+        if len(password_clicks) > 1:
+            for j in range(len(password_clicks) - 1):
+                idx1, step1 = password_clicks[j]
+                idx2, step2 = password_clicks[j + 1]
+                # Se estão próximos (menos de 3 steps de diferença), pode ser duplicado
+                if idx2 - idx1 < 3:
+                    errors.append(
+                        f"❌ PROBLEMA DETECTADO: Cliques duplicados no password! "
+                        f"Step {idx1 + 1} e Step {idx2 + 1} estão muito próximos. "
+                        f"Step {idx1 + 1}: {step1.get('description', 'N/A')}, "
+                        f"Step {idx2 + 1}: {step2.get('description', 'N/A')}"
+                    )
+        
+        # Verificar cliques duplicados em geral (mesmo elemento, steps consecutivos)
+        for i in range(len(click_steps) - 1):
+            step1 = click_steps[i]
+            step2 = click_steps[i + 1]
+            
+            # Se são cliques no mesmo elemento (mesmo selector ou mesma descrição)
+            selector1 = step1.get('selector', '').lower()
+            selector2 = step2.get('selector', '').lower()
+            desc1 = step1.get('description', '').lower()
+            desc2 = step2.get('description', '').lower()
+            
+            if selector1 and selector2 and selector1 == selector2:
+                errors.append(
+                    f"❌ PROBLEMA DETECTADO: Cliques duplicados no mesmo elemento! "
+                    f"Step {i + 1} e Step {i + 2} clicam no mesmo seletor: {selector1}"
+                )
+            elif desc1 and desc2 and desc1 == desc2 and len(desc1) > 10:
+                errors.append(
+                    f"❌ PROBLEMA DETECTADO: Cliques duplicados com mesma descrição! "
+                    f"Step {i + 1} e Step {i + 2}: {desc1}"
+                )
+        
+        return len(errors) == 0, errors
+        
+    except Exception as e:
+        return False, [f"Erro ao validar YAML: {e}"]
+
+
+def validate_reproduction_output(output: str) -> tuple[bool, List[str]]:
+    """
+    TDD: Valida saída da reprodução para detectar problemas.
+    
+    Retorna: (is_valid, error_messages)
+    """
+    errors = []
+    
+    # Verificar se há mensagens de erro sobre cursor no centro
+    if 'cursor' in output.lower() and ('centro' in output.lower() or 'center' in output.lower()):
+        # Procurar por padrões de erro
+        if '❌ PROBLEMA DETECTADO' in output:
+            # Extrair linhas com problemas
+            lines = output.split('\n')
+            for line in lines:
+                if '❌ PROBLEMA DETECTADO' in line and 'cursor' in line.lower():
+                    errors.append(f"❌ PROBLEMA DETECTADO na reprodução: {line.strip()}")
+    
+    # Verificar se há mensagens sobre cliques duplicados
+    if 'duplicado' in output.lower() or 'duplicate' in output.lower():
+        if '❌ PROBLEMA DETECTADO' in output:
+            lines = output.split('\n')
+            for line in lines:
+                if '❌ PROBLEMA DETECTADO' in line and ('duplicado' in line.lower() or 'duplicate' in line.lower()):
+                    errors.append(f"❌ PROBLEMA DETECTADO na reprodução: {line.strip()}")
+    
+    return len(errors) == 0, errors
 
 
 async def run_generation():
@@ -81,7 +184,19 @@ async def run_generation():
                     print(f"  ... ({len(lines) - 40} linhas restantes)")
             print("─" * 80)
             
-            return True, result.returncode == 0
+            # TDD: Validar YAML para problemas conhecidos
+            print(f"\n🔍 Validando YAML para problemas conhecidos...")
+            yaml_valid, yaml_errors = validate_yaml_for_duplicate_clicks(YAML_PATH)
+            
+            if not yaml_valid:
+                print(f"\n❌ VALIDAÇÃO DO YAML FALHOU:")
+                for error in yaml_errors:
+                    print(f"   {error}")
+                print(f"\n⚠️  YAML gerado, mas contém problemas detectados!")
+            else:
+                print(f"✅ YAML validado: sem cliques duplicados detectados")
+            
+            return True, result.returncode == 0 and yaml_valid
         else:
             print(f"\n❌ YAML não foi gerado!")
             return False, False
@@ -123,28 +238,45 @@ async def run_reproduction():
         # Verificar resultado
         success = result.returncode == 0
         
+        # TDD: Validar saída da reprodução para problemas conhecidos
+        full_output = result.stdout + "\n" + result.stderr
+        repro_valid, repro_errors = validate_reproduction_output(full_output)
+        
+        if not repro_valid:
+            print(f"\n❌ VALIDAÇÃO DA REPRODUÇÃO FALHOU:")
+            for error in repro_errors:
+                print(f"   {error}")
+            print(f"\n⚠️  Reprodução executada, mas problemas detectados!")
+        
         # Extrair informações do resultado
         if "test_finished" in result.stdout or "test_passed" in result.stdout:
             # Tentar extrair informações do teste
             if "status" in result.stdout:
                 if '"status": "passed"' in result.stdout:
-                    print(f"\n✅ Reprodução concluída com sucesso!")
+                    if repro_valid:
+                        print(f"\n✅ Reprodução concluída com sucesso!")
+                    else:
+                        print(f"\n⚠️  Reprodução passou, mas problemas detectados na validação!")
                 elif '"status": "failed"' in result.stdout:
                     print(f"\n❌ Reprodução falhou!")
                 else:
                     print(f"\n⚠️  Reprodução completou com status desconhecido")
             else:
-                if success:
+                if success and repro_valid:
                     print(f"\n✅ Reprodução concluída com sucesso!")
+                elif success:
+                    print(f"\n⚠️  Reprodução executou, mas problemas detectados!")
                 else:
                     print(f"\n❌ Reprodução falhou (código: {result.returncode})")
         else:
-            if success:
+            if success and repro_valid:
                 print(f"\n✅ Reprodução concluída com sucesso!")
+            elif success:
+                print(f"\n⚠️  Reprodução executou, mas problemas detectados!")
             else:
                 print(f"\n❌ Reprodução falhou (código: {result.returncode})")
         
-        return True, success
+        return True, success and repro_valid
         
     except subprocess.TimeoutExpired:
         print(f"\n⏱️  Timeout ao reproduzir YAML (120s)")
