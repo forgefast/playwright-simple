@@ -288,7 +288,7 @@ async def test_odoo_login():
                 print("   ✅ Continuando (fast_mode)")
             else:
                 # Normal mode: wait for navigation to complete (but with shorter timeouts)
-            try:
+                try:
                 # Wait for URL to change (indicating navigation started)
                 initial_url = page.url
                 await asyncio.wait_for(
