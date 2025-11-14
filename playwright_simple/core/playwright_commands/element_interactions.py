@@ -658,10 +658,16 @@ class ElementInteractions:
                             // Trigger change event (for form validation)
                             const changeEvent = new Event('change', { bubbles: true, cancelable: true });
                             el.dispatchEvent(changeEvent);
-                            // Trigger blur to finalize
-                            el.blur();
                         }
                     """, text_str)
+                    # Small delay to allow event_capture to process input before blur
+                    await asyncio.sleep(0.05)
+                    # Trigger blur to finalize (after event_capture has processed input)
+                    await element.evaluate("""
+                        (el) => {
+                            el.blur();
+                        }
+                    """)
                 else:
                     # Normal mode: click on field before typing (for better UX in videos)
                     if element_coords:
