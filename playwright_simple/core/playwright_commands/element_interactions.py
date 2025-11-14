@@ -726,43 +726,71 @@ class ElementInteractions:
                     except Exception as e:
                         logger.debug(f"Error getting bounding_box: {e}")
                 
-                if coords_to_use:
-                    if DEBUG_CURSOR:
-                        logger.info(f"🖱️  [DEBUG] Preparing to click at ({coords_to_use['x']}, {coords_to_use['y']}) before typing")
-                        logger.info(f"🖱️  [DEBUG] visual_feedback={visual_feedback is not None}, cursor_controller={cursor_controller is not None}")
-                    
-                    # Use visual feedback to move cursor and show click animation (even in fast_mode)
-                    if visual_feedback and cursor_controller:
-                        logger.info(f"🎯 Using visual feedback to click at ({coords_to_use['x']}, {coords_to_use['y']})")
-                        if DEBUG_CURSOR:
-                            logger.info(f"🖱️  [DEBUG] Moving cursor visual to ({coords_to_use['x']}, {coords_to_use['y']})")
-                        await visual_feedback.show_click_feedback(
-                            coords_to_use['x'],
-                            coords_to_use['y'],
-                            cursor_controller
-                        )
-                        # After visual feedback moves cursor, sync Playwright mouse position
-                        # This ensures the actual click happens where the cursor visual is
-                        if DEBUG_CURSOR:
-                            logger.info(f"🖱️  [DEBUG] Syncing Playwright mouse to ({coords_to_use['x']}, {coords_to_use['y']})")
-                        await self.page.mouse.move(coords_to_use['x'], coords_to_use['y'])
-                        await asyncio.sleep(0.05)  # Small delay to ensure mouse is positioned
-                        # Always click - this ensures the click event is captured in YAML
-                        # Even if field is already focused, we need the click for the video
-                        if DEBUG_CLICKS:
-                            logger.info(f"🖱️  [DEBUG] Executing mouse.click at ({coords_to_use['x']}, {coords_to_use['y']})")
-                        await self.page.mouse.click(coords_to_use['x'], coords_to_use['y'])
-                        if DEBUG_CLICKS:
-                            logger.info(f"🖱️  [DEBUG] Mouse click completed at ({coords_to_use['x']}, {coords_to_use['y']})")
-                    else:
-                        # Fallback: direct mouse click without animation
-                        logger.warning(f"⚠️  Clicking directly at ({coords_to_use['x']}, {coords_to_use['y']}) [no visual feedback - visual_feedback={visual_feedback is not None}, cursor_controller={cursor_controller is not None}]")
-                        if DEBUG_CLICKS:
-                            logger.info(f"🖱️  [DEBUG] Executing direct mouse.click at ({coords_to_use['x']}, {coords_to_use['y']}) [no visual feedback]")
-                        await self.page.mouse.click(coords_to_use['x'], coords_to_use['y'])
-                    clicked = True
-                    # Small delay to allow click event to be captured
-                    await asyncio.sleep(0.1)
+           if coords_to_use:
+               if DEBUG_CURSOR:
+                   logger.info(f"🖱️  [DEBUG] Preparing to click at ({coords_to_use['x']}, {coords_to_use['y']}) before typing")
+                   logger.info(f"🖱️  [DEBUG] visual_feedback={visual_feedback is not None}, cursor_controller={cursor_controller is not None}")
+               
+               # CRITICAL: Check if element is already focused before clicking
+               # If already focused, skip the actual mouse click but still move cursor for visual consistency
+               is_focused = False
+               try:
+                   is_focused = await element.evaluate("""
+                       (el) => {
+                           return document.activeElement === el;
+                       }
+                   """)
+                   if DEBUG_CLICKS:
+                       logger.info(f"🖱️  [DEBUG] Element focus check: is_focused={is_focused}")
+               except Exception as e:
+                   logger.debug(f"Error checking focus: {e}")
+               
+               # Use visual feedback to move cursor and show click animation (even in fast_mode)
+               if visual_feedback and cursor_controller:
+                   logger.info(f"🎯 Using visual feedback to click at ({coords_to_use['x']}, {coords_to_use['y']})")
+                   if DEBUG_CURSOR:
+                       logger.info(f"🖱️  [DEBUG] Moving cursor visual to ({coords_to_use['x']}, {coords_to_use['y']})")
+                   await visual_feedback.show_click_feedback(
+                       coords_to_use['x'],
+                       coords_to_use['y'],
+                       cursor_controller
+                   )
+                   # After visual feedback moves cursor, sync Playwright mouse position
+                   # This ensures the actual click happens where the cursor visual is
+                   if DEBUG_CURSOR:
+                       logger.info(f"🖱️  [DEBUG] Syncing Playwright mouse to ({coords_to_use['x']}, {coords_to_use['y']})")
+                   await self.page.mouse.move(coords_to_use['x'], coords_to_use['y'])
+                   await asyncio.sleep(0.1)  # Increased delay to ensure mouse is positioned and cursor animation completed
+                   
+                   # Only click if element is not already focused
+                   # This prevents duplicate clicks when clicking on a label and then typing
+                   if not is_focused:
+                       # Always click - this ensures the click event is captured in YAML
+                       if DEBUG_CLICKS:
+                           logger.info(f"🖱️  [DEBUG] Executing mouse.click at ({coords_to_use['x']}, {coords_to_use['y']}) [element not focused]")
+                       await self.page.mouse.click(coords_to_use['x'], coords_to_use['y'])
+                       if DEBUG_CLICKS:
+                           logger.info(f"🖱️  [DEBUG] Mouse click completed at ({coords_to_use['x']}, {coords_to_use['y']})")
+                   else:
+                       # Element already focused - skip click but still show visual feedback
+                       if DEBUG_CLICKS:
+                           logger.info(f"🖱️  [DEBUG] Skipping mouse.click - element already focused (cursor moved for visual consistency)")
+               else:
+                   # Fallback: direct mouse click without animation
+                   logger.warning(f"⚠️  Clicking directly at ({coords_to_use['x']}, {coords_to_use['y']}) [no visual feedback - visual_feedback={visual_feedback is not None}, cursor_controller={cursor_controller is not None}]")
+                   if not is_focused:
+                       if DEBUG_CLICKS:
+                           logger.info(f"🖱️  [DEBUG] Executing direct mouse.click at ({coords_to_use['x']}, {coords_to_use['y']}) [no visual feedback]")
+                       await self.page.mouse.click(coords_to_use['x'], coords_to_use['y'])
+                   else:
+                       if DEBUG_CLICKS:
+                           logger.info(f"🖱️  [DEBUG] Skipping direct mouse.click - element already focused")
+               clicked = True
+               # Small delay to allow click event to be captured (if click happened)
+               if not is_focused:
+                   await asyncio.sleep(0.1)
+               else:
+                   await asyncio.sleep(0.05)  # Shorter delay if no click happened
                 else:
                     # Last resort: use element.click() which also triggers click event
                     logger.info(f"Clicking on field using element.click() [fallback - no coordinates]")
