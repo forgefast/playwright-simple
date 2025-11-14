@@ -181,21 +181,21 @@ async def test_odoo_login():
     if not recorder.fast_mode:
         await asyncio.sleep(1)
     
-    # 4. Digitar email
-    print("\n4️⃣  Digitando email...")
-    # Try multiple variations to find email field
+    # 4. Digitar login (admin)
+    print("\n4️⃣  Digitando login...")
+    # Try multiple variations to find email/login field
     success, error = await run_with_timeout(
-        handlers.handle_pw_type('admin@example.com into "E-mail"'),
+        handlers.handle_pw_type('admin into "E-mail"'),
         timeout_seconds=10.0,
-        step_name="type email"
+        step_name="type login"
     )
     if not success:
         # Fallback: try with "login" or just "email"
         print("   ⚠️  Tentando variações...")
         success, error = await run_with_timeout(
-            handlers.handle_pw_type('admin@example.com into "login"'),
+            handlers.handle_pw_type('admin into "login"'),
             timeout_seconds=10.0,
-            step_name="type email (fallback)"
+            step_name="type login (fallback)"
         )
     if not success:
         print(f"   ❌ Erro: {error}")
