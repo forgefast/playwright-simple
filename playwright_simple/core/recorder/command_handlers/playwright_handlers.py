@@ -499,8 +499,15 @@ class PlaywrightHandlers:
             print(f"❌ Failed to type into '{field}'")
     
     async def handle_pw_submit(self, args: str) -> None:
-        """Handle pw-submit command using unified function."""
+        """
+        Handle pw-submit command using unified function.
+        
+        IMPORTANT: Programmatic submit (CLI commands) should add step to YAML as 'submit' action,
+        not 'click'. This differentiates submit buttons from regular clicks.
+        """
         from ...playwright_commands.unified import unified_submit
+        from ..action_converter import ActionConverter
+        from ..element_identifier import ElementIdentifier
         
         page = self._get_page()
         if not page:
@@ -520,6 +527,76 @@ class PlaywrightHandlers:
         # Parse button text (optional)
         button_text = args.strip().strip('"\'') if args.strip() else None
         
+        # CRITICAL: Get element information BEFORE submitting
+        # This allows us to create YAML action directly
+        submit_element_info = None
+        try:
+            # Find the submit button and get its information
+            if button_text:
+                submit_element_info = await page.evaluate("""
+                    (buttonText) => {
+                        const textLower = buttonText.toLowerCase();
+                        // Find submit buttons
+                        const submitSelectors = ['input[type="submit"]', 'button[type="submit"]', 'button:not([type])'];
+                        for (const selector of submitSelectors) {
+                            const elements = Array.from(document.querySelectorAll(selector));
+                            for (const el of elements) {
+                                if (el.offsetParent === null || el.style.display === 'none') continue;
+                                const elText = (el.textContent || el.innerText || el.value || '').trim().toLowerCase();
+                                if (elText === textLower || elText.includes(textLower)) {
+                                    // Check if it's actually a submit button
+                                    const isSubmit = el.type === 'submit' || 
+                                                    (el.tagName?.toUpperCase() === 'BUTTON' && 
+                                                     (el.type === 'submit' || el.type === ''));
+                                    if (isSubmit) {
+                                        return {
+                                            tagName: el.tagName || '',
+                                            text: (el.textContent || el.innerText || el.value || '').trim(),
+                                            id: el.id || '',
+                                            className: el.className || '',
+                                            href: '',
+                                            type: el.type || 'submit',
+                                            name: el.name || '',
+                                            value: el.value || '',
+                                            role: el.getAttribute('role') || '',
+                                            ariaLabel: el.getAttribute('aria-label') || ''
+                                        };
+                                    }
+                                }
+                            }
+                        }
+                        return null;
+                    }
+                """, button_text)
+            else:
+                # Find first submit button if no text specified
+                submit_element_info = await page.evaluate("""
+                    () => {
+                        const submitSelectors = ['input[type="submit"]', 'button[type="submit"]'];
+                        for (const selector of submitSelectors) {
+                            const el = document.querySelector(selector);
+                            if (el && el.offsetParent !== null && el.style.display !== 'none') {
+                                return {
+                                    tagName: el.tagName || '',
+                                    text: (el.textContent || el.innerText || el.value || '').trim(),
+                                    id: el.id || '',
+                                    className: el.className || '',
+                                    href: '',
+                                    type: el.type || 'submit',
+                                    name: el.name || '',
+                                    value: el.value || '',
+                                    role: el.getAttribute('role') || '',
+                                    ariaLabel: el.getAttribute('aria-label') || ''
+                                };
+                            }
+                        }
+                        return null;
+                    }
+                """)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).debug(f"Error getting submit element info before submit: {e}")
+        
         # Use unified submit function
         success = await unified_submit(
             page=page,
@@ -533,6 +610,40 @@ class PlaywrightHandlers:
                 print(f"✅ Form submitted (button: '{button_text}')")
             else:
                 print("✅ Form submitted")
+            
+            # CRITICAL: Add submit action directly to YAML for programmatic submits
+            # This is the standard pattern - programmatic actions don't depend on event_capture
+            if submit_element_info and self.yaml_writer:
+                # Get action_converter from recorder if available
+                action_converter = None
+                if self._recorder:
+                    action_converter = getattr(self._recorder, 'action_converter', None)
+                
+                if action_converter:
+                    # Create event_data in the same format as event_capture
+                    # Mark as submit button explicitly
+                    submit_element_info['type'] = 'submit'  # Ensure it's marked as submit
+                    event_data = {
+                        'element': submit_element_info,
+                        'timestamp': None  # Not needed for programmatic actions
+                    }
+                    
+                    # Convert to YAML action (should create 'submit' action, not 'click')
+                    action = action_converter.convert_click(event_data)
+                    if action:
+                        # Ensure it's a submit action, not click
+                        if action.get('action') != 'submit':
+                            # Force it to be submit if it's a submit button
+                            action['action'] = 'submit'
+                            action['description'] = f"Submeter formulário: {action.get('description', '')}"
+                        self.yaml_writer.add_step(action)
+                        print(f"📝 Submit: {action.get('description', '')}")
+                    else:
+                        import logging
+                        logging.getLogger(__name__).warning(f"Failed to convert programmatic submit to action: {submit_element_info}")
+                else:
+                    import logging
+                    logging.getLogger(__name__).warning("ActionConverter not available for programmatic submit")
         else:
             if button_text:
                 print(f"❌ Failed to submit form (button: '{button_text}' not found)")

@@ -69,7 +69,16 @@ class ActionConverter:
             text = element_info.get('text', '').strip()
             href = element_info.get('href', '')
             if text:
-                description = f"Clicar em '{text}'"
+                # For links, add context to differentiate from buttons
+                if is_link:
+                    # Check if link is in header/nav (common pattern)
+                    className = element_info.get('className', '').lower()
+                    if 'header' in className or 'nav' in className or 'menu' in className:
+                        description = f"Clicar em '{text}' (link no header)"
+                    else:
+                        description = f"Clicar em '{text}' (link)"
+                else:
+                    description = f"Clicar em '{text}'"
             elif href:
                 description = f"Clicar em link ({href})"
             else:
