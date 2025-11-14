@@ -286,15 +286,16 @@ async def test_odoo_login():
                     print("   ⚠️  Continuando mesmo sem aguardar completamente")
             
             # Adicionar passo estático ao YAML (modelagem, não execução)
+            # O delay será aplicado durante a reprodução, não durante a gravação
             print("   ⏸️  Adicionando passo estático ao YAML...")
             static_step = {
                 'action': 'wait',
-                'seconds': 0.1 if recorder.fast_mode else 2.0,  # Muito rápido em fast mode
                 'description': 'Passo estático (feedback visual)',
                 'static': True
+                # Não especificar 'seconds' - será determinado durante a reprodução
             }
             recorder.yaml_writer.add_step(static_step)
-            print(f"   ✅ Passo estático adicionado ({static_step['seconds']}s)")
+            print("   ✅ Passo estático adicionado (delay será aplicado na reprodução)")
     except Exception as e:
         print(f"   ⚠️  Erro aguardando próxima tela: {e}")
         # Wait a bit anyway
