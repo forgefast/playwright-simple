@@ -29,14 +29,18 @@ class ActionConverter:
         All clicks are converted to 'click' action, never 'go_to'.
         Submit buttons are converted to 'submit' action.
         
+        IMPORTANT: This should ALWAYS return an action if element_info exists.
+        If element_info is missing, return None (event is invalid).
+        
         Args:
             event_data: Click event data
             
         Returns:
-            YAML action dictionary or None
+            YAML action dictionary or None (only if element_info is missing)
         """
         element_info = event_data.get('element', {})
         if not element_info:
+            logger.warning("convert_click: No element_info in event_data")
             return None
         
         # Check if this is a submit button
@@ -57,6 +61,20 @@ class ActionConverter:
         # Identify element
         identification = ElementIdentifier.identify(element_info)
         
+        # Ensure we always have a valid description
+        if not identification.get('description'):
+            # Fallback description if identification failed
+            tag_name = element_info.get('tagName', 'element').lower()
+            text = element_info.get('text', '').strip()
+            href = element_info.get('href', '')
+            if text:
+                description = f"Clicar em '{text}'"
+            elif href:
+                description = f"Clicar em link ({href})"
+            else:
+                description = f"Clicar em {tag_name}"
+            identification['description'] = description
+        
         if is_submit_button:
             # Convert to submit action
             action = {
@@ -64,10 +82,11 @@ class ActionConverter:
                 'description': f"Submeter formulário: {identification['description']}"
             }
             
-            if identification['text']:
+            if identification.get('text'):
                 action['button_text'] = identification['text']
-            elif identification['selector']:
+            elif identification.get('selector'):
                 action['selector'] = identification['selector']
+            # If no text or selector, still create action (description is enough)
         else:
             # Convert to click action
             action = {
@@ -75,11 +94,19 @@ class ActionConverter:
                 'description': identification['description']
             }
             
-            if identification['text']:
+            if identification.get('text'):
                 action['text'] = identification['text']
-            elif identification['selector']:
+            elif identification.get('selector'):
                 action['selector'] = identification['selector']
+            # If no text or selector, still create action (description is enough)
+            # For links, try to use href as fallback
+            if not action.get('text') and not action.get('selector'):
+                href = element_info.get('href', '')
+                if href:
+                    action['selector'] = f"a[href='{href}']"
         
+        # ALWAYS return an action if we got here (element_info exists)
+        logger.debug(f"convert_click: Created action - {action.get('action')}: {action.get('description')}")
         return action
     
     def convert_input(self, event_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:

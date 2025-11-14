@@ -47,13 +47,19 @@ class EventHandlers:
             return
         
         logger.debug(f"Processing click event: {event_data}")
-        action = self.action_converter.convert_click(event_data)
-        if action:
-            self.yaml_writer.add_step(action)
-            logger.info(f"Added click step: {action.get('description', '')}")
-            print(f"📝 Click: {action.get('description', '')}")
-        else:
-            logger.warning(f"Click event not converted to action: {event_data}")
+        try:
+            action = self.action_converter.convert_click(event_data)
+            if action:
+                # CRITICAL: Add step immediately, before any navigation can happen
+                self.yaml_writer.add_step(action)
+                logger.info(f"Added click step: {action.get('description', '')}")
+                print(f"📝 Click: {action.get('description', '')}")
+            else:
+                logger.error(f"❌ Click event not converted to action! Event data: {event_data}")
+                print(f"❌ ERRO: Click não foi convertido em ação! {event_data.get('element', {}).get('tagName', 'unknown')}")
+        except Exception as e:
+            logger.error(f"Error handling click event: {e}", exc_info=True)
+            print(f"❌ ERRO ao processar click: {e}")
     
     def handle_input(self, event_data: dict) -> None:
         """Handle input event - accumulates, doesn't save yet."""
