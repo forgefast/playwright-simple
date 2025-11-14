@@ -651,39 +651,44 @@ class ElementInteractions:
                 # CRITICAL: Always click on field before typing (even in fast_mode)
                 # This ensures the click is captured in YAML and matches real user behavior
                 # Click must happen BEFORE typing to be captured correctly
+                # ALWAYS use visual feedback when available (even in fast_mode) for better UX
                 clicked = False
-                if element_coords:
-                    # Click on element to focus (this will be captured by event_capture)
-                    logger.info(f"Clicking on field before typing at ({element_coords['x']}, {element_coords['y']})")
-                    await self.page.mouse.click(element_coords['x'], element_coords['y'])
+                coords_to_use = element_coords
+                
+                # Get coordinates if not available
+                if not coords_to_use:
+                    try:
+                        box = await element.bounding_box()
+                        if box:
+                            coords_to_use = {
+                                'x': int(box['x'] + box['width'] / 2),
+                                'y': int(box['y'] + box['height'] / 2)
+                            }
+                    except Exception as e:
+                        logger.debug(f"Error getting bounding_box: {e}")
+                
+                if coords_to_use:
+                    # Use visual feedback to move cursor and show click animation (even in fast_mode)
+                    if visual_feedback and cursor_controller:
+                        logger.debug(f"Using visual feedback to click at ({coords_to_use['x']}, {coords_to_use['y']})")
+                        await visual_feedback.show_click_feedback(
+                            coords_to_use['x'],
+                            coords_to_use['y'],
+                            cursor_controller
+                        )
+                    else:
+                        # Fallback: direct mouse click without animation
+                        logger.debug(f"Clicking directly at ({coords_to_use['x']}, {coords_to_use['y']}) [no visual feedback]")
+                        await self.page.mouse.click(coords_to_use['x'], coords_to_use['y'])
                     clicked = True
                     # Small delay to allow click event to be captured
                     await asyncio.sleep(0.1)
                 else:
-                    # Fallback: try to get coordinates from element
-                    try:
-                        box = await element.bounding_box()
-                        if box:
-                            coords = {
-                                'x': int(box['x'] + box['width'] / 2),
-                                'y': int(box['y'] + box['height'] / 2)
-                            }
-                            logger.info(f"Clicking on field before typing at ({coords['x']}, {coords['y']}) [from bounding_box]")
-                            await self.page.mouse.click(coords['x'], coords['y'])
-                            clicked = True
-                            await asyncio.sleep(0.1)
-                        else:
-                            # Last resort: use element.click() which also triggers click event
-                            logger.info(f"Clicking on field using element.click() [fallback - no bounding_box]")
-                            await element.click()
-                            clicked = True
-                            await asyncio.sleep(0.1)
-                    except Exception as e:
-                        # Last resort: use element.click()
-                        logger.warning(f"Error getting bounding_box, using element.click(): {e}")
-                        await element.click()
-                        clicked = True
-                        await asyncio.sleep(0.1)
+                    # Last resort: use element.click() which also triggers click event
+                    logger.info(f"Clicking on field using element.click() [fallback - no coordinates]")
+                    await element.click()
+                    clicked = True
+                    await asyncio.sleep(0.1)
                 
                 if not clicked:
                     logger.error("CRITICAL: Click was not executed before typing! This should never happen.")
