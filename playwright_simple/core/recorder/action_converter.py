@@ -46,8 +46,8 @@ class ActionConverter:
             logger.warning("convert_click: No element_info in event_data")
             return None
         
-        # Filter duplicate clicks on the same element within 300ms
-        # This prevents capturing clicks on labels and then on the input field
+        # Filter duplicate clicks on the same element within 200ms
+        # This prevents capturing rapid duplicate clicks, but allows clicks on different elements
         element_id = element_info.get('id', '')
         element_name = element_info.get('name', '')
         element_tag = element_info.get('tagName', '').upper()
@@ -60,8 +60,9 @@ class ActionConverter:
             last_timestamp = self._last_click.get('timestamp', 0)
             time_diff = timestamp - last_timestamp
             
-            # Filter if same element clicked within 300ms
-            if last_key == element_key and time_diff < 300:
+            # Filter if same element clicked within 200ms (reduced from 300ms)
+            # This allows clicks on labels and then on fields (they're different elements)
+            if last_key == element_key and time_diff < 200:
                 logger.debug(f"Filtering duplicate click on {element_key} within {time_diff}ms")
                 return None  # Ignore duplicate click
         
