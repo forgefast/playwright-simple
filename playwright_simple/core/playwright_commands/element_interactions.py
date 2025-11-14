@@ -299,8 +299,9 @@ class ElementInteractions:
                         if visual_feedback and cursor_controller:
                             await visual_feedback.show_click_feedback(x, y, cursor_controller)
                         
-                        logger.debug(f"[ELEMENT_INTERACTIONS] Executando click em ({x}, {y})...")
-                        await self.page.mouse.click(x, y)
+                        logger.debug(f"[ELEMENT_INTERACTIONS] Executando click via element.click() para disparar eventos DOM...")
+                        # Use element.click() to dispatch DOM events that event_capture can catch
+                        await element.click()
                         logger.debug(f"[ELEMENT_INTERACTIONS] Click executado com sucesso!")
                     else:
                         logger.debug(f"[ELEMENT_INTERACTIONS] Sem bounding box, usando element.click()")
@@ -322,10 +323,9 @@ class ElementInteractions:
                         # Show visual feedback
                         if visual_feedback and cursor_controller:
                             await visual_feedback.show_click_feedback(x, y, cursor_controller)
-                        
-                        await self.page.mouse.click(x, y)
-                    else:
-                        await element.click()
+                    
+                    # Use element.click() to dispatch DOM events that event_capture can catch
+                    await element.click()
                     return True
                 return False
             
