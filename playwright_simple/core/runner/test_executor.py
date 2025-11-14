@@ -310,10 +310,15 @@ class TestExecutor:
                 initial_x = int(position.get('x'))
                 initial_y = int(position.get('y'))
                 logger.info(f"Restoring cursor position from storage: ({initial_x}, {initial_y})")
+                # Move cursor visual first
                 await test.cursor_manager.move_to(initial_x, initial_y)
+                # Then sync Playwright mouse position to match cursor visual
+                await page.mouse.move(initial_x, initial_y)
             else:
                 # Move cursor to center of screen to ensure it's visible
                 await test.cursor_manager.move_to(center_x, center_y)
+                # Sync Playwright mouse position
+                await page.mouse.move(center_x, center_y)
             
             # Set up navigation listener to restore cursor position after navigation
             async def on_navigation(frame):
@@ -352,10 +357,28 @@ class TestExecutor:
                         # Re-inject cursor and restore position
                         await test.cursor_manager.inject(force=True)
                         await test.cursor_manager.move_to(x, y)
+                        # Sync Playwright mouse position to match cursor visual
+                        await page.mouse.move(x, y)
                         logger.info(f"Cursor restored after navigation: ({x}, {y})")
                     else:
                         # No saved position, re-inject cursor (will use last position from move_to)
                         await test.cursor_manager.inject(force=True)
+                        # Try to get current cursor position and sync mouse
+                        try:
+                            current_pos = await page.evaluate("""
+                                () => {
+                                    const cursor = document.getElementById('__playwright_cursor');
+                                    if (cursor) {
+                                        const rect = cursor.getBoundingClientRect();
+                                        return {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2};
+                                    }
+                                    return null;
+                                }
+                            """)
+                            if current_pos:
+                                await page.mouse.move(int(current_pos['x']), int(current_pos['y']))
+                        except:
+                            pass
                 except Exception as e:
                     logger.warning(f"Error restoring cursor after navigation: {e}")
                     # Try to restore anyway

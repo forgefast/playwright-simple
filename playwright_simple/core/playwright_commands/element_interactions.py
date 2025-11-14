@@ -222,6 +222,10 @@ class ElementInteractions:
                     # Show visual feedback
                     if visual_feedback and cursor_controller:
                         await visual_feedback.show_click_feedback(x, y, cursor_controller)
+                        # After visual feedback moves cursor, sync Playwright mouse position
+                        # This ensures the actual click happens where the cursor visual is
+                        await self.page.mouse.move(x, y)
+                        await asyncio.sleep(0.05)  # Small delay to ensure mouse is positioned
                     
                     # Try to find element via Playwright and click it directly (dispatches DOM events that event_capture can catch)
                     # This is more reliable than JavaScript element.click() inside page.evaluate()
@@ -676,6 +680,11 @@ class ElementInteractions:
                             coords_to_use['y'],
                             cursor_controller
                         )
+                        # After visual feedback moves cursor, sync Playwright mouse position
+                        # This ensures the actual click happens where the cursor visual is
+                        await self.page.mouse.move(coords_to_use['x'], coords_to_use['y'])
+                        await asyncio.sleep(0.05)  # Small delay to ensure mouse is positioned
+                        await self.page.mouse.click(coords_to_use['x'], coords_to_use['y'])
                     else:
                         # Fallback: direct mouse click without animation
                         logger.warning(f"⚠️  Clicking directly at ({coords_to_use['x']}, {coords_to_use['y']}) [no visual feedback - visual_feedback={visual_feedback is not None}, cursor_controller={cursor_controller is not None}]")
