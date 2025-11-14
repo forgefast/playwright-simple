@@ -338,20 +338,25 @@ Este documento contém o plano completo de implementação do playwright-simple,
 - [x] Comandos CLI: `find`, `click`, `type`, `wait`, `info`, `html`
 - [x] Integração com `Recorder` ativo
 - [x] `PlaywrightCommands` interface criada (incluindo `get_html()`)
+- [x] Feedback visual do cursor durante cliques (movimento + efeito visual)
 - [x] Documentação completa (`CLI_COMMANDS.md`, `PLAYWRIGHT_COMMANDS.md`)
 - [x] Melhorias na captura de cliques (links sempre capturados)
 
 ### Entregáveis
 - ✅ Comandos CLI funcionando durante gravação
 - ✅ Interface `PlaywrightCommands` para uso programático
+- ✅ Feedback visual do cursor (movimento + efeito de clique)
 - ✅ Documentação completa
 - ✅ Sistema IPC funcionando
+- ✅ Testes E2E (Odoo e feedback visual)
 
 ### Checklist de Qualidade
 - [x] Comandos CLI testados
 - [x] Comunicação IPC funcionando
+- [x] Feedback visual do cursor funcionando
 - [x] Documentação completa
 - [x] Captura de cliques melhorada
+- [x] Testes E2E passando
 
 ---
 
