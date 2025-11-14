@@ -54,6 +54,11 @@ async def replay_yaml(yaml_path: Path):
     
     # Executar teste (browser será criado automaticamente se não fornecido)
     print(f"▶️  Executando teste...")
+    print(f"💡 Comandos CLI disponíveis durante execução:")
+    print(f"   playwright-simple find \"texto\" - encontrar elemento")
+    print(f"   playwright-simple info - informações da página")
+    print(f"   playwright-simple html --max-length 500 - HTML da página")
+    print(f"   playwright-simple screenshot - capturar tela")
     logger.debug("Iniciando execução do teste...")
     try:
         result = await runner.run_test(test_name, test_func)

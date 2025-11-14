@@ -226,6 +226,63 @@ class ActionMapper:
         if not hasattr(test, '_playwright_commands_cache'):
             test._playwright_commands_cache = {}
         
+        # Debug: Check if element exists before clicking
+        logger.debug(f"[ACTION] Verificando se elemento existe antes do click...")
+        element_found = False
+        try:
+            if parsed['text']:
+                # Try to find element by text
+                result = await test.page.evaluate("""
+                    (text) => {
+                        const textLower = text.toLowerCase();
+                        const elements = Array.from(document.querySelectorAll('*'));
+                        for (const el of elements) {
+                            if (el.offsetParent === null) continue;
+                            const elText = (el.textContent || el.innerText || '').trim().toLowerCase();
+                            if (elText.includes(textLower)) {
+                                const rect = el.getBoundingClientRect();
+                                return {
+                                    found: true,
+                                    tag: el.tagName,
+                                    text: elText.substring(0, 50),
+                                    visible: rect.width > 0 && rect.height > 0,
+                                    x: rect.left,
+                                    y: rect.top
+                                };
+                            }
+                        }
+                        return {found: false};
+                    }
+                """, parsed['text'])
+                element_found = result.get('found', False)
+                if element_found:
+                    logger.debug(f"[ACTION] Elemento encontrado: {result}")
+                    print(f"✅ [DIAGNÓSTICO] Elemento '{parsed['text']}' encontrado: {result.get('tag')} - visível={result.get('visible')}")
+                else:
+                    logger.warning(f"[ACTION] Elemento '{parsed['text']}' NÃO encontrado na página")
+                    print(f"⚠️  [DIAGNÓSTICO] Elemento '{parsed['text']}' NÃO encontrado na página")
+                    print(f"💡 [DIAGNÓSTICO] Use comandos CLI para investigar:")
+                    print(f"   playwright-simple find \"{parsed['text']}\"")
+                    print(f"   playwright-simple info")
+                    print(f"   playwright-simple html --max-length 500")
+            elif parsed['selector']:
+                # Try to find element by selector
+                try:
+                    element = await test.page.query_selector(parsed['selector'])
+                    if element:
+                        box = await element.bounding_box()
+                        element_found = True
+                        logger.debug(f"[ACTION] Elemento encontrado por selector: {parsed['selector']}, box={box}")
+                        print(f"✅ [DIAGNÓSTICO] Elemento '{parsed['selector']}' encontrado: visível={box is not None}")
+                    else:
+                        logger.warning(f"[ACTION] Elemento '{parsed['selector']}' NÃO encontrado na página")
+                        print(f"⚠️  [DIAGNÓSTICO] Elemento '{parsed['selector']}' NÃO encontrado na página")
+                except Exception as e:
+                    logger.warning(f"[ACTION] Erro ao buscar elemento por selector: {e}")
+                    print(f"⚠️  [DIAGNÓSTICO] Erro ao buscar '{parsed['selector']}': {e}")
+        except Exception as e:
+            logger.debug(f"[ACTION] Erro no diagnóstico: {e}")
+        
         # Use unified click function
         success = await unified_click(
             page=test.page,
@@ -243,6 +300,9 @@ class ActionMapper:
         if not success:
             error_msg = f"Failed to click: {description or text or selector}"
             logger.error(f"[ACTION] {error_msg}")
+            print(f"❌ [DIAGNÓSTICO] Falha no click. Use comandos CLI para investigar:")
+            print(f"   playwright-simple find \"{text or selector}\"")
+            print(f"   playwright-simple info")
             raise Exception(error_msg)
     
     @staticmethod
