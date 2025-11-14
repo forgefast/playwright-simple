@@ -652,46 +652,78 @@ class ElementInteractions:
                     logger.warning(f"Element not found by selector '{selector}'")
             
             if element:
-                # CRITICAL: Always click on field before typing (even in fast_mode)
-                # This ensures the click is captured in YAML and matches real user behavior
-                # Click must happen BEFORE typing to be captured correctly
-                # ALWAYS use visual feedback when available (even in fast_mode) for better UX
-                clicked = False
-                coords_to_use = element_coords
+                # Check if element is already focused before clicking
+                # This prevents unnecessary clicks when field is already focused
+                is_focused = await element.evaluate("""
+                    (el) => {
+                        return document.activeElement === el;
+                    }
+                """)
                 
-                # Get coordinates if not available
-                if not coords_to_use:
-                    try:
-                        box = await element.bounding_box()
-                        if box:
-                            coords_to_use = {
-                                'x': int(box['x'] + box['width'] / 2),
-                                'y': int(box['y'] + box['height'] / 2)
-                            }
-                    except Exception as e:
-                        logger.debug(f"Error getting bounding_box: {e}")
-                
-                if coords_to_use:
-                    # Use visual feedback to move cursor and show click animation (even in fast_mode)
-                    if visual_feedback and cursor_controller:
-                        logger.info(f"🎯 Using visual feedback to click at ({coords_to_use['x']}, {coords_to_use['y']})")
-                        await visual_feedback.show_click_feedback(
-                            coords_to_use['x'],
-                            coords_to_use['y'],
-                            cursor_controller
-                        )
-                        # After visual feedback moves cursor, sync Playwright mouse position
-                        # This ensures the actual click happens where the cursor visual is
-                        await self.page.mouse.move(coords_to_use['x'], coords_to_use['y'])
-                        await asyncio.sleep(0.05)  # Small delay to ensure mouse is positioned
-                        await self.page.mouse.click(coords_to_use['x'], coords_to_use['y'])
+                # Only click if element is not already focused
+                # This prevents duplicate clicks when clicking on label already focused the field
+                if not is_focused:
+                    # CRITICAL: Click on field before typing (even in fast_mode)
+                    # This ensures the click is captured in YAML and matches real user behavior
+                    # Click must happen BEFORE typing to be captured correctly
+                    # ALWAYS use visual feedback when available (even in fast_mode) for better UX
+                    clicked = False
+                    coords_to_use = element_coords
+                    
+                    # Get coordinates if not available
+                    if not coords_to_use:
+                        try:
+                            box = await element.bounding_box()
+                            if box:
+                                coords_to_use = {
+                                    'x': int(box['x'] + box['width'] / 2),
+                                    'y': int(box['y'] + box['height'] / 2)
+                                }
+                        except Exception as e:
+                            logger.debug(f"Error getting bounding_box: {e}")
+                    
+                    if coords_to_use:
+                        # Use visual feedback to move cursor and show click animation (even in fast_mode)
+                        if visual_feedback and cursor_controller:
+                            logger.info(f"🎯 Using visual feedback to click at ({coords_to_use['x']}, {coords_to_use['y']})")
+                            await visual_feedback.show_click_feedback(
+                                coords_to_use['x'],
+                                coords_to_use['y'],
+                                cursor_controller
+                            )
+                            # After visual feedback moves cursor, sync Playwright mouse position
+                            # This ensures the actual click happens where the cursor visual is
+                            await self.page.mouse.move(coords_to_use['x'], coords_to_use['y'])
+                            await asyncio.sleep(0.05)  # Small delay to ensure mouse is positioned
+                            await self.page.mouse.click(coords_to_use['x'], coords_to_use['y'])
+                        else:
+                            # Fallback: direct mouse click without animation
+                            logger.warning(f"⚠️  Clicking directly at ({coords_to_use['x']}, {coords_to_use['y']}) [no visual feedback - visual_feedback={visual_feedback is not None}, cursor_controller={cursor_controller is not None}]")
+                            await self.page.mouse.click(coords_to_use['x'], coords_to_use['y'])
+                        clicked = True
+                        # Small delay to allow click event to be captured
+                        await asyncio.sleep(0.1)
                     else:
-                        # Fallback: direct mouse click without animation
-                        logger.warning(f"⚠️  Clicking directly at ({coords_to_use['x']}, {coords_to_use['y']}) [no visual feedback - visual_feedback={visual_feedback is not None}, cursor_controller={cursor_controller is not None}]")
-                        await self.page.mouse.click(coords_to_use['x'], coords_to_use['y'])
-                    clicked = True
-                    # Small delay to allow click event to be captured
-                    await asyncio.sleep(0.1)
+                        # Last resort: use element.click() which also triggers click event
+                        logger.info(f"Clicking on field using element.click() [fallback - no coordinates]")
+                        await element.click()
+                        clicked = True
+                        await asyncio.sleep(0.1)
+                else:
+                    logger.debug("Element already focused, skipping click before typing")
+                    # Still move cursor to field position for visual consistency
+                    if visual_feedback and cursor_controller:
+                        try:
+                            box = await element.bounding_box()
+                            if box:
+                                coords = {
+                                    'x': int(box['x'] + box['width'] / 2),
+                                    'y': int(box['y'] + box['height'] / 2)
+                                }
+                                await cursor_controller.move_to(coords['x'], coords['y'])
+                                await self.page.mouse.move(coords['x'], coords['y'])
+                        except:
+                            pass
                 else:
                     # Last resort: use element.click() which also triggers click event
                     logger.info(f"Clicking on field using element.click() [fallback - no coordinates]")

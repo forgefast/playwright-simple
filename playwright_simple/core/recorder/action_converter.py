@@ -22,12 +22,15 @@ class ActionConverter:
         self.last_input_element = None
         self.pending_inputs: Dict[str, Dict[str, Any]] = {}  # Track pending inputs by element key
         self.initial_url = None  # Store initial URL
+        self._last_click = {}  # Track last click to filter duplicates
     
     def convert_click(self, event_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         Convert click event to YAML action.
         All clicks are converted to 'click' action, never 'go_to'.
         Submit buttons are converted to 'submit' action.
+        
+        Filters out duplicate clicks on the same element within a short time window.
         
         IMPORTANT: This should ALWAYS return an action if element_info exists.
         If element_info is missing, return None (event is invalid).
@@ -42,6 +45,31 @@ class ActionConverter:
         if not element_info:
             logger.warning("convert_click: No element_info in event_data")
             return None
+        
+        # Filter duplicate clicks on the same element within 300ms
+        # This prevents capturing clicks on labels and then on the input field
+        element_id = element_info.get('id', '')
+        element_name = element_info.get('name', '')
+        element_tag = element_info.get('tagName', '').upper()
+        element_key = f"{element_tag}:{element_id}:{element_name}"
+        timestamp = event_data.get('timestamp', 0)
+        
+        # Check if this is a duplicate click on the same element
+        if self._last_click:
+            last_key = self._last_click.get('key', '')
+            last_timestamp = self._last_click.get('timestamp', 0)
+            time_diff = timestamp - last_timestamp
+            
+            # Filter if same element clicked within 300ms
+            if last_key == element_key and time_diff < 300:
+                logger.debug(f"Filtering duplicate click on {element_key} within {time_diff}ms")
+                return None  # Ignore duplicate click
+        
+        # Store this click
+        self._last_click = {
+            'key': element_key,
+            'timestamp': timestamp
+        }
         
         # Check if this is a submit button
         element_type = element_info.get('type', '').lower()
