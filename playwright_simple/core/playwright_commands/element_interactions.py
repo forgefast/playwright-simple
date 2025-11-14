@@ -726,8 +726,9 @@ class ElementInteractions:
                             el.blur();
                         }
                     """)
-                    # Small additional delay to ensure blur event is captured
-                    await asyncio.sleep(0.05)
+                    # Increased delay to ensure blur event is captured and processed
+                    # This is critical for password fields and other inputs that might be followed by submit
+                    await asyncio.sleep(0.2)  # Increased from 0.05s to 0.2s for better reliability
                 else:
                     # Normal mode: click on field before typing (for better UX in videos)
                     if element_coords:

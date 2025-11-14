@@ -84,6 +84,9 @@ class EventHandlers:
         element_type = element_info.get('type', '')
         element_key = f"{element_id}:{element_name}:{element_type}"
         
+        # Log element info for debugging
+        logger.info(f"Blur event received for element: id={element_id}, name={element_name}, type={element_type}, key={element_key}")
+        
         action = self.action_converter.finalize_input(element_key)
         if action:
             self.yaml_writer.add_step(action)
@@ -92,6 +95,10 @@ class EventHandlers:
                 value_preview += '...'
             logger.info(f"Finalized input on blur: {action.get('description', '')} = '{value_preview}'")
             print(f"📝 Type: {action.get('description', '')} = '{value_preview}'")
+        else:
+            # Log if no action was created (no pending input found)
+            logger.warning(f"No pending input found for element_key={element_key}. Pending inputs: {list(self.action_converter.pending_inputs.keys())}")
+            print(f"⚠️  Blur recebido mas nenhum input pendente encontrado para {element_key}")
     
     def handle_navigation(self, event_data: dict) -> None:
         """Handle navigation event."""
