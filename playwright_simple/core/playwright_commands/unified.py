@@ -28,6 +28,7 @@ except ImportError:
 def get_playwright_commands(
     page: Page,
     fast_mode: bool = False,
+    enable_animations: bool = True,
     cache_key: Optional[Any] = None,
     cache: Optional[Dict[Any, PlaywrightCommands]] = None
 ) -> Optional['PlaywrightCommands']:

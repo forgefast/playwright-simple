@@ -17,9 +17,18 @@ logger = logging.getLogger(__name__)
 class VisualFeedback:
     """Handles visual feedback for interactions."""
     
-    def __init__(self, page: Page, fast_mode: bool = False):
-        """Initialize visual feedback."""
+    def __init__(self, page: Page, fast_mode: bool = False, enable_animations: bool = True):
+        """
+        Initialize visual feedback.
+        
+        Args:
+            page: Playwright Page instance
+            fast_mode: Enable fast mode (reduce delays, but animations can still be enabled)
+            enable_animations: Whether to show animations (default: True, even in fast_mode for recording)
+        """
         self.page = page
+        self.fast_mode = fast_mode
+        self.enable_animations = enable_animations
         self.fast_mode = fast_mode
     
     async def show_click_feedback(
@@ -40,15 +49,14 @@ class VisualFeedback:
             try:
                 await cursor_controller.show()
                 # Move cursor to position (this will save position automatically)
-                # In fast mode, use instant movement instead of smooth animation
-                await cursor_controller.move(x, y, smooth=not self.fast_mode)
+                # Use smooth animation if animations are enabled (even in fast_mode for recording)
+                await cursor_controller.move(x, y, smooth=self.enable_animations)
                 # Wait for cursor to reach position (only if smooth animation)
-                if not self.fast_mode:
+                if self.enable_animations:
                     await asyncio.sleep(0.3)  # Smooth animation takes ~0.3s
-                # No delay in fast mode - instant movement
                 
-                # Show click animation (skip in fast mode for speed)
-                if not self.fast_mode:
+                # Show click animation (if animations are enabled)
+                if self.enable_animations:
                     animation_duration = 300
                     await self.page.evaluate(f"""
                         () => {{

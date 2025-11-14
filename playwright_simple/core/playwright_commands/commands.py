@@ -18,20 +18,21 @@ from .visual_feedback import VisualFeedback
 class PlaywrightCommands:
     """Interface for direct Playwright commands."""
     
-    def __init__(self, page: Page, fast_mode: bool = False):
+    def __init__(self, page: Page, fast_mode: bool = False, enable_animations: bool = True):
         """
         Initialize Playwright commands interface.
         
         Args:
             page: Playwright Page instance
-            fast_mode: Enable fast mode (reduce delays, instant animations)
+            fast_mode: Enable fast mode (reduce delays, but animations can still be enabled)
+            enable_animations: Whether to show animations (default: True, even in fast_mode for recording)
         """
         self.page = page
         self.fast_mode = fast_mode
         self._element_finder = ElementFinder(page)
         self._element_interactions = ElementInteractions(page, fast_mode=fast_mode)
         self._page_operations = PageOperations(page)
-        self._visual_feedback = VisualFeedback(page, fast_mode=fast_mode)
+        self._visual_feedback = VisualFeedback(page, fast_mode=fast_mode, enable_animations=enable_animations)
     
     # Delegate to element finder
     async def find_element(self, *args, **kwargs):
