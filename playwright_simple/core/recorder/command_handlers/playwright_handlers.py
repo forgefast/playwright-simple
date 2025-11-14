@@ -6,7 +6,10 @@ Playwright Direct Handlers.
 Handles Playwright direct commands (find, click, type, submit, wait, info, html).
 """
 
+import logging
 from typing import Optional, Callable
+
+logger = logging.getLogger(__name__)
 
 # Try to import PlaywrightCommands
 try:
@@ -533,8 +536,51 @@ class PlaywrightHandlers:
                     }
                 """)
         except Exception as e:
-            import logging
-            logging.getLogger(__name__).debug(f"Error getting submit element info before submit: {e}")
+            logger.debug(f"Error getting submit element info before submit: {e}")
+        
+        # CRITICAL: Add submit step to YAML BEFORE submitting
+        # This ensures the step is captured even if event_capture misses the click
+        if submit_element_info and self.yaml_writer:
+            # Add isInForm information if not present
+            if 'isInForm' not in submit_element_info:
+                try:
+                    is_in_form = await page.evaluate("""
+                        (buttonText) => {
+                            const textLower = buttonText ? buttonText.toLowerCase() : '';
+                            const submitSelectors = ['input[type="submit"]', 'button[type="submit"]', 'button:not([type])'];
+                            for (const selector of submitSelectors) {
+                                const elements = Array.from(document.querySelectorAll(selector));
+                                for (const el of elements) {
+                                    if (el.offsetParent === null || el.style.display === 'none') continue;
+                                    const elText = (el.textContent || el.innerText || el.value || '').trim().toLowerCase();
+                                    if (!buttonText || elText === textLower || elText.includes(textLower)) {
+                                        let parent = el.parentElement;
+                                        while (parent && parent !== document.body) {
+                                            if (parent.tagName && parent.tagName.toUpperCase() === 'FORM') {
+                                                return true;
+                                            }
+                                            parent = parent.parentElement;
+                                        }
+                                        return false;
+                                    }
+                                }
+                            }
+                            return false;
+                        }
+                    """, button_text)
+                    submit_element_info['isInForm'] = is_in_form
+                except:
+                    submit_element_info['isInForm'] = False
+            
+            # Convert to action using ActionConverter
+            converter = ActionConverter()
+            event_data = {'element': submit_element_info}
+            action = converter.convert_click(event_data)
+            
+            if action and action.get('action') == 'submit':
+                self.yaml_writer.add_step(action)
+                logger.info(f"Added submit step: {action.get('description', '')}")
+                print(f"📝 Submit: {action.get('description', '')}")
         
         # Use unified submit function
         success = await unified_submit(
@@ -549,11 +595,6 @@ class PlaywrightHandlers:
                 print(f"✅ Form submitted (button: '{button_text}')")
             else:
                 print("✅ Form submitted")
-            
-            # UNIFIED YAML GENERATION: Let event_capture handle all YAML generation
-            # Programmatic submits trigger DOM events that event_capture will capture
-            # This ensures consistent YAML generation for both user and programmatic actions
-            # No need to add to YAML directly here - event_capture will do it
         else:
             if button_text:
                 print(f"❌ Failed to submit form (button: '{button_text}' not found)")
