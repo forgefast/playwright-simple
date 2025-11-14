@@ -1,0 +1,59 @@
+# Cursor Rules - Playwright Simple
+
+## Regras Universais (Aplicam-se a Todos os Projetos)
+
+### Antes de Fazer Mudanças
+- SEMPRE execute testes críticos antes de modificar código existente
+- SEMPRE use plan mode para mudanças complexas (>3 arquivos ou lógica complexa)
+- SEMPRE verifique imports após refatorações
+- NUNCA altere padrões estabelecidos sem aprovação explícita
+- SEMPRE teste localmente antes de commitar
+
+### Durante Desenvolvimento
+- Se você não entende completamente o código, PARE e pergunte
+- Se identificar dependências entre módulos, documente-as
+- Se encontrar código crítico, marque-o como tal
+- Se quebrar algo, reverta imediatamente
+
+### Validação
+- Testes críticos devem passar SEMPRE (< 10s)
+- Sintaxe Python deve estar correta SEMPRE
+- Imports devem funcionar SEMPRE
+- Linting básico deve passar (erros críticos bloqueiam)
+- Type checking básico deve passar (se configurado)
+
+### Commits
+- NUNCA commite se testes críticos falharem
+- NUNCA commite se houver erros de sintaxe
+- NUNCA commite se houver imports quebrados
+- SEMPRE execute validação completa antes de commitar
+
+## Regras Específicas do Projeto: playwright-simple
+
+### Áreas Críticas (NÃO ALTERAR SEM CUIDADO)
+- `playwright_simple/core/recorder/`: Sistema de gravação - alterações podem quebrar geração de YAML
+- `playwright_simple/core/yaml_actions.py`: Execução de ações YAML - alterações podem quebrar reprodução
+- `playwright_simple/core/playwright_commands/element_interactions/`: Interações com elementos - core do framework
+- Formato YAML: NUNCA alterar o padrão YAML sem aprovação explícita - usuários criam YAMLs manualmente
+
+### Padrões que Devem ser Mantidos
+- Formato YAML simples e legível (sem complexidade desnecessária)
+- Sempre clicar antes de digitar em campos
+- Sempre manter sincronização entre cursor visual e mouse do Playwright
+- Sempre preservar estado do cursor após navegação
+
+### Validações Específicas
+- Após mudanças em recorder: SEMPRE testar ciclo completo (geração + reprodução)
+- Após mudanças em yaml_actions: SEMPRE testar reprodução de YAML existente
+- Após mudanças em element_interactions: SEMPRE executar testes de integração
+
+## Níveis de Validação
+
+- **Mínimo**: Apenas testes críticos
+- **Médio**: Testes + sintaxe + imports + linting básico + type checking básico
+- **Máximo**: Tudo do médio + linting completo + type checking completo + testes de regressão completos
+
+## Áreas Críticas
+
+Definidas em docs/CRITICAL_AREAS.md do projeto
+

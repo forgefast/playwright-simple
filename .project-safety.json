@@ -1,0 +1,22 @@
+{
+  "validation_level": "medium",
+  "critical_tests": ["tests/test_critical_paths.py"],
+  "linting": {
+    "enabled": true,
+    "tool": "flake8",
+    "args": ["--select=E9,F63,F7,F82"]
+  },
+  "type_checking": {
+    "enabled": true,
+    "tool": "mypy",
+    "args": ["--no-error-summary"]
+  },
+  "project_specific_rules": [
+    "Nunca alterar formato YAML sem aprovação explícita - usuários criam YAMLs manualmente",
+    "Sempre testar ciclo completo (geração + reprodução) após mudanças em recorder",
+    "Sempre testar reprodução de YAML existente após mudanças em yaml_actions",
+    "Sempre executar testes de integração após mudanças em element_interactions",
+    "Áreas críticas: recorder/, yaml_actions.py, element_interactions/ - não alterar sem cuidado"
+  ]
+}
+
