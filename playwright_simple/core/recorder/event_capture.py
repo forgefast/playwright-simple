@@ -527,20 +527,8 @@ class EventCapture:
         self.page.on('load', on_load)
         self.page.on('domcontentloaded', on_dom_content_loaded)
         
-        # CRITICAL: Listen for custom link click events to trigger immediate processing
-        async def on_link_click_event(event_data):
-            """Handle custom link click event - process immediately."""
-            try:
-                # This event is dispatched from JavaScript when a link is clicked
-                # It signals that we need to process events immediately
-                logger.info("🔗 Link click event detected - processing events immediately")
-                # Trigger immediate event processing
-                await self._process_pending_events_immediately()
-            except Exception as e:
-                logger.debug(f"Error handling link click event: {e}")
-        
-        # Listen for the custom event via page evaluation
-        # We'll check for this in the polling loop
+        # Note: Link clicks are handled via preventDefault in the click listener
+        # The polling loop will detect hasLinkClick and process events immediately
         
         # Inject immediately if page is already loaded
         await inject_on_page()
