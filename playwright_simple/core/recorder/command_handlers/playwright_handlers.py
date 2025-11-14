@@ -276,8 +276,18 @@ class PlaywrightHandlers:
             print("     pw-click role button [0]")
     
     async def handle_pw_type(self, args: str) -> None:
-        """Handle pw-type command using unified function."""
-        from ...playwright_commands.unified import unified_type, parse_type_args
+        """
+        Handle pw-type command using unified function.
+        
+        IMPORTANT: Programmatic typing (CLI commands) should add steps to YAML:
+        1. Click on the field (to focus it, like a real user would)
+        2. Type the text
+        
+        This ensures the YAML reflects the actual user workflow.
+        """
+        from ...playwright_commands.unified import unified_type, unified_click, parse_type_args
+        from ..action_converter import ActionConverter
+        from ..element_identifier import ElementIdentifier
         
         page = self._get_page()
         if not page:
@@ -305,7 +315,141 @@ class PlaywrightHandlers:
             print(f"⚠️  No field specified. Use: pw-type \"text\" into \"field\"")
             return
         
-        # Use unified type function
+        # CRITICAL: Get element information BEFORE clicking/typing
+        # This allows us to create YAML actions directly
+        field_element_info = None
+        try:
+            # Find the input field and get its information
+            if parsed['selector']:
+                # Find by selector
+                field_element_info = await page.evaluate("""
+                    (selector) => {
+                        const el = document.querySelector(selector);
+                        if (!el) return null;
+                        return {
+                            tagName: el.tagName || '',
+                            text: (el.textContent || el.innerText || el.value || '').trim(),
+                            id: el.id || '',
+                            className: el.className || '',
+                            href: '',
+                            type: el.type || '',
+                            name: el.name || '',
+                            value: el.value || '',
+                            role: el.getAttribute('role') || '',
+                            ariaLabel: el.getAttribute('aria-label') || '',
+                            placeholder: el.placeholder || '',
+                            label: (el.labels && el.labels.length > 0) 
+                                ? (el.labels[0].textContent || '').trim() 
+                                : ''
+                        };
+                    }
+                """, parsed['selector'])
+            elif parsed['into']:
+                # Find by text (label, placeholder, name, id, etc.)
+                field_element_info = await page.evaluate("""
+                    (fieldText) => {
+                        const textLower = fieldText.toLowerCase();
+                        const inputs = Array.from(document.querySelectorAll('input, textarea'));
+                        
+                        for (const input of inputs) {
+                            if (input.offsetParent === null || input.style.display === 'none') continue;
+                            if (input.type === 'hidden') continue;
+                            
+                            // Check label
+                            const labels = input.labels || [];
+                            for (const label of labels) {
+                                const labelText = (label.textContent || '').trim().toLowerCase();
+                                if (labelText === textLower || labelText.includes(textLower)) {
+                                    return {
+                                        tagName: input.tagName || '',
+                                        text: (input.textContent || input.innerText || input.value || '').trim(),
+                                        id: input.id || '',
+                                        className: input.className || '',
+                                        href: '',
+                                        type: input.type || '',
+                                        name: input.name || '',
+                                        value: input.value || '',
+                                        role: input.getAttribute('role') || '',
+                                        ariaLabel: input.getAttribute('aria-label') || '',
+                                        placeholder: input.placeholder || '',
+                                        label: labelText
+                                    };
+                                }
+                            }
+                            
+                            // Check placeholder
+                            if (input.placeholder && input.placeholder.toLowerCase().includes(textLower)) {
+                                return {
+                                    tagName: input.tagName || '',
+                                    text: (input.textContent || input.innerText || input.value || '').trim(),
+                                    id: input.id || '',
+                                    className: input.className || '',
+                                    href: '',
+                                    type: input.type || '',
+                                    name: input.name || '',
+                                    value: input.value || '',
+                                    role: input.getAttribute('role') || '',
+                                    ariaLabel: input.getAttribute('aria-label') || '',
+                                    placeholder: input.placeholder || '',
+                                    label: ''
+                                };
+                            }
+                            
+                            // Check name/id
+                            if ((input.name && input.name.toLowerCase().includes(textLower)) ||
+                                (input.id && input.id.toLowerCase().includes(textLower))) {
+                                return {
+                                    tagName: input.tagName || '',
+                                    text: (input.textContent || input.innerText || input.value || '').trim(),
+                                    id: input.id || '',
+                                    className: input.className || '',
+                                    href: '',
+                                    type: input.type || '',
+                                    name: input.name || '',
+                                    value: input.value || '',
+                                    role: input.getAttribute('role') || '',
+                                    ariaLabel: input.getAttribute('aria-label') || '',
+                                    placeholder: input.placeholder || '',
+                                    label: ''
+                                };
+                            }
+                        }
+                        return null;
+                    }
+                """, parsed['into'])
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).debug(f"Error getting field element info before type: {e}")
+        
+        # STEP 1: Click on the field first (like a real user would)
+        # This focuses the field and ensures it's ready for typing
+        if field_element_info:
+            # Click on the field using unified_click
+            field_clicked = await unified_click(
+                page=page,
+                text=parsed['into'],
+                selector=parsed['selector'],
+                cursor_controller=cursor_controller,
+                fast_mode=fast_mode
+            )
+            
+            if field_clicked and self.yaml_writer:
+                # Add click step to YAML
+                action_converter = None
+                if self._recorder:
+                    action_converter = getattr(self._recorder, 'action_converter', None)
+                
+                if action_converter:
+                    event_data = {
+                        'element': field_element_info,
+                        'timestamp': None
+                    }
+                    click_action = action_converter.convert_click(event_data)
+                    if click_action:
+                        self.yaml_writer.add_step(click_action)
+                        print(f"📝 Click: {click_action.get('description', '')}")
+        
+        # STEP 2: Type the text
         success = await unified_type(
             page=page,
             text=parsed['text'],
@@ -318,6 +462,38 @@ class PlaywrightHandlers:
         if success:
             field = parsed['selector'] or parsed['into'] or 'field'
             print(f"✅ Typed '{parsed['text']}' into '{field}'")
+            
+            # STEP 3: Add type step to YAML
+            if field_element_info and self.yaml_writer:
+                action_converter = None
+                if self._recorder:
+                    action_converter = getattr(self._recorder, 'action_converter', None)
+                
+                if action_converter:
+                    # Create input event data (same format as event_capture)
+                    input_event_data = {
+                        'element': field_element_info,
+                        'value': parsed['text'],
+                        'timestamp': None
+                    }
+                    
+                    # Use convert_input to create the action
+                    # But we need to finalize it immediately since it's programmatic
+                    action_converter.convert_input(input_event_data)
+                    
+                    # Finalize the input immediately (don't wait for blur)
+                    element_id = field_element_info.get('id', '')
+                    element_name = field_element_info.get('name', '')
+                    element_type = field_element_info.get('type', '')
+                    element_key = f"{element_id}:{element_name}:{element_type}"
+                    
+                    type_action = action_converter.finalize_input(element_key)
+                    if type_action:
+                        self.yaml_writer.add_step(type_action)
+                        value_preview = type_action.get('text', '')[:50]
+                        if len(type_action.get('text', '')) > 50:
+                            value_preview += '...'
+                        print(f"📝 Type: {type_action.get('description', '')} = '{value_preview}'")
         else:
             field = parsed['selector'] or parsed['into'] or 'field'
             print(f"❌ Failed to type into '{field}'")
