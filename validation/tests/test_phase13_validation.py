@@ -263,4 +263,17 @@ class TestPhase13Documentation:
                 'commands' in content.lower()
             )
             assert has_content, "PLAYWRIGHT_COMMANDS.md não tem conteúdo relevante"
+    
+    def test_cursor_visual_feedback_exists(self):
+        """Verifica que teste de feedback visual do cursor existe."""
+        test_file = Path("tests/test_cursor_visual_feedback.py")
+        assert test_file.exists(), "test_cursor_visual_feedback.py não encontrado"
+    
+    def test_playwright_commands_click_has_cursor_controller(self):
+        """Verifica que PlaywrightCommands.click() aceita cursor_controller."""
+        from playwright_simple.core.playwright_commands import PlaywrightCommands
+        import inspect
+        
+        sig = inspect.signature(PlaywrightCommands.click)
+        assert 'cursor_controller' in sig.parameters, "click() não tem parâmetro cursor_controller"
 

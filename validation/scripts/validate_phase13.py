@@ -33,6 +33,7 @@ class Phase13Validator:
         self._validate_cli_commands()
         self._validate_recorder_integration()
         self._validate_link_capture()
+        self._validate_cursor_visual_feedback()
         self._validate_documentation()
         
         # Calcular métricas
@@ -220,6 +221,44 @@ class Phase13Validator:
         else:
             self.errors.append("event_capture.py não encontrado")
             print("  ❌ event_capture.py não encontrado")
+    
+    def _validate_cursor_visual_feedback(self):
+        """Valida feedback visual do cursor."""
+        print("\n👆 Verificando feedback visual do cursor...")
+        
+        # Verificar que PlaywrightCommands.click() aceita cursor_controller
+        try:
+            from playwright_simple.core.playwright_commands import PlaywrightCommands
+            import inspect
+            
+            sig = inspect.signature(PlaywrightCommands.click)
+            if 'cursor_controller' in sig.parameters:
+                print("  ✅ PlaywrightCommands.click() aceita cursor_controller")
+                self.metrics['cursor_controller_param'] = True
+            else:
+                self.errors.append("PlaywrightCommands.click() não tem parâmetro cursor_controller")
+                print("  ❌ PlaywrightCommands.click() não tem parâmetro cursor_controller")
+        except Exception as e:
+            self.errors.append(f"Erro verificando cursor_controller: {e}")
+            print(f"  ❌ Erro: {e}")
+        
+        # Verificar que teste existe
+        test_file = Path("tests/test_cursor_visual_feedback.py")
+        if test_file.exists():
+            print("  ✅ Teste de feedback visual existe")
+            self.metrics['cursor_test_exists'] = True
+        else:
+            self.warnings.append("test_cursor_visual_feedback.py não encontrado")
+            print("  ⚠️  test_cursor_visual_feedback.py não encontrado")
+        
+        # Verificar documentação
+        cursor_docs = Path("validation/phase13_cursor_visual_validation.md")
+        if cursor_docs.exists():
+            print("  ✅ Documentação de feedback visual existe")
+            self.metrics['cursor_docs'] = True
+        else:
+            self.warnings.append("phase13_cursor_visual_validation.md não encontrado")
+            print("  ⚠️  phase13_cursor_visual_validation.md não encontrado")
     
     def _validate_documentation(self):
         """Valida documentação."""
