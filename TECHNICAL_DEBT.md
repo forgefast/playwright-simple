@@ -108,14 +108,22 @@ O problema fundamental é que:
 - Processar eventos pendentes antes da navegação: O evento já foi perdido
 - Marcação de prioridade: Não ajuda se o contexto já foi destruído
 
-### Solução Implementada (Testando)
+### Solução Implementada ✅ RESOLVIDO
 
-**Opção 3: Usar `page.on('request')` para detectar navegação** ✅ IMPLEMENTADO
-- Intercepta requisições HTTP de tipo 'document' antes da navegação
-- Processa eventos pendentes IMEDIATAMENTE quando detecta requisição de navegação
-- Permite navegação continuar normalmente após processamento
+**Solução Final: Usar `page.expose_function()` para processamento imediato** ✅ IMPLEMENTADO E TESTADO
+- Expõe função Python (`__playwright_process_link_click`) para JavaScript chamar diretamente
+- Quando JavaScript detecta clique em link, chama função Python IMEDIATAMENTE
+- Processa evento ANTES da navegação, sem depender do polling assíncrono
+- Bypassa completamente o problema de timing
 
-**Status**: Implementado, aguardando teste do usuário
+**Status**: ✅ **RESOLVIDO** - Testado com sucesso. Clique em link "Entrar" foi capturado antes da navegação.
+
+**Logs de confirmação**:
+```
+🚨 Immediate link click processing triggered from JavaScript
+Added click step: Clicar em 'Entrar'
+📝 Click: Clicar em 'Entrar'
+```
 
 ### Outras Opções (Se a atual não funcionar)
 
