@@ -430,8 +430,10 @@ class ElementFinder:
             }
         """, {'labelText': label_text, 'labelTextLower': labelTextLower})
         
-        if element and await element.as_element():
-            return await element.as_element()
+        if element:
+            # evaluate_handle already returns an ElementHandle, not a JSHandle
+            # So we can use it directly without calling as_element()
+            return element
         return None
     
     async def find_submit_button(

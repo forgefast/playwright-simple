@@ -68,7 +68,12 @@ class TypeHandler:
                 result = await self.element_finder.find_input_by_label(into)
                 if result:
                     element_coords = {'x': result.get('x'), 'y': result.get('y')}
-                    element = await self.element_finder.get_input_element_handle(into)
+                    element_handle = await self.element_finder.get_input_element_handle(into)
+                    if element_handle:
+                        # element_handle is already an ElementHandle, no need to await
+                        element = element_handle
+                    else:
+                        element = None
             
             if selector and not element:
                 element = await self.page.query_selector(selector)
