@@ -1029,14 +1029,18 @@ class ElementInteractions:
             x = result.get('x')
             y = result.get('y')
             button_text_found = result.get('text', '')
+            logger.debug(f"[SUBMIT] Submit button found at ({x}, {y}), button_text='{button_text}', found_text='{button_text_found}'")
             
             # Show visual feedback
             if visual_feedback and cursor_controller:
+                logger.debug(f"[SUBMIT] Showing visual feedback at ({x}, {y})")
                 await visual_feedback.show_click_feedback(x, y, cursor_controller)
             
             # Use mouse click directly - this will trigger DOM events that event_capture can catch
             # The mouse.click() from Playwright triggers native browser events that are captured by event_capture
+            logger.debug(f"[CLICK] Executing mouse.click at ({x}, {y}) [submit form, button_text='{button_text}']")
             await self.page.mouse.click(x, y)
+            logger.debug(f"[CLICK] Mouse click completed at ({x}, {y}) [submit form]")
             
             # Small delay to ensure click event is captured (reduced in fast mode)
             await asyncio.sleep(0.05 if self.fast_mode else 0.15)
