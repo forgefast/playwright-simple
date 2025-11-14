@@ -236,10 +236,12 @@ class ActionConverter:
         }
         
         # Add selector if needed (for fallback)
+        # Use double quotes in selector to avoid YAML parsing issues
         if identification.get('selector'):
             action['selector'] = identification['selector']
         elif element_info.get('name'):
-            action['selector'] = f"[name='{element_info['name']}']"
+            # Use double quotes to avoid YAML parsing issues with single quotes
+            action['selector'] = f'[name="{element_info["name"]}"]'
         elif element_info.get('id'):
             action['selector'] = f"#{element_info['id']}"
         

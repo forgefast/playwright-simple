@@ -75,10 +75,11 @@ class ElementIdentifier:
             result['description'] = position_description or "Elemento"
         
         # Add fallback selector if needed (for debugging)
+        # Use double quotes to avoid YAML parsing issues
         if element_info.get('id'):
             result['selector'] = f"#{element_info['id']}"
         elif element_info.get('name'):
-            result['selector'] = f"[name='{element_info['name']}']"
+            result['selector'] = f'[name="{element_info["name"]}"]'
         
         return result
     
@@ -106,6 +107,9 @@ class ElementIdentifier:
         """Get label for input element."""
         label = element_info.get('label', '').strip()
         if label:
+            # Clean label: remove newlines, extra spaces, and normalize whitespace
+            # This prevents YAML parsing issues with multiline descriptions
+            label = ' '.join(label.split())
             return label
         return None
     
@@ -207,6 +211,7 @@ class ElementIdentifier:
         # Prefer label
         label = ElementIdentifier._get_label(element_info)
         if label:
+            # Label is already cleaned by _get_label, but ensure it's safe for YAML
             result['description'] = f"Campo '{label}'"
         # Then placeholder
         elif element_info.get('placeholder'):
