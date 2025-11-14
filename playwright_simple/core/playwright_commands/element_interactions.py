@@ -320,7 +320,7 @@ class ElementInteractions:
                         
                         // Strategy 4: Find by type for common field types
                         const typeMap = {
-                            'email': ['email', 'e-mail', 'correio', 'mail'],
+                            'email': ['email', 'e-mail', 'e-mail', 'correio', 'mail'],
                             'password': ['password', 'senha', 'pass', 'pwd'],
                             'login': ['login', 'username', 'user', 'usuário']
                         };
@@ -328,7 +328,8 @@ class ElementInteractions:
                         for (const input of inputs) {
                             const inputType = input.type || '';
                             for (const [type, keywords] of Object.entries(typeMap)) {
-                                if (inputType === type && keywords.some(k => labelTextLower.includes(k))) {
+                                // Check if input type matches AND label text contains any keyword
+                                if (inputType === type && keywords.some(k => labelTextLower.includes(k) || k.includes(labelTextLower))) {
                                     const rect = input.getBoundingClientRect();
                                     return {
                                         found: true,
@@ -336,6 +337,21 @@ class ElementInteractions:
                                         y: Math.floor(rect.top + rect.height / 2)
                                     };
                                 }
+                            }
+                        }
+                        
+                        // Strategy 5: Find by input order (first text input is usually email/login)
+                        // Only if searching for email/login and no other strategy worked
+                        if (labelTextLower.includes('email') || labelTextLower.includes('login') || labelTextLower.includes('mail')) {
+                            const textInputs = inputs.filter(inp => inp.type === 'text' || inp.type === 'email');
+                            if (textInputs.length > 0) {
+                                const firstTextInput = textInputs[0];
+                                const rect = firstTextInput.getBoundingClientRect();
+                                return {
+                                    found: true,
+                                    x: Math.floor(rect.left + rect.width / 2),
+                                    y: Math.floor(rect.top + rect.height / 2)
+                                };
                             }
                         }
                         
@@ -391,7 +407,7 @@ class ElementInteractions:
                             
                             // Strategy 4: Find by type
                             const typeMap = {
-                                'email': ['email', 'e-mail', 'correio', 'mail'],
+                                'email': ['email', 'e-mail', 'e-mail', 'correio', 'mail'],
                                 'password': ['password', 'senha', 'pass', 'pwd'],
                                 'login': ['login', 'username', 'user', 'usuário']
                             };
@@ -399,7 +415,38 @@ class ElementInteractions:
                             for (const input of inputs) {
                                 const inputType = input.type || '';
                                 for (const [type, keywords] of Object.entries(typeMap)) {
-                                    if (inputType === type && keywords.some(k => labelTextLower.includes(k))) {
+                                    // Check if input type matches AND label text contains any keyword
+                                    if (inputType === type && keywords.some(k => labelTextLower.includes(k) || k.includes(labelTextLower))) {
+                                        return input;
+                                    }
+                                }
+                            }
+                            
+                            // Strategy 5: Find by input order (first text input is usually email/login)
+                            // Only if searching for email/login and no other strategy worked
+                            if (labelTextLower.includes('email') || labelTextLower.includes('login') || labelTextLower.includes('mail')) {
+                                const textInputs = inputs.filter(inp => inp.type === 'text' || inp.type === 'email');
+                                if (textInputs.length > 0) {
+                                    return textInputs[0];
+                                }
+                            }
+                            
+                            // Strategy 6: Find by name/id if it matches common patterns
+                            for (const input of inputs) {
+                                const name = (input.name || '').toLowerCase();
+                                const id = (input.id || '').toLowerCase();
+                                
+                                // Common patterns: login, email, username, user
+                                if (labelTextLower.includes('email') || labelTextLower.includes('login') || labelTextLower.includes('mail')) {
+                                    if (name === 'login' || name === 'email' || name === 'username' || name === 'user' ||
+                                        id === 'login' || id === 'email' || id === 'username' || id === 'user') {
+                                        return input;
+                                    }
+                                }
+                                // Common patterns: password, pass, pwd
+                                if (labelTextLower.includes('password') || labelTextLower.includes('senha') || labelTextLower.includes('pass')) {
+                                    if (name === 'password' || name === 'pass' || name === 'pwd' ||
+                                        id === 'password' || id === 'pass' || id === 'pwd') {
                                         return input;
                                     }
                                 }
