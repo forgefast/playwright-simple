@@ -403,46 +403,41 @@ __all__ = ['CommandHandlers']
             print(f"❌ No elements found")
     
     async def handle_pw_click(self, args: str) -> None:
-        """Handle pw-click command - click using Playwright directly."""
-        if not PLAYWRIGHT_COMMANDS_AVAILABLE:
-            print("❌ Playwright commands not available")
-            return
+        """Handle pw-click command using unified function."""
+        from ..playwright_commands.unified import unified_click, parse_click_args
         
-        commands = self._get_playwright_commands()
-        if not commands:
+        page = self._get_page()
+        if not page:
             print("❌ Page not available")
             return
-        
-        # Get cursor controller if available
-        cursor_controller = self._get_cursor_controller()
         
         if not args:
             print("❌ Usage: pw-click \"text\" | pw-click selector \"#id\" | pw-click role button [index]")
             return
         
-        args = args.strip()
-        index = 0
+        # Get fast_mode from recorder if available
+        fast_mode = False
+        if hasattr(self, '_recorder') and self._recorder:
+            fast_mode = getattr(self._recorder, 'fast_mode', False)
         
-        # Check for index
-        if '[' in args and ']' in args:
-            try:
-                index_part = args[args.index('[')+1:args.index(']')]
-                index = int(index_part)
-                args = args[:args.index('[')].strip()
-            except:
-                pass
+        # Get cursor controller if available
+        cursor_controller = None
+        if self._get_cursor_controller:
+            cursor_controller = self._get_cursor_controller()
         
-        # Try to parse different formats
-        if args.startswith('selector '):
-            selector = args[9:].strip().strip('"\'')
-            success = await commands.click(selector=selector, cursor_controller=cursor_controller)
-        elif args.startswith('role '):
-            role = args[5:].strip().strip('"\'')
-            success = await commands.click(role=role, index=index, cursor_controller=cursor_controller)
-        else:
-            # Treat as text
-            text = args.strip('"\'')
-            success = await commands.click(text=text, index=index, cursor_controller=cursor_controller)
+        # Parse arguments using unified parser
+        parsed = parse_click_args(args)
+        
+        # Use unified click function
+        success = await unified_click(
+            page=page,
+            text=parsed['text'],
+            selector=parsed['selector'],
+            role=parsed['role'],
+            index=parsed['index'],
+            cursor_controller=cursor_controller,
+            fast_mode=fast_mode
+        )
         
         if success:
             print(f"✅ Clicked successfully")
@@ -454,66 +449,81 @@ __all__ = ['CommandHandlers']
             print("     pw-click role button [0]")
     
     async def handle_pw_type(self, args: str) -> None:
-        """Handle pw-type command - type using Playwright directly."""
-        if not PLAYWRIGHT_COMMANDS_AVAILABLE:
-            print("❌ Playwright commands not available")
-            return
+        """Handle pw-type command using unified function."""
+        from ..playwright_commands.unified import unified_type, parse_type_args
         
-        commands = self._get_playwright_commands()
-        if not commands:
+        page = self._get_page()
+        if not page:
             print("❌ Page not available")
             return
-        
-        # Get cursor controller if available
-        cursor_controller = self._get_cursor_controller()
         
         if not args:
             print("❌ Usage: pw-type \"text\" into \"field\" | pw-type \"text\" selector \"#id\"")
             return
         
-        args = args.strip()
+        # Get fast_mode from recorder if available
+        fast_mode = False
+        if hasattr(self, '_recorder') and self._recorder:
+            fast_mode = getattr(self._recorder, 'fast_mode', False)
         
-        # Check for "into" keyword
-        if ' into ' in args.lower():
-            parts = args.split(' into ', 1)
-            if len(parts) == 2:
-                text = parts[0].strip().strip('"\'')
-                field = parts[1].strip().strip('"\'')
-                
-                if field.startswith('selector '):
-                    selector = field[9:].strip().strip('"\'')
-                    success = await commands.type_text(text, selector=selector, cursor_controller=cursor_controller)
-                else:
-                    success = await commands.type_text(text, into=field, cursor_controller=cursor_controller)
-                
-                if success:
-                    print(f"✅ Typed '{text}' into '{field}'")
-                else:
-                    print(f"❌ Failed to type into '{field}'")
-                return
+        # Get cursor controller if available
+        cursor_controller = None
+        if self._get_cursor_controller:
+            cursor_controller = self._get_cursor_controller()
         
-        # No "into" - just type the text
-        text = args.strip('"\'')
-        print(f"⚠️  No field specified. Use: pw-type \"{text}\" into \"field\"")
-    
-    async def handle_pw_submit(self, args: str) -> None:
-        """Handle pw-submit command - submit form using Playwright."""
-        if not PLAYWRIGHT_COMMANDS_AVAILABLE:
-            print("❌ Playwright commands not available")
+        # Parse arguments using unified parser
+        parsed = parse_type_args(args)
+        
+        if not parsed['text']:
+            print(f"⚠️  No field specified. Use: pw-type \"text\" into \"field\"")
             return
         
-        commands = self._get_playwright_commands()
-        if not commands:
+        # Use unified type function
+        success = await unified_type(
+            page=page,
+            text=parsed['text'],
+            into=parsed['into'],
+            selector=parsed['selector'],
+            cursor_controller=cursor_controller,
+            fast_mode=fast_mode
+        )
+        
+        if success:
+            field = parsed['selector'] or parsed['into'] or 'field'
+            print(f"✅ Typed '{parsed['text']}' into '{field}'")
+        else:
+            field = parsed['selector'] or parsed['into'] or 'field'
+            print(f"❌ Failed to type into '{field}'")
+    
+    async def handle_pw_submit(self, args: str) -> None:
+        """Handle pw-submit command using unified function."""
+        from ..playwright_commands.unified import unified_submit
+        
+        page = self._get_page()
+        if not page:
             print("❌ Page not available")
             return
         
+        # Get fast_mode from recorder if available
+        fast_mode = False
+        if hasattr(self, '_recorder') and self._recorder:
+            fast_mode = getattr(self._recorder, 'fast_mode', False)
+        
         # Get cursor controller if available
-        cursor_controller = self._get_cursor_controller()
+        cursor_controller = None
+        if self._get_cursor_controller:
+            cursor_controller = self._get_cursor_controller()
         
         # Parse button text (optional)
         button_text = args.strip().strip('"\'') if args.strip() else None
         
-        success = await commands.submit_form(button_text=button_text, cursor_controller=cursor_controller)
+        # Use unified submit function
+        success = await unified_submit(
+            page=page,
+            button_text=button_text,
+            cursor_controller=cursor_controller,
+            fast_mode=fast_mode
+        )
         
         if success:
             if button_text:
