@@ -345,7 +345,10 @@ class ElementInteractions:
                     # Find element handle for typing (using same strategies)
                     labelTextLower = into.lower()
                     element = await self.page.evaluate_handle("""
-                        (labelText, labelTextLower) => {
+                        (args) => {
+                            const labelText = args.labelText;
+                            const labelTextLower = args.labelTextLower;
+                            
                             // Strategy 1: Find by label
                             const labels = Array.from(document.querySelectorAll('label'));
                             for (const label of labels) {
@@ -401,7 +404,7 @@ class ElementInteractions:
                             
                             return null;
                         }
-                    """, into, labelTextLower)
+                    """, {'labelText': into, 'labelTextLower': labelTextLower})
             
             if selector and not element:
                 element = await self.page.query_selector(selector)
