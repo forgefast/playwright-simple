@@ -6,10 +6,13 @@ Element management for cursor system.
 Contains methods for creating, removing, and managing cursor DOM elements.
 """
 
+import logging
 from typing import Dict, Any
 from playwright.async_api import Page
 
 from .config import CursorConfig
+
+logger = logging.getLogger(__name__)
 from .constants import (
     CURSOR_ELEMENT_ID,
     CLICK_EFFECT_ELEMENT_ID,
@@ -91,10 +94,30 @@ class CursorElements:
         center_x = viewport['width'] / 2
         center_y = viewport['height'] / 2
         
-        # Try to get current cursor position from previous page/frame
+        # Try to get saved cursor position from storage (for navigation persistence)
         # This helps maintain cursor position across navigations
-        current_pos = await self.page.evaluate(f"""
+        saved_pos = await self.page.evaluate(f"""
             (function() {{
+                // Try sessionStorage first (more reliable across navigations)
+                try {{
+                    const stored = sessionStorage.getItem('__playwright_cursor_last_position');
+                    if (stored) {{
+                        const pos = JSON.parse(stored);
+                        if (pos.x && pos.y) {{
+                            return {{x: pos.x, y: pos.y, exists: true, source: 'sessionStorage'}};
+                        }}
+                    }}
+                }} catch (e) {{
+                    // sessionStorage might not be available
+                }}
+                // Fallback to window property
+                if (window.__playwright_cursor_last_position) {{
+                    const pos = window.__playwright_cursor_last_position;
+                    if (pos.x && pos.y) {{
+                        return {{x: pos.x, y: pos.y, exists: true, source: 'window'}};
+                    }}
+                }}
+                // Try to get current cursor position from DOM
                 const CURSOR_ID = '{CURSOR_ELEMENT_ID}';
                 const cursor = document.getElementById(CURSOR_ID);
                 if (cursor) {{
@@ -103,16 +126,20 @@ class CursorElements:
                     const top = parseFloat(cursor.style.top) || rect.top;
                     // Only return if position is valid (not 0,0 or NaN)
                     if (!isNaN(left) && !isNaN(top) && left > 0 && top > 0) {{
-                        return {{x: left, y: top, exists: true}};
+                        return {{x: left, y: top, exists: true, source: 'dom'}};
                     }}
                 }}
                 return {{x: 0, y: 0, exists: false}};
             }})();
         """)
         
-        # Use current position if available, otherwise use center
-        initial_x = current_pos.get('x', center_x) if current_pos.get('exists') else center_x
-        initial_y = current_pos.get('y', center_y) if current_pos.get('exists') else center_y
+        # Use saved position if available, otherwise use center
+        if saved_pos.get('exists'):
+            initial_x = saved_pos.get('x', center_x)
+            initial_y = saved_pos.get('y', center_y)
+        else:
+            initial_x = center_x
+            initial_y = center_y
         
         cursor_style = CursorStyles.get_cursor_css(self.config)
         click_effect_style = CursorStyles.get_click_effect_css(self.config)

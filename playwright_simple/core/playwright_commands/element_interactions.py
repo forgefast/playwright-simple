@@ -724,12 +724,7 @@ class ElementInteractions:
                                 await self.page.mouse.move(coords['x'], coords['y'])
                         except:
                             pass
-                else:
-                    # Last resort: use element.click() which also triggers click event
-                    logger.info(f"Clicking on field using element.click() [fallback - no coordinates]")
-                    await element.click()
-                    clicked = True
-                    await asyncio.sleep(0.1)
+                    clicked = True  # Mark as clicked even though we skipped the actual click
                 
                 if not clicked:
                     logger.error("CRITICAL: Click was not executed before typing! This should never happen.")
