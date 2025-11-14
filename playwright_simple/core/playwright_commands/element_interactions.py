@@ -223,7 +223,62 @@ class ElementInteractions:
                     if visual_feedback and cursor_controller:
                         await visual_feedback.show_click_feedback(x, y, cursor_controller)
                     
-                    # Perform actual click
+                    # Try to click element directly (dispatches DOM events that event_capture can catch)
+                    # First, try to find element by selector or get it from the result
+                    element_clicked = await self.page.evaluate("""
+                        ({text, index}) => {
+                            const textLower = text.toLowerCase();
+                            const matches = [];
+                            
+                            // Same matching logic as before
+                            const submitSelectors = ['input[type="submit"]', 'button[type="submit"]', 'button:not([type])'];
+                            for (const selector of submitSelectors) {
+                                const elements = Array.from(document.querySelectorAll(selector));
+                                for (const el of elements) {
+                                    if (el.offsetParent === null || el.style.display === 'none') continue;
+                                    const directText = Array.from(el.childNodes)
+                                        .filter(node => node.nodeType === Node.TEXT_NODE)
+                                        .map(node => node.textContent.trim())
+                                        .join(' ').trim();
+                                    const elText = (directText || el.textContent || el.innerText || el.value || '').trim();
+                                    if (elText.toLowerCase() === textLower || elText.toLowerCase().includes(textLower)) {
+                                        matches.push({element: el, priority: el.closest('form') ? 10 : 5});
+                                    }
+                                }
+                            }
+                            
+                            const clickableSelectors = ['button', 'a', 'input[type="button"]', '[role="button"]', '[role="link"]'];
+                            for (const selector of clickableSelectors) {
+                                const elements = Array.from(document.querySelectorAll(selector));
+                                for (const el of elements) {
+                                    if (matches.some(m => m.element === el)) continue;
+                                    if (el.offsetParent === null || el.style.display === 'none') continue;
+                                    const directText = Array.from(el.childNodes)
+                                        .filter(node => node.nodeType === Node.TEXT_NODE)
+                                        .map(node => node.textContent.trim())
+                                        .join(' ').trim();
+                                    const elText = (directText || el.textContent || el.innerText || '').trim();
+                                    if (elText.toLowerCase() === textLower || elText.toLowerCase().includes(textLower)) {
+                                        matches.push({element: el, priority: 3});
+                                    }
+                                }
+                            }
+                            
+                            matches.sort((a, b) => b.priority - a.priority);
+                            if (matches.length > index && matches[index]) {
+                                const element = matches[index].element;
+                                // Click element directly - this dispatches DOM events that event_capture can catch
+                                element.click();
+                                return true;
+                            }
+                            return false;
+                        }
+                    """, {'text': text, 'index': index})
+                    
+                    if element_clicked:
+                        return True
+                    
+                    # Fallback: use mouse.click if element.click() didn't work
                     await self.page.mouse.click(x, y)
                     return True
                 return False
