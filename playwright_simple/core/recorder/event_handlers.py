@@ -46,6 +46,13 @@ class EventHandlers:
             logger.debug("Click ignored: not recording or paused")
             return
         
+        element_info = event_data.get('element', {})
+        element_tag = element_info.get('tagName', 'unknown')
+        element_id = element_info.get('id', '')
+        element_name = element_info.get('name', '')
+        element_text = element_info.get('text', '')[:50]
+        
+        logger.info(f"🖱️  [DEBUG] Click event received: tag={element_tag}, id={element_id}, name={element_name}, text='{element_text}'")
         logger.debug(f"Processing click event: {event_data}")
         try:
             action = self.action_converter.convert_click(event_data)
@@ -53,12 +60,15 @@ class EventHandlers:
                 # CRITICAL: Add step immediately, before any navigation can happen
                 self.yaml_writer.add_step(action)
                 logger.info(f"Added click step: {action.get('description', '')}")
+                logger.info(f"🖱️  [DEBUG] Click action added to YAML: {action.get('action')} - {action.get('description', '')}")
                 print(f"📝 Click: {action.get('description', '')}")
             else:
                 logger.error(f"❌ Click event not converted to action! Event data: {event_data}")
+                logger.error(f"🖱️  [DEBUG] Click conversion failed for: tag={element_tag}, id={element_id}, name={element_name}")
                 print(f"❌ ERRO: Click não foi convertido em ação! {event_data.get('element', {}).get('tagName', 'unknown')}")
         except Exception as e:
             logger.error(f"Error handling click event: {e}", exc_info=True)
+            logger.error(f"🖱️  [DEBUG] Exception in handle_click: {e}")
             print(f"❌ ERRO ao processar click: {e}")
     
     def handle_input(self, event_data: dict) -> None:
@@ -73,12 +83,14 @@ class EventHandlers:
         element_type = element_info.get('type', '')
         value = event_data.get('value', '')
         
+        logger.info(f"⌨️  [DEBUG] Input event received: id={element_id}, name={element_name}, type={element_type}, value='{value[:50]}...' (length={len(value)})")
         logger.info(f"Input event received: id={element_id}, name={element_name}, type={element_type}, value_length={len(value)}")
         logger.debug(f"Processing input event (accumulating): {event_data}")
         # convert_input now accumulates and returns None
         self.action_converter.convert_input(event_data)
         # Log pending inputs after accumulation
         element_key = f"{element_id}:{element_name}:{element_type}"
+        logger.info(f"⌨️  [DEBUG] Input accumulated for {element_key}. Pending inputs: {list(self.action_converter.pending_inputs.keys())}")
         logger.info(f"Input accumulated for {element_key}. Pending inputs: {list(self.action_converter.pending_inputs.keys())}")
         # Action will be created on blur or Enter
     
@@ -93,8 +105,10 @@ class EventHandlers:
         element_name = element_info.get('name', '')
         element_type = element_info.get('type', '')
         element_key = f"{element_id}:{element_name}:{element_type}"
+        value = event_data.get('value', '')
         
         # Log element info for debugging
+        logger.info(f"⌨️  [DEBUG] Blur event received: id={element_id}, name={element_name}, type={element_type}, key={element_key}, value='{value[:50]}...'")
         logger.info(f"Blur event received for element: id={element_id}, name={element_name}, type={element_type}, key={element_key}")
         
         action = self.action_converter.finalize_input(element_key)
@@ -103,10 +117,12 @@ class EventHandlers:
             value_preview = action.get('text', '')[:50]
             if len(action.get('text', '')) > 50:
                 value_preview += '...'
+            logger.info(f"⌨️  [DEBUG] Input finalized on blur: {action.get('description', '')} = '{value_preview}'")
             logger.info(f"Finalized input on blur: {action.get('description', '')} = '{value_preview}'")
             print(f"📝 Type: {action.get('description', '')} = '{value_preview}'")
         else:
             # Log if no action was created (no pending input found)
+            logger.warning(f"⌨️  [DEBUG] No pending input found for element_key={element_key}. Pending inputs: {list(self.action_converter.pending_inputs.keys())}")
             logger.warning(f"No pending input found for element_key={element_key}. Pending inputs: {list(self.action_converter.pending_inputs.keys())}")
             print(f"⚠️  Blur recebido mas nenhum input pendente encontrado para {element_key}")
     

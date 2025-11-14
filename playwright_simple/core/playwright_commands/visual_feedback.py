@@ -13,6 +13,9 @@ from playwright.async_api import Page
 
 logger = logging.getLogger(__name__)
 
+# Enable debug logging for cursor movements
+DEBUG_CURSOR_MOVEMENT = True
+
 
 class VisualFeedback:
     """Handles visual feedback for interactions."""
@@ -50,29 +53,43 @@ class VisualFeedback:
                 has_move = hasattr(cursor_controller, 'move')
                 has_move_to = hasattr(cursor_controller, 'move_to')
                 
+                if DEBUG_CURSOR_MOVEMENT:
+                    logger.info(f"🖱️  [DEBUG] Visual feedback: moving cursor to ({x}, {y})")
+                    logger.info(f"🖱️  [DEBUG] Cursor type: has_move={has_move}, has_move_to={has_move_to}, enable_animations={self.enable_animations}")
+                
                 logger.info(f"🎬 Visual feedback: moving cursor to ({x}, {y}) [has_move={has_move}, has_move_to={has_move_to}, enable_animations={self.enable_animations}]")
                 
                 if has_move:
                     # CursorController interface
+                    if DEBUG_CURSOR_MOVEMENT:
+                        logger.info(f"🖱️  [DEBUG] Using CursorController.move({x}, {y}, smooth={self.enable_animations})")
                     await cursor_controller.show()
                     # Move cursor to position (this will save position automatically)
                     # Use smooth animation if animations are enabled (even in fast_mode for recording)
                     await cursor_controller.move(x, y, smooth=self.enable_animations)
                     # Wait for cursor to reach position (only if smooth animation)
                     if self.enable_animations:
+                        if DEBUG_CURSOR_MOVEMENT:
+                            logger.info(f"🖱️  [DEBUG] Waiting for smooth animation to complete (0.3s)")
                         await asyncio.sleep(0.3)  # Smooth animation takes ~0.3s
                 elif has_move_to:
                     # CursorManager interface
                     # Move cursor to position with smooth animation
                     logger.info(f"🎬 Moving cursor using CursorManager.move_to({x}, {y})")
+                    if DEBUG_CURSOR_MOVEMENT:
+                        logger.info(f"🖱️  [DEBUG] Calling CursorManager.move_to({x}, {y})")
                     await cursor_controller.move_to(x, y)
                     # Wait for cursor to reach position (only if smooth animation)
                     if self.enable_animations:
+                        if DEBUG_CURSOR_MOVEMENT:
+                            logger.info(f"🖱️  [DEBUG] Waiting for smooth animation to complete (0.3s)")
                         await asyncio.sleep(0.3)  # Smooth animation takes ~0.3s
                     
                     # Use CursorManager's show_click_effect if available
                     if hasattr(cursor_controller, 'show_click_effect'):
                         logger.info(f"🎬 Showing click effect at ({x}, {y})")
+                        if DEBUG_CURSOR_MOVEMENT:
+                            logger.info(f"🖱️  [DEBUG] Showing click effect at ({x}, {y})")
                         await cursor_controller.show_click_effect(x, y)
                         if self.enable_animations:
                             await asyncio.sleep(0.1)  # Small delay for animation

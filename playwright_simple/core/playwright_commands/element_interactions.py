@@ -13,6 +13,11 @@ from playwright.async_api import Page
 
 logger = logging.getLogger(__name__)
 
+# Enable debug logging for this module
+DEBUG_CURSOR = True  # Set to False to disable cursor debug logs
+DEBUG_KEYBOARD = True  # Set to False to disable keyboard debug logs
+DEBUG_CLICKS = True  # Set to False to disable click debug logs
+
 
 class ElementInteractions:
     """Handles interactions with elements."""
@@ -47,6 +52,8 @@ class ElementInteractions:
         Returns:
             True if clicked successfully, False otherwise
         """
+        if DEBUG_CLICKS:
+            logger.info(f"🖱️  [DEBUG] click() called: text='{text}', selector='{selector}', role='{role}', description='{description}'")
         logger.debug(f"[ELEMENT_INTERACTIONS] click: text='{text}', selector='{selector}', role='{role}', description='{description}'")
         try:
             if text:
@@ -219,13 +226,25 @@ class ElementInteractions:
                     x = result.get('x')
                     y = result.get('y')
                     
+                    if DEBUG_CLICKS:
+                        logger.info(f"🖱️  [DEBUG] Element found at ({x}, {y}), preparing to click")
+                    
                     # Show visual feedback
                     if visual_feedback and cursor_controller:
+                        if DEBUG_CURSOR:
+                            logger.info(f"🖱️  [DEBUG] Showing visual feedback for click at ({x}, {y})")
                         await visual_feedback.show_click_feedback(x, y, cursor_controller)
                         # After visual feedback moves cursor, sync Playwright mouse position
                         # This ensures the actual click happens where the cursor visual is
+                        if DEBUG_CURSOR:
+                            logger.info(f"🖱️  [DEBUG] Syncing Playwright mouse to ({x}, {y})")
                         await self.page.mouse.move(x, y)
                         await asyncio.sleep(0.05)  # Small delay to ensure mouse is positioned
+                        if DEBUG_CLICKS:
+                            logger.info(f"🖱️  [DEBUG] Executing mouse.click at ({x}, {y})")
+                        await self.page.mouse.click(x, y)
+                        if DEBUG_CLICKS:
+                            logger.info(f"🖱️  [DEBUG] Mouse click completed at ({x}, {y})")
                     
                     # Try to find element via Playwright and click it directly (dispatches DOM events that event_capture can catch)
                     # This is more reliable than JavaScript element.click() inside page.evaluate()
@@ -668,13 +687,21 @@ class ElementInteractions:
                                 'x': int(box['x'] + box['width'] / 2),
                                 'y': int(box['y'] + box['height'] / 2)
                             }
+                            if DEBUG_CURSOR:
+                                logger.info(f"🖱️  [DEBUG] Got bounding_box for element: {coords_to_use}")
                     except Exception as e:
                         logger.debug(f"Error getting bounding_box: {e}")
                 
                 if coords_to_use:
+                    if DEBUG_CURSOR:
+                        logger.info(f"🖱️  [DEBUG] Preparing to click at ({coords_to_use['x']}, {coords_to_use['y']}) before typing")
+                        logger.info(f"🖱️  [DEBUG] visual_feedback={visual_feedback is not None}, cursor_controller={cursor_controller is not None}")
+                    
                     # Use visual feedback to move cursor and show click animation (even in fast_mode)
                     if visual_feedback and cursor_controller:
                         logger.info(f"🎯 Using visual feedback to click at ({coords_to_use['x']}, {coords_to_use['y']})")
+                        if DEBUG_CURSOR:
+                            logger.info(f"🖱️  [DEBUG] Moving cursor visual to ({coords_to_use['x']}, {coords_to_use['y']})")
                         await visual_feedback.show_click_feedback(
                             coords_to_use['x'],
                             coords_to_use['y'],
@@ -682,14 +709,22 @@ class ElementInteractions:
                         )
                         # After visual feedback moves cursor, sync Playwright mouse position
                         # This ensures the actual click happens where the cursor visual is
+                        if DEBUG_CURSOR:
+                            logger.info(f"🖱️  [DEBUG] Syncing Playwright mouse to ({coords_to_use['x']}, {coords_to_use['y']})")
                         await self.page.mouse.move(coords_to_use['x'], coords_to_use['y'])
                         await asyncio.sleep(0.05)  # Small delay to ensure mouse is positioned
                         # Always click - this ensures the click event is captured in YAML
                         # Even if field is already focused, we need the click for the video
+                        if DEBUG_CLICKS:
+                            logger.info(f"🖱️  [DEBUG] Executing mouse.click at ({coords_to_use['x']}, {coords_to_use['y']})")
                         await self.page.mouse.click(coords_to_use['x'], coords_to_use['y'])
+                        if DEBUG_CLICKS:
+                            logger.info(f"🖱️  [DEBUG] Mouse click completed at ({coords_to_use['x']}, {coords_to_use['y']})")
                     else:
                         # Fallback: direct mouse click without animation
                         logger.warning(f"⚠️  Clicking directly at ({coords_to_use['x']}, {coords_to_use['y']}) [no visual feedback - visual_feedback={visual_feedback is not None}, cursor_controller={cursor_controller is not None}]")
+                        if DEBUG_CLICKS:
+                            logger.info(f"🖱️  [DEBUG] Executing direct mouse.click at ({coords_to_use['x']}, {coords_to_use['y']}) [no visual feedback]")
                         await self.page.mouse.click(coords_to_use['x'], coords_to_use['y'])
                     clicked = True
                     # Small delay to allow click event to be captured

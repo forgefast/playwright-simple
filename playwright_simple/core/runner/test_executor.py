@@ -354,12 +354,16 @@ class TestExecutor:
                     if position and position.get('x') and position.get('y'):
                         x = int(position.get('x'))
                         y = int(position.get('y'))
+                        logger.info(f"🖱️  [DEBUG] Navigation detected, restoring cursor to ({x}, {y})")
                         # Re-inject cursor and restore position
                         await test.cursor_manager.inject(force=True)
+                        logger.info(f"🖱️  [DEBUG] Cursor injected, moving to ({x}, {y})")
                         await test.cursor_manager.move_to(x, y)
                         # Sync Playwright mouse position to match cursor visual
+                        logger.info(f"🖱️  [DEBUG] Syncing Playwright mouse to ({x}, {y})")
                         await page.mouse.move(x, y)
                         logger.info(f"Cursor restored after navigation: ({x}, {y})")
+                        logger.info(f"🖱️  [DEBUG] Cursor and mouse restored to ({x}, {y})")
                     else:
                         # No saved position, re-inject cursor (will use last position from move_to)
                         await test.cursor_manager.inject(force=True)
