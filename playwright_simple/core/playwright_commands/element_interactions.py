@@ -278,6 +278,8 @@ class ElementInteractions:
                             # Use Playwright's element.click() which dispatches DOM events that event_capture can catch
                             element = await element_handle.as_element()
                             await element.click()
+                            # Small delay to ensure event is captured before navigation (if link causes navigation)
+                            await asyncio.sleep(0.1)
                             return True
                     except Exception as e:
                         logger.debug(f"[ELEMENT_INTERACTIONS] Erro ao clicar via element.click(), usando fallback: {e}")
