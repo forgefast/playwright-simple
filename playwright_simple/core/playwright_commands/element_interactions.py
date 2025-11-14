@@ -506,7 +506,19 @@ class ElementInteractions:
                 
                 if clear:
                     await element.fill('')
-                await element.type(text)
+                
+                # Type text character by character to trigger input events
+                # This ensures events are captured by event_capture
+                text_str = str(text)
+                for char in text_str:
+                    await element.type(char, delay=10)
+                    # Small delay to ensure events are processed
+                    await asyncio.sleep(0.01)
+                
+                # Trigger blur event to finalize input (so it's captured)
+                await element.evaluate('el => el.blur()')
+                await asyncio.sleep(0.1)  # Small delay for blur event to be captured
+                
                 return True
             
             return False
@@ -630,8 +642,42 @@ class ElementInteractions:
             if visual_feedback and cursor_controller:
                 await visual_feedback.show_click_feedback(x, y, cursor_controller)
             
-            # Perform actual click
-            await self.page.mouse.click(x, y)
+            # Find the actual button element to click it properly (triggers DOM events)
+            button_element = await self.page.evaluate_handle("""
+                (args) => {
+                    const x = args.x;
+                    const y = args.y;
+                    const buttonText = args.buttonText;
+                    
+                    // Find element at coordinates
+                    const element = document.elementFromPoint(x, y);
+                    if (element) {
+                        return element;
+                    }
+                    
+                    // Fallback: find by text
+                    const buttons = Array.from(document.querySelectorAll('button, input[type="submit"]'));
+                    for (const btn of buttons) {
+                        const btnText = (btn.textContent || btn.innerText || btn.value || '').trim();
+                        if (buttonText && btnText.toLowerCase().includes(buttonText.toLowerCase())) {
+                            return btn;
+                        }
+                    }
+                    
+                    return null;
+                }
+            """, {'x': x, 'y': y, 'buttonText': button_text})
+            
+            if button_element:
+                # Click the element directly (triggers DOM click event that event_capture can catch)
+                await button_element.click()
+            else:
+                # Fallback: use mouse click
+                await self.page.mouse.click(x, y)
+            
+            # Small delay to ensure click event is captured
+            await asyncio.sleep(0.1)
+            
             logger.info(f"Form submitted (button: '{button_text_found}')")
             return True
             
