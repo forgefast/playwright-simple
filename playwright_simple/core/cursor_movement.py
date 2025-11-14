@@ -151,4 +151,22 @@ class CursorMovement:
         # Wait for animation to complete - the JavaScript Promise will resolve when done
         # Add a minimal buffer to ensure animation is fully rendered in video
         await asyncio.sleep(CURSOR_AFTER_MOVE_DELAY)
+        
+        # Store position for persistence across navigations
+        # Use both window property and sessionStorage for reliability
+        await self.page.evaluate(f"""
+            () => {{
+                const position = {{
+                    x: {x},
+                    y: {y}
+                }};
+                window.__playwright_cursor_last_position = position;
+                // Also store in sessionStorage for persistence across navigations
+                try {{
+                    sessionStorage.setItem('__playwright_cursor_last_position', JSON.stringify(position));
+                }} catch (e) {{
+                    // sessionStorage might not be available in some contexts
+                }}
+            }}
+        """)
 

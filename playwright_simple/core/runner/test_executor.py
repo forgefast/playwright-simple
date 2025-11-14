@@ -284,11 +284,88 @@ class TestExecutor:
             print(f"  🖱️  Injetando cursor...")
             await test.cursor_manager.inject(force=True)
             
-            # Move cursor to center of screen to ensure it's visible
+            # Try to restore cursor position from storage, or move to center
             viewport = page.viewport_size or {"width": 1920, "height": 1080}
             center_x = viewport['width'] / 2
             center_y = viewport['height'] / 2
-            await test.cursor_manager.move_to(center_x, center_y)
+            
+            # Try to get last cursor position from storage
+            position = await page.evaluate("""
+                () => {
+                    // Try sessionStorage first (more reliable across navigations)
+                    try {
+                        const stored = sessionStorage.getItem('__playwright_cursor_last_position');
+                        if (stored) {
+                            return JSON.parse(stored);
+                        }
+                    } catch (e) {
+                        // sessionStorage might not be available
+                    }
+                    // Fallback to window property
+                    return window.__playwright_cursor_last_position || null;
+                }
+            """)
+            
+            if position and position.get('x') and position.get('y'):
+                initial_x = int(position.get('x'))
+                initial_y = int(position.get('y'))
+                logger.info(f"Restoring cursor position from storage: ({initial_x}, {initial_y})")
+                await test.cursor_manager.move_to(initial_x, initial_y)
+            else:
+                # Move cursor to center of screen to ensure it's visible
+                await test.cursor_manager.move_to(center_x, center_y)
+            
+            # Set up navigation listener to restore cursor position after navigation
+            async def on_navigation(frame):
+                """Restore cursor position after navigation."""
+                try:
+                    # Only handle main frame navigation
+                    if frame != page.main_frame:
+                        return
+                    
+                    # Wait for page to be ready
+                    try:
+                        await page.wait_for_load_state('domcontentloaded', timeout=5000)
+                    except:
+                        pass
+                    
+                    # Get last position from storage
+                    position = await page.evaluate("""
+                        () => {
+                            // Try sessionStorage first (more reliable across navigations)
+                            try {
+                                const stored = sessionStorage.getItem('__playwright_cursor_last_position');
+                                if (stored) {
+                                    return JSON.parse(stored);
+                                }
+                            } catch (e) {
+                                // sessionStorage might not be available
+                            }
+                            // Fallback to window property
+                            return window.__playwright_cursor_last_position || null;
+                        }
+                    """)
+                    
+                    if position and position.get('x') and position.get('y'):
+                        x = int(position.get('x'))
+                        y = int(position.get('y'))
+                        # Re-inject cursor and restore position
+                        await test.cursor_manager.inject(force=True)
+                        await test.cursor_manager.move_to(x, y)
+                        logger.info(f"Cursor restored after navigation: ({x}, {y})")
+                    else:
+                        # No saved position, re-inject cursor (will use last position from move_to)
+                        await test.cursor_manager.inject(force=True)
+                except Exception as e:
+                    logger.warning(f"Error restoring cursor after navigation: {e}")
+                    # Try to restore anyway
+                    try:
+                        await test.cursor_manager.inject(force=True)
+                    except:
+                        pass
+            
+            # Listen for navigation events
+            page.on('framenavigated', on_navigation)
             
             # Remove hover effect and hide click effect if disabled (they might have been created)
             await page.evaluate(f"""
