@@ -263,7 +263,8 @@ async def unified_type(
         return False
     
     # Get PlaywrightCommands instance (cached if possible)
-    commands = get_playwright_commands(page, fast_mode=fast_mode, enable_animations=enable_animations, cache_key=cache_key, cache=cache)
+    # Default enable_animations=True to keep animations during recording
+    commands = get_playwright_commands(page, fast_mode=fast_mode, enable_animations=True, cache_key=cache_key, cache=cache)
     if not commands:
         logger.error("Failed to get PlaywrightCommands for unified_type")
         return False
@@ -314,7 +315,8 @@ async def unified_submit(
         return False
     
     # Get PlaywrightCommands instance (cached if possible)
-    commands = get_playwright_commands(page, fast_mode=fast_mode, enable_animations=enable_animations, cache_key=cache_key, cache=cache)
+    # Default enable_animations=True to keep animations during recording
+    commands = get_playwright_commands(page, fast_mode=fast_mode, enable_animations=True, cache_key=cache_key, cache=cache)
     if not commands:
         logger.error("Failed to get PlaywrightCommands for unified_submit")
         return False
