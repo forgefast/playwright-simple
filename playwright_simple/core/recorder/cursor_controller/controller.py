@@ -29,10 +29,30 @@ class CursorController:
         self._movement = CursorMovement(page, self)
         self._interaction = CursorInteraction(page, self)
     
-    async def start(self, force: bool = False):
-        """Start cursor controller and inject cursor overlay."""
-        await self._visual.start(force)
+    async def start(self, force: bool = False, initial_x: int = None, initial_y: int = None):
+        """
+        Start cursor controller and inject cursor overlay.
+        
+        Args:
+            force: Force reinjection even if already active
+            initial_x: Initial X position (None = center or last position)
+            initial_y: Initial Y position (None = center or last position)
+        """
+        await self._visual.start(force, initial_x, initial_y)
         self.is_active = self._visual.is_active
+        # Update current position from movement module
+        if self._movement.current_x == 0 and self._movement.current_y == 0:
+            # Get position from page if available
+            position = await self.page.evaluate("""
+                () => {
+                    return window.__playwright_cursor_last_position || null;
+                }
+            """)
+            if position:
+                self.current_x = position.get('x', 0)
+                self.current_y = position.get('y', 0)
+                self._movement.current_x = self.current_x
+                self._movement.current_y = self.current_y
     
     async def show(self):
         """Show cursor overlay."""

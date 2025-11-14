@@ -28,6 +28,16 @@ class CursorMovement:
             self.current_x = x
             self.current_y = y
             
+            # Store position for persistence across navigations
+            await self.page.evaluate(f"""
+                () => {{
+                    window.__playwright_cursor_last_position = {{
+                        x: {x},
+                        y: {y}
+                    }};
+                }}
+            """)
+            
             # Ensure cursor is initialized and visible when moving
             if not self.controller.is_active:
                 await self.controller.start()

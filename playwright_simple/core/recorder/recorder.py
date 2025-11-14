@@ -172,7 +172,38 @@ class Recorder:
             # Initialize cursor controller if available
             if CURSOR_AVAILABLE:
                 self.cursor_controller = CursorController(page)
+                # Start cursor at center of screen (or last position if available)
                 await self.cursor_controller.start()
+                
+                # Set up navigation listener to preserve cursor position
+                async def on_navigation(frame):
+                    """Restore cursor position after navigation."""
+                    try:
+                        # Only handle main frame navigation
+                        if frame != page.main_frame:
+                            return
+                        
+                        if self.cursor_controller and self.cursor_controller.is_active:
+                            # Wait a bit for page to be ready
+                            await asyncio.sleep(0.2)
+                            
+                            # Get last position
+                            position = await page.evaluate("""
+                                () => {
+                                    return window.__playwright_cursor_last_position || null;
+                                }
+                            """)
+                            if position:
+                                x = position.get('x')
+                                y = position.get('y')
+                                # Restore cursor position
+                                await self.cursor_controller.start(force=True, initial_x=x, initial_y=y)
+                                logger.debug(f"Cursor position restored after navigation: ({x}, {y})")
+                    except Exception as e:
+                        logger.debug(f"Error restoring cursor after navigation: {e}")
+                
+                # Listen for navigation events
+                page.on('framenavigated', on_navigation)
             
             # Start console interface
             loop = asyncio.get_event_loop()

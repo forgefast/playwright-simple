@@ -20,8 +20,15 @@ class CursorVisual:
         self.page = page
         self.is_active = False
     
-    async def start(self, force: bool = False):
-        """Start cursor controller and inject cursor overlay."""
+    async def start(self, force: bool = False, initial_x: int = None, initial_y: int = None):
+        """
+        Start cursor controller and inject cursor overlay.
+        
+        Args:
+            force: Force reinjection even if already active
+            initial_x: Initial X position (None = center of screen)
+            initial_y: Initial Y position (None = center of screen)
+        """
         if self.is_active and not force:
             # Still ensure cursor is visible
             await self.show()
@@ -34,6 +41,42 @@ class CursorVisual:
             except:
                 pass  # Continue even if timeout
             
+            # Get viewport size to calculate center
+            viewport = self.page.viewport_size
+            if viewport:
+                screen_center_x = viewport['width'] // 2
+                screen_center_y = viewport['height'] // 2
+            else:
+                # Fallback if viewport not available
+                screen_center_x = 960  # Default 1920x1080 center
+                screen_center_y = 540
+            
+            # Use provided position or center of screen
+            cursor_x = initial_x if initial_x is not None else screen_center_x
+            cursor_y = initial_y if initial_y is not None else screen_center_y
+            
+            # Try to get last cursor position from window storage (for navigation persistence)
+            last_position = await self.page.evaluate("""
+                () => {
+                    return window.__playwright_cursor_last_position || null;
+                }
+            """)
+            
+            # If we have a last position and no explicit initial position, use it
+            if last_position and initial_x is None and initial_y is None:
+                cursor_x = last_position.get('x', cursor_x)
+                cursor_y = last_position.get('y', cursor_y)
+            
+            # Store position for next navigation
+            await self.page.evaluate(f"""
+                () => {{
+                    window.__playwright_cursor_last_position = {{
+                        x: {cursor_x},
+                        y: {cursor_y}
+                    }};
+                }}
+            """)
+            
             # Reset flag to allow reinjection
             await self.page.evaluate("""
                 () => {
@@ -41,8 +84,8 @@ class CursorVisual:
                 }
             """)
             
-            await self.page.evaluate("""
-                (function() {
+            await self.page.evaluate(f"""
+                (function() {{
                     // Always recreate cursor (in case of navigation)
                     const existing = document.getElementById('__playwright_cursor');
                     if (existing) existing.remove();
@@ -65,8 +108,8 @@ class CursorVisual:
                         z-index: 999999;
                         transform: translate(-50%, -50%);
                         display: block;
-                        left: 100px;
-                        top: 100px;
+                        left: {cursor_x}px;
+                        top: {cursor_y}px;
                         filter: drop-shadow(0 0 3px rgba(0, 102, 255, 0.8));
                     `;
                     
@@ -113,11 +156,15 @@ class CursorVisual:
                     window.__playwright_cursor_element = cursor;
                     window.__playwright_cursor_click_element = clickIndicator;
                     window.__playwright_cursor_initialized = true;
-                    console.log('[Playwright Cursor] Injected and initialized.');
-                })();
+                    window.__playwright_cursor_last_position = {{
+                        x: {cursor_x},
+                        y: {cursor_y}
+                    }};
+                    console.log('[Playwright Cursor] Injected and initialized at (' + String({cursor_x}) + ', ' + String({cursor_y}) + ').');
+                }})();
             """)
             self.is_active = True
-            logger.info("Cursor controller started and injected.")
+            logger.info(f"Cursor controller started and injected at ({cursor_x}, {cursor_y})")
         except Exception as e:
             logger.error(f"Error starting cursor controller: {e}")
             self.is_active = False
