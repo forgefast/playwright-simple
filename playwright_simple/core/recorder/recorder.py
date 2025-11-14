@@ -227,9 +227,16 @@ class Recorder:
                                     """)
                                     if position:
                                         break
-                                    await asyncio.sleep(0.1)  # Small delay between attempts
+                                    # Wait for storage to be available using dynamic wait
+                                    try:
+                                        await page.wait_for_function(
+                                            "window.__playwright_cursor_last_position !== undefined",
+                                            timeout=200
+                                        )
+                                    except:
+                                        pass  # Continue to next attempt
                                 except:
-                                    await asyncio.sleep(0.1)
+                                    pass  # Continue to next attempt
                             
                             if position and position.get('x') and position.get('y'):
                                 x = int(position.get('x'))
