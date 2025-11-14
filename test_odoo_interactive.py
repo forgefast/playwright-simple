@@ -247,10 +247,58 @@ async def test_odoo_login():
         await recorder.stop(save=False)
         return
     print("   ✅ Formulário submetido")
-    if not recorder.fast_mode:
-        await asyncio.sleep(3)
-    else:
-        await asyncio.sleep(0.5)  # Reduced delay in fast mode
+    
+    # Aguardar navegação após login (espera dinâmica)
+    print("   ⏳ Aguardando próxima tela após login...")
+    try:
+        page = recorder.page
+        if page:
+            # Wait for navigation to complete (dynamic wait)
+            try:
+                # Wait for URL to change (indicating navigation started)
+                initial_url = page.url
+                await asyncio.wait_for(
+                    page.wait_for_function(
+                        f"window.location.href !== '{initial_url}'",
+                        timeout=10000
+                    ),
+                    timeout=12.0
+                )
+                print("   ✅ Navegação detectada")
+            except:
+                # Fallback: wait for load state
+                pass
+            
+            # Wait for new page to be fully loaded (dynamic wait)
+            try:
+                await asyncio.wait_for(
+                    page.wait_for_load_state('networkidle', timeout=15000),
+                    timeout=18.0
+                )
+                print("   ✅ Página carregada completamente")
+            except:
+                # Fallback: wait for domcontentloaded
+                try:
+                    await asyncio.wait_for(
+                        page.wait_for_load_state('domcontentloaded', timeout=10000),
+                        timeout=12.0
+                    )
+                    print("   ✅ DOM carregado")
+                except:
+                    print("   ⚠️  Continuando mesmo sem aguardar completamente")
+            
+            # Adicionar passo estático para garantir que tudo esteja pronto
+            # (delay pode ser ajustado no vídeo durante pós-processamento)
+            print("   ⏸️  Passo estático: aguardando tela estabilizar...")
+            if recorder.fast_mode:
+                await asyncio.sleep(0.5)  # Delay mínimo em fast mode
+            else:
+                await asyncio.sleep(2.0)  # Delay normal para passo estático
+            print("   ✅ Tela estabilizada")
+    except Exception as e:
+        print(f"   ⚠️  Erro aguardando próxima tela: {e}")
+        # Wait a bit anyway
+        await asyncio.sleep(1 if not recorder.fast_mode else 0.3)
     
     # 8. Verificar info
     print("\n8️⃣  Verificando estado da página...")
