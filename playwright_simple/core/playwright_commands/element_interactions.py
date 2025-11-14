@@ -255,11 +255,15 @@ class ElementInteractions:
             
             if into:
                 # Find input by label text and get coordinates
+                # Support multiple search strategies for better compatibility
+                labelTextLower = into.lower()
                 result = await self.page.evaluate("""
-                    (labelText) => {
+                    (labelText, labelTextLower) => {
+                        // Strategy 1: Find by label text
                         const labels = Array.from(document.querySelectorAll('label'));
                         for (const label of labels) {
-                            if ((label.textContent || '').includes(labelText)) {
+                            const labelTextContent = (label.textContent || '').toLowerCase();
+                            if (labelTextContent.includes(labelTextLower)) {
                                 const inputId = label.getAttribute('for');
                                 let input = null;
                                 if (inputId) {
@@ -278,10 +282,12 @@ class ElementInteractions:
                                 }
                             }
                         }
-                        // Try to find input with placeholder
+                        
+                        // Strategy 2: Find by placeholder
                         const inputs = Array.from(document.querySelectorAll('input, textarea'));
                         for (const input of inputs) {
-                            if ((input.placeholder || '').includes(labelText)) {
+                            const placeholder = (input.placeholder || '').toLowerCase();
+                            if (placeholder.includes(labelTextLower)) {
                                 const rect = input.getBoundingClientRect();
                                 return {
                                     found: true,
@@ -290,35 +296,112 @@ class ElementInteractions:
                                 };
                             }
                         }
+                        
+                        // Strategy 3: Find by name/id/aria-label (for common field names)
+                        for (const input of inputs) {
+                            const name = (input.name || '').toLowerCase();
+                            const id = (input.id || '').toLowerCase();
+                            const ariaLabel = (input.getAttribute('aria-label') || '').toLowerCase();
+                            
+                            if (name.includes(labelTextLower) || 
+                                id.includes(labelTextLower) || 
+                                ariaLabel.includes(labelTextLower)) {
+                                const rect = input.getBoundingClientRect();
+                                return {
+                                    found: true,
+                                    x: Math.floor(rect.left + rect.width / 2),
+                                    y: Math.floor(rect.top + rect.height / 2)
+                                };
+                            }
+                        }
+                        
+                        // Strategy 4: Find by type for common field types
+                        const typeMap = {
+                            'email': ['email', 'e-mail', 'correio', 'mail'],
+                            'password': ['password', 'senha', 'pass', 'pwd'],
+                            'login': ['login', 'username', 'user', 'usuário']
+                        };
+                        
+                        for (const input of inputs) {
+                            const inputType = input.type || '';
+                            for (const [type, keywords] of Object.entries(typeMap)) {
+                                if (inputType === type && keywords.some(k => labelTextLower.includes(k))) {
+                                    const rect = input.getBoundingClientRect();
+                                    return {
+                                        found: true,
+                                        x: Math.floor(rect.left + rect.width / 2),
+                                        y: Math.floor(rect.top + rect.height / 2)
+                                    };
+                                }
+                            }
+                        }
+                        
                         return {found: false};
                     }
-                """, into)
+                """, into, labelTextLower)
                 
                 if result.get('found'):
                     element_coords = {'x': result.get('x'), 'y': result.get('y')}
-                    # Find element handle for typing
+                    # Find element handle for typing (using same strategies)
+                    labelTextLower = into.lower()
                     element = await self.page.evaluate_handle("""
-                        (labelText) => {
+                        (labelText, labelTextLower) => {
+                            // Strategy 1: Find by label
                             const labels = Array.from(document.querySelectorAll('label'));
                             for (const label of labels) {
-                                if ((label.textContent || '').includes(labelText)) {
+                                const labelTextContent = (label.textContent || '').toLowerCase();
+                                if (labelTextContent.includes(labelTextLower)) {
                                     const inputId = label.getAttribute('for');
                                     if (inputId) {
-                                        return document.getElementById(inputId);
+                                        const input = document.getElementById(inputId);
+                                        if (input) return input;
                                     }
                                     const input = label.parentElement?.querySelector('input, textarea');
                                     if (input) return input;
                                 }
                             }
+                            
+                            // Strategy 2: Find by placeholder
                             const inputs = Array.from(document.querySelectorAll('input, textarea'));
                             for (const input of inputs) {
-                                if ((input.placeholder || '').includes(labelText)) {
+                                const placeholder = (input.placeholder || '').toLowerCase();
+                                if (placeholder.includes(labelTextLower)) {
                                     return input;
                                 }
                             }
+                            
+                            // Strategy 3: Find by name/id/aria-label
+                            for (const input of inputs) {
+                                const name = (input.name || '').toLowerCase();
+                                const id = (input.id || '').toLowerCase();
+                                const ariaLabel = (input.getAttribute('aria-label') || '').toLowerCase();
+                                
+                                if (name.includes(labelTextLower) || 
+                                    id.includes(labelTextLower) || 
+                                    ariaLabel.includes(labelTextLower)) {
+                                    return input;
+                                }
+                            }
+                            
+                            // Strategy 4: Find by type
+                            const typeMap = {
+                                'email': ['email', 'e-mail', 'correio', 'mail'],
+                                'password': ['password', 'senha', 'pass', 'pwd'],
+                                'login': ['login', 'username', 'user', 'usuário']
+                            };
+                            
+                            for (const input of inputs) {
+                                const inputType = input.type || '';
+                                for (const [type, keywords] of Object.entries(typeMap)) {
+                                    if (inputType === type && keywords.some(k => labelTextLower.includes(k))) {
+                                        return input;
+                                    }
+                                }
+                            }
+                            
                             return null;
                         }
-                    """, into)
+                    """, into, labelTextLower)
             
             if selector and not element:
                 element = await self.page.query_selector(selector)
