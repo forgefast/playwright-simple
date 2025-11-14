@@ -40,8 +40,13 @@ def main():
             headless=args.headless,
             debug=args.debug
         ))
-    elif args.command in ['find', 'click', 'type', 'submit', 'wait', 'info', 'html']:
-        # Command commands - send to active recording session
+    # Command commands - send to active recording session
+    command_commands = [
+        'find', 'click', 'type', 'submit', 'wait', 'info', 'html',
+        'save', 'exit', 'pause', 'resume', 'start',
+        'caption', 'audio', 'screenshot'
+    ]
+    if args.command in command_commands:
         handle_command_commands(args)
     else:
         parser.print_help()

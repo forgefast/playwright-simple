@@ -12,7 +12,7 @@ from playwright_simple.core.recorder.command_server import send_command
 
 
 def handle_command_commands(args) -> None:
-    """Handle command commands (find, click, type, submit, wait, info, html)."""
+    """Handle command commands (find, click, type, submit, wait, info, html, save, exit, etc.)."""
     if args.command == 'find':
         _handle_find(args)
     elif args.command == 'click':
@@ -27,6 +27,22 @@ def handle_command_commands(args) -> None:
         _handle_info(args)
     elif args.command == 'html':
         _handle_html(args)
+    elif args.command == 'save':
+        _handle_save(args)
+    elif args.command == 'exit':
+        _handle_exit(args)
+    elif args.command == 'pause':
+        _handle_pause(args)
+    elif args.command == 'resume':
+        _handle_resume(args)
+    elif args.command == 'start':
+        _handle_start(args)
+    elif args.command == 'caption':
+        _handle_caption(args)
+    elif args.command == 'audio':
+        _handle_audio(args)
+    elif args.command == 'screenshot':
+        _handle_screenshot(args)
 
 
 def _handle_find(args):
