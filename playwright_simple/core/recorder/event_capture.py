@@ -844,6 +844,7 @@ class EventCapture:
                     # CRITICAL: Process any pending events BEFORE clearing the array
                     # This ensures clicks that happened just before navigation are captured
                     # Especially important for link clicks which cause immediate navigation
+                    # BUT: Only process click events, NOT input/blur events (they belong to previous page)
                     pending_result = await self.page.evaluate("""
                         () => {
                             const events = window.__playwright_recording_events || [];
@@ -861,14 +862,24 @@ class EventCapture:
                     has_link_click = pending_result.get('hasLinkClick', False)
                     
                     # Process pending events before navigation clears them
+                    # CRITICAL: Only process click events, ignore input/blur events from previous page
                     if pending_events:
-                        priority_msg = " (LINK CLICK - HIGH PRIORITY)" if has_link_click else ""
-                        logger.info(f"Processing {len(pending_events)} pending event(s) before navigation{priority_msg}")
-                        for event in pending_events:
-                            try:
-                                await self._process_event(event)
-                            except Exception as e:
-                                logger.debug(f"Error processing pending event before navigation: {e}")
+                        # Filter: only process click events, ignore input/blur/keydown events
+                        # Input events from previous page should NOT be processed after navigation
+                        click_events = [e for e in pending_events if e.get('type') == 'click']
+                        ignored_events = [e for e in pending_events if e.get('type') in ('input', 'blur', 'keydown')]
+                        
+                        if ignored_events:
+                            logger.debug(f"Ignoring {len(ignored_events)} input/blur/keydown event(s) from previous page during navigation")
+                        
+                        if click_events:
+                            priority_msg = " (LINK CLICK - HIGH PRIORITY)" if has_link_click else ""
+                            logger.info(f"Processing {len(click_events)} pending click event(s) before navigation{priority_msg}")
+                            for event in click_events:
+                                try:
+                                    await self._process_event(event)
+                                except Exception as e:
+                                    logger.debug(f"Error processing pending click event before navigation: {e}")
                     
                     # Reset flag and reinject
                     await self.page.evaluate("""

@@ -106,16 +106,12 @@ class EventHandlers:
             logger.debug(f"Skipping navigation to initial URL: {url}")
             return
         
-        # Finalize any pending inputs before navigation
+        # CRITICAL: Clear all pending inputs on navigation
+        # Events from the previous page should NOT be finalized after navigation
+        # This prevents capturing input events that happened before navigation
         if self.action_converter.pending_inputs:
-            for element_key in list(self.action_converter.pending_inputs.keys()):
-                input_action = self.action_converter.finalize_input(element_key)
-                if input_action:
-                    self.yaml_writer.add_step(input_action)
-                    value_preview = input_action.get('text', '')[:50]
-                    if len(input_action.get('text', '')) > 50:
-                        value_preview += '...'
-                    logger.info(f"Finalized input before navigation: {input_action.get('description', '')} = '{value_preview}'")
+            logger.debug(f"Clearing {len(self.action_converter.pending_inputs)} pending input(s) on navigation (from previous page)")
+            self.action_converter.pending_inputs.clear()
         
         # Skip all navigations - they're caused by clicks which are already captured as 'click' actions
         # Only the initial URL is recorded (done in start())
