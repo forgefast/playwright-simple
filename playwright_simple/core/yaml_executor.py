@@ -183,7 +183,8 @@ class StepExecutor:
                 logger.debug(f"Debug pause error (ignoring): {e}")
         else:
             # Log step for debugging (non-blocking)
-            logger.debug(f"Step {step_number}: {action_type} - {step}")
+            logger.debug(f"🔍 Step {step_number}: {action_type} - {step}")
+            print(f"🔍 [DEBUG] Executando passo {step_number}: {action_type}")
         
         # Merge compose params into context if present
         if '_compose_params' in step:
@@ -226,21 +227,34 @@ class StepExecutor:
         
         # Handle standard actions
         action = step.get('action')
+        logger.debug(f"Executando ação: {action}, step completo: {step}")
         if not action:
+            logger.debug("Nenhuma ação encontrada no step, retornando estado anterior")
             return previous_state
         
         # Handle Playwright actions (special async handling)
+        logger.debug(f"Verificando se '{action}' é uma ação Playwright...")
         playwright_state = await StepExecutor._handle_playwright_actions(action, step, test, context, previous_state)
         if playwright_state is not None:
+            logger.debug(f"Ação '{action}' foi tratada como ação Playwright")
             new_state = playwright_state
         else:
+            logger.debug(f"Ação '{action}' não é Playwright, verificando ações core...")
             # Handle core actions
             core_actions = ActionMapper.get_core_actions(step, test)
+            logger.debug(f"Ações core disponíveis: {list(core_actions.keys())}")
             if action in core_actions:
+                logger.debug(f"Executando ação core '{action}' com parâmetros: {step}")
                 if ActionMapper.is_deprecated(action):
                     logger.warning(ActionMapper.get_deprecation_warning(action))
-                await core_actions[action]()
+                try:
+                    await core_actions[action]()
+                    logger.debug(f"Ação '{action}' executada com sucesso")
+                except Exception as e:
+                    logger.error(f"Erro ao executar ação '{action}': {e}", exc_info=True)
+                    raise
                 new_state = await WebState.capture(test.page, step_number=previous_state.step_number, action_type=action_type)
+                logger.debug(f"Estado capturado após ação '{action}'")
             # Handle deprecated navigate
             elif action == 'navigate':
                 logger.warning(ActionMapper.get_deprecation_warning(action))

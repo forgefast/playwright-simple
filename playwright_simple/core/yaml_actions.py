@@ -29,7 +29,8 @@ class ActionMapper:
         Returns:
             Dictionary mapping action names to callable functions
         """
-        return {
+        logger.debug(f"Obtendo ações core para step: {step}")
+        actions = {
             'go_to': lambda: test.go_to(step.get('url', '/')),
             'click': lambda: test.click(
                 step.get('text') or step.get('selector', ''),
@@ -140,6 +141,8 @@ class ActionMapper:
                 step.get('element')
             ),
         }
+        logger.debug(f"Ações core mapeadas: {list(actions.keys())}")
+        return actions
     
     @staticmethod
     def is_deprecated(action: str) -> bool:

@@ -544,6 +544,15 @@ class TestExecutor:
                 if hasattr(self, '_playwright') and self._playwright:
                     await self._playwright.stop()
             
+            # Cleanup orphan browser processes
+            try:
+                from ..recorder.command_server import cleanup_old_sessions
+                cleaned = cleanup_old_sessions(force=True, timeout=5.0)
+                if cleaned > 0:
+                    logger.debug(f"Cleaned up {cleaned} orphan browser process(es) after test execution")
+            except Exception as e:
+                logger.debug(f"Error cleaning up orphan processes: {e}")
+            
             # Get video path and rename to test name
             # Playwright creates videos with hash in record_video_dir, we rename after
             if self.config.video.enabled:
