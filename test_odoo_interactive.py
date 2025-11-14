@@ -263,43 +263,55 @@ async def test_odoo_login():
         return
     print("   ✅ Formulário submetido")
     
-    # Aguardar navegação após login (espera dinâmica)
+    # Aguardar navegação após login (espera dinâmica e rápida)
     print("   ⏳ Aguardando próxima tela após login...")
     try:
         page = recorder.page
         if page:
-            # Wait for navigation to complete (dynamic wait)
-            try:
-                # Wait for URL to change (indicating navigation started)
-                initial_url = page.url
-                await asyncio.wait_for(
-                    page.wait_for_function(
-                        f"window.location.href !== '{initial_url}'",
-                        timeout=10000
-                    ),
-                    timeout=1.0
-                )
-                print("   ✅ Navegação detectada")
-            except:
-                # Fallback: wait for load state
-                pass
-            
-            # Wait for new page to be fully loaded (dynamic wait)
-            try:
-                await asyncio.wait_for(
-                    page.wait_for_load_state('networkidle', timeout=15000),
-                    timeout=18.0
-                )
-                print("   ✅ Página carregada completamente")
-            except:
-                # Fallback: wait for domcontentloaded
+            # In fast_mode, skip waiting - just detect navigation and continue
+            if recorder.fast_mode:
+                # Just wait for URL to change (very short wait)
+                try:
+                    initial_url = page.url
+                    await asyncio.wait_for(
+                        page.wait_for_function(
+                            f"window.location.href !== '{initial_url}'",
+                            timeout=3000
+                        ),
+                        timeout=1.0
+                    )
+                    print("   ✅ Navegação detectada")
+                except:
+                    pass
+                # Small delay to ensure page started loading
+                await asyncio.sleep(0.5)
+                print("   ✅ Continuando (fast_mode)")
+            else:
+                # Normal mode: wait for navigation to complete (but with shorter timeouts)
+                try:
+                    # Wait for URL to change (indicating navigation started)
+                    initial_url = page.url
+                    await asyncio.wait_for(
+                        page.wait_for_function(
+                            f"window.location.href !== '{initial_url}'",
+                            timeout=5000
+                        ),
+                        timeout=2.0
+                    )
+                    print("   ✅ Navegação detectada")
+                except:
+                    # Fallback: wait for load state
+                    pass
+                
+                # Wait for new page to be loaded (shorter timeouts, skip networkidle)
                 try:
                     await asyncio.wait_for(
-                        page.wait_for_load_state('domcontentloaded', timeout=10000),
-                        timeout=12.0
+                        page.wait_for_load_state('domcontentloaded', timeout=5000),
+                        timeout=6.0
                     )
                     print("   ✅ DOM carregado")
                 except:
+                    # Skip networkidle wait - it's too slow
                     print("   ⚠️  Continuando mesmo sem aguardar completamente")
             
             # Adicionar passo estático ao YAML (modelagem, não execução)
