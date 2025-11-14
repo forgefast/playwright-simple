@@ -84,7 +84,7 @@ class CursorVisual:
                 }
             """)
             
-            await self.page.evaluate(f"""
+            script = """
                 (function() {{
                     // Always recreate cursor (in case of navigation)
                     const existing = document.getElementById('__playwright_cursor');
@@ -131,23 +131,23 @@ class CursorVisual:
                     
                     // Add click animation
                     let style = document.getElementById('__playwright_cursor_style');
-                    if (!style) {
+                    if (!style) {{
                         style = document.createElement('style');
                         style.id = '__playwright_cursor_style';
                         style.textContent = `
-                            @keyframes cursorClick {
-                                0% {
+                            @keyframes cursorClick {{
+                                0% {{
                                     transform: translate(-50%, -50%) scale(0.5);
                                     opacity: 1;
-                                }
-                                100% {
+                                }}
+                                100% {{
                                     transform: translate(-50%, -50%) scale(2);
                                     opacity: 0;
-                                }
-                            }
+                                }}
+                            }}
                         `;
                         document.head.appendChild(style);
-                    }
+                    }}
                     
                     document.body.appendChild(cursor);
                     document.body.appendChild(clickIndicator);
@@ -162,7 +162,9 @@ class CursorVisual:
                     }};
                     console.log('[Playwright Cursor] Injected and initialized at (' + {cursor_x} + ', ' + {cursor_y} + ').');
                 }})();
-            """)
+            """.format(cursor_x=cursor_x, cursor_y=cursor_y)
+            
+            await self.page.evaluate(script)
             self.is_active = True
             logger.info(f"Cursor controller started and injected at ({cursor_x}, {cursor_y})")
         except Exception as e:
