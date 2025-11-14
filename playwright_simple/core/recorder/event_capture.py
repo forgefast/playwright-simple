@@ -447,19 +447,33 @@ class EventCapture:
                                             timestamp: Date.now(),
                                             element: serialized
                                         };
-                                        window.__playwright_recording_events.push(eventData);
-                                        console.log('[Playwright] Click captured (LINK):', serialized.tagName, serialized.href, serialized.text?.substring(0, 50) || 'no text', 'Events in queue:', window.__playwright_recording_events.length);
                                         
-                                        // CRITICAL: For links, mark as high priority and try to process immediately
-                                        // This helps ensure the event is processed before navigation
+                                        // CRITICAL: Process event IMMEDIATELY via exposed Python function
+                                        // This bypasses the polling loop and processes the event synchronously
+                                        // This is the key to capturing link clicks before navigation
+                                        try {
+                                            if (window.__playwright_process_link_click) {
+                                                // Call Python function directly - processes event IMMEDIATELY
+                                                window.__playwright_process_link_click(eventData).catch(err => {
+                                                    console.error('[Playwright] Error calling immediate processing:', err);
+                                                    // Fallback: add to array for polling
+                                                    window.__playwright_recording_events.push(eventData);
+                                                });
+                                                console.log('[Playwright] Link click processed IMMEDIATELY via exposed function');
+                                            } else {
+                                                // Fallback: add to array if function not available
+                                                window.__playwright_recording_events.push(eventData);
+                                                console.log('[Playwright] Click captured (LINK - fallback to polling):', serialized.tagName, serialized.href, serialized.text?.substring(0, 50) || 'no text');
+                                            }
+                                        } catch (err) {
+                                            console.error('[Playwright] Error in immediate processing, using fallback:', err);
+                                            // Fallback: add to array
+                                            window.__playwright_recording_events.push(eventData);
+                                        }
+                                        
+                                        // Mark as link click for polling (backup)
                                         window.__playwright_recording_link_click = true;
                                         window.__playwright_recording_link_click_time = Date.now();
-                                        
-                                        // CRITICAL: Trigger immediate processing by dispatching a custom event
-                                        // This signals that a link click happened and needs immediate processing
-                                        window.dispatchEvent(new CustomEvent('__playwright_link_click', {
-                                            detail: { href: serialized.href, text: serialized.text }
-                                        }));
                                         
                                         // Allow navigation after a small delay to ensure event is processed
                                         // Use setTimeout to allow event processing before navigation
@@ -470,7 +484,7 @@ class EventCapture:
                                             } else if (interactiveEl.getAttribute('href')) {
                                                 window.location.href = interactiveEl.getAttribute('href');
                                             }
-                                        }, 50); // Small delay to ensure event is added to array
+                                        }, 100); // Increased delay to ensure immediate processing completes
                                         
                                         return; // Early return for links
                                     }
