@@ -641,15 +641,22 @@ class ElementInteractions:
                             'x': int(box['x'] + box['width'] / 2),
                             'y': int(box['y'] + box['height'] / 2)
                         }
+                        logger.debug(f"Found element by selector '{selector}', coords: {element_coords}")
+                    else:
+                        logger.debug(f"Element found by selector '{selector}' but bounding_box is None")
+                else:
+                    logger.warning(f"Element not found by selector '{selector}'")
             
             if element:
                 # CRITICAL: Always click on field before typing (even in fast_mode)
                 # This ensures the click is captured in YAML and matches real user behavior
                 # Click must happen BEFORE typing to be captured correctly
+                clicked = False
                 if element_coords:
                     # Click on element to focus (this will be captured by event_capture)
-                    logger.debug(f"Clicking on field before typing at ({element_coords['x']}, {element_coords['y']})")
+                    logger.info(f"Clicking on field before typing at ({element_coords['x']}, {element_coords['y']})")
                     await self.page.mouse.click(element_coords['x'], element_coords['y'])
+                    clicked = True
                     # Small delay to allow click event to be captured
                     await asyncio.sleep(0.1)
                 else:
@@ -661,17 +668,31 @@ class ElementInteractions:
                                 'x': int(box['x'] + box['width'] / 2),
                                 'y': int(box['y'] + box['height'] / 2)
                             }
-                            logger.debug(f"Clicking on field before typing at ({coords['x']}, {coords['y']})")
+                            logger.info(f"Clicking on field before typing at ({coords['x']}, {coords['y']}) [from bounding_box]")
                             await self.page.mouse.click(coords['x'], coords['y'])
+                            clicked = True
                             await asyncio.sleep(0.1)
                         else:
                             # Last resort: use element.click() which also triggers click event
+                            logger.info(f"Clicking on field using element.click() [fallback - no bounding_box]")
                             await element.click()
+                            clicked = True
                             await asyncio.sleep(0.1)
-                    except:
+                    except Exception as e:
                         # Last resort: use element.click()
+                        logger.warning(f"Error getting bounding_box, using element.click(): {e}")
+                        await element.click()
+                        clicked = True
+                        await asyncio.sleep(0.1)
+                
+                if not clicked:
+                    logger.error("CRITICAL: Click was not executed before typing! This should never happen.")
+                    # Force click as last resort
+                    try:
                         await element.click()
                         await asyncio.sleep(0.1)
+                    except Exception as e:
+                        logger.error(f"Failed to click element even as last resort: {e}")
                 
                 if self.fast_mode:
                     # In fast mode: type instantly after click (click already happened above)
