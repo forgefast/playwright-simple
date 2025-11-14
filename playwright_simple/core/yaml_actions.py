@@ -30,33 +30,32 @@ class ActionMapper:
     
     @staticmethod
     def _get_playwright_commands(test: SimpleTestBase) -> Optional['PlaywrightCommands']:
-        """Get or create PlaywrightCommands instance for the test."""
-        logger.debug(f"_get_playwright_commands: PLAYWRIGHT_COMMANDS_AVAILABLE={PLAYWRIGHT_COMMANDS_AVAILABLE}")
-        if not PLAYWRIGHT_COMMANDS_AVAILABLE:
-            logger.warning("PlaywrightCommands não disponível (PLAYWRIGHT_COMMANDS_AVAILABLE=False)")
-            return None
+        """Get or create PlaywrightCommands instance using unified function."""
+        from .playwright_commands.unified import get_playwright_commands
         
-        # Check if test has page
         if not hasattr(test, 'page') or test.page is None:
             logger.warning("Test não tem page disponível")
             return None
         
-        # Check if test already has a PlaywrightCommands instance
-        if hasattr(test, '_playwright_commands'):
-            logger.debug("Reutilizando instância existente de PlaywrightCommands")
-            return test._playwright_commands
+        # Get fast_mode from test config
+        fast_mode = False
+        if hasattr(test, 'config') and hasattr(test.config, 'step'):
+            fast_mode = getattr(test.config.step, 'fast_mode', False)
         
-        # Create new instance
-        fast_mode = getattr(test.config.step, 'fast_mode', False) if hasattr(test, 'config') else False
-        logger.debug(f"Criando nova instância de PlaywrightCommands (fast_mode={fast_mode})")
-        try:
-            commands = PlaywrightCommands(test.page, fast_mode=fast_mode)
-            test._playwright_commands = commands  # Cache for reuse
-            logger.debug("PlaywrightCommands criado com sucesso")
-            return commands
-        except Exception as e:
-            logger.error(f"Erro ao criar PlaywrightCommands: {e}", exc_info=True)
-            return None
+        # Initialize cache if not exists
+        if not hasattr(test, '_playwright_commands_cache'):
+            test._playwright_commands_cache = {}
+        
+        # Use unified function
+        commands = get_playwright_commands(
+            page=test.page,
+            fast_mode=fast_mode,
+            cache_key=test,
+            cache=test._playwright_commands_cache
+        )
+        
+        logger.debug(f"_get_playwright_commands retornou: {commands is not None}")
+        return commands
     
     @staticmethod
     def get_core_actions(step: Dict[str, Any], test: SimpleTestBase) -> Dict[str, Callable]:
@@ -183,116 +182,167 @@ class ActionMapper:
     
     @staticmethod
     async def _execute_click(step: Dict[str, Any], test: SimpleTestBase, commands: Optional['PlaywrightCommands']) -> None:
-        """Execute click action using PlaywrightCommands (same code as recording)."""
+        """Execute click action using unified function (same code as recording)."""
+        from .playwright_commands.unified import unified_click, parse_click_args
+        
         text = step.get('text')
         selector = step.get('selector')
         description = step.get('description', '')
         
         logger.debug(f"[ACTION] Executando click: text='{text}', selector='{selector}', description='{description}'")
-        print(f"🔍 [ACTION] Executando click: text='{text}', selector='{selector}'")
         
-        if commands:
-            # Use PlaywrightCommands (same code as recording)
-            logger.debug(f"[ACTION] PlaywrightCommands disponível, executando click...")
-            print(f"🔍 [ACTION] PlaywrightCommands disponível, executando click...")
-            try:
-                # Get cursor_controller from test if available (for visual feedback)
-                # Same logic as in command_server and command_handlers
-                cursor_controller = None
-                if hasattr(test, 'cursor_manager') and hasattr(test.cursor_manager, 'controller'):
-                    cursor_controller = test.cursor_manager.controller
-                
-                # Parse index if needed (same as command_server)
-                index = 0
-                if text and '[' in text and ']' in text:
-                    try:
-                        index_part = text[text.index('[')+1:text.index(']')]
-                        index = int(index_part)
-                        text = text[:text.index('[')].strip()
-                    except:
-                        pass
-                
-                if text:
-                    logger.debug(f"[ACTION] Chamando commands.click(text='{text}', index={index})...")
-                    print(f"🔍 [ACTION] Chamando commands.click(text='{text}', index={index})...")
-                    success = await commands.click(text=text, index=index, cursor_controller=cursor_controller, description=description)
-                    logger.debug(f"[ACTION] commands.click retornou: {success}")
-                    print(f"🔍 [ACTION] commands.click retornou: {success}")
-                elif selector:
-                    logger.debug(f"[ACTION] Chamando commands.click(selector='{selector}')...")
-                    print(f"🔍 [ACTION] Chamando commands.click(selector='{selector}')...")
-                    success = await commands.click(selector=selector, cursor_controller=cursor_controller, description=description)
-                    logger.debug(f"[ACTION] commands.click retornou: {success}")
-                    print(f"🔍 [ACTION] commands.click retornou: {success}")
-                else:
-                    raise ValueError("Click action requires either 'text' or 'selector'")
-                
-                if not success:
-                    error_msg = f"Failed to click: {description or text or selector}"
-                    logger.error(f"[ACTION] {error_msg}")
-                    print(f"❌ [ACTION] {error_msg}")
-                    raise Exception(error_msg)
-                else:
-                    logger.debug(f"[ACTION] Click executado com sucesso!")
-                    print(f"✅ [ACTION] Click executado com sucesso!")
-            except Exception as e:
-                logger.error(f"[ACTION] Erro ao executar click: {e}", exc_info=True)
-                print(f"❌ [ACTION] Erro ao executar click: {e}")
-                raise
+        if not test.page:
+            raise ValueError("Page not available for click action")
+        
+        # Get fast_mode from test config
+        fast_mode = False
+        if hasattr(test, 'config') and hasattr(test.config, 'step'):
+            fast_mode = getattr(test.config.step, 'fast_mode', False)
+        
+        # Get cursor_controller from test if available
+        cursor_controller = None
+        if hasattr(test, 'cursor_manager') and hasattr(test.cursor_manager, 'controller'):
+            cursor_controller = test.cursor_manager.controller
+        
+        # Build args string for unified parser (same format as CLI)
+        args_str = ''
+        if text:
+            args_str = text
+        elif selector:
+            args_str = f'selector {selector}'
         else:
-            # Fallback to SimpleTestBase if PlaywrightCommands not available
-            logger.warning("PlaywrightCommands not available, using SimpleTestBase.click")
-            print("⚠️  [ACTION] PlaywrightCommands não disponível, usando SimpleTestBase.click")
-            await test.click(
-                text or selector or '',
-                description
-            )
+            raise ValueError("Click action requires either 'text' or 'selector'")
+        
+        # Parse arguments using unified parser
+        parsed = parse_click_args(args_str)
+        
+        # Wait for page to be ready (same as before)
+        try:
+            await test.page.wait_for_load_state('domcontentloaded', timeout=2000)
+        except:
+            pass
+        
+        # Initialize cache if not exists
+        if not hasattr(test, '_playwright_commands_cache'):
+            test._playwright_commands_cache = {}
+        
+        # Use unified click function
+        success = await unified_click(
+            page=test.page,
+            text=parsed['text'],
+            selector=parsed['selector'],
+            role=parsed['role'],
+            index=parsed['index'],
+            cursor_controller=cursor_controller,
+            fast_mode=fast_mode,
+            description=description,
+            cache_key=test,
+            cache=test._playwright_commands_cache
+        )
+        
+        if not success:
+            error_msg = f"Failed to click: {description or text or selector}"
+            logger.error(f"[ACTION] {error_msg}")
+            raise Exception(error_msg)
     
     @staticmethod
     async def _execute_type(step: Dict[str, Any], test: SimpleTestBase, commands: Optional['PlaywrightCommands']) -> None:
-        """Execute type action using PlaywrightCommands (same code as recording)."""
+        """Execute type action using unified function (same code as recording)."""
+        from .playwright_commands.unified import unified_type, parse_type_args
+        
         text = step.get('text', '')
         selector = step.get('selector')
         description = step.get('description', '')
         
         logger.debug(f"[ACTION] Executando type: text='{text}', selector='{selector}'")
         
-        if commands:
-            # Use PlaywrightCommands (same code as recording)
-            if selector:
-                success = await commands.type_text(text, selector=selector)
-            else:
-                # Try to find field by common patterns (email, password, etc)
-                success = await commands.type_text(text, into=description or 'input')
-            
-            if not success:
-                raise Exception(f"Failed to type '{text}' into {description or selector or 'field'}")
+        if not test.page:
+            raise ValueError("Page not available for type action")
+        
+        if not text:
+            raise ValueError("Text is required for type action")
+        
+        # Get fast_mode from test config
+        fast_mode = False
+        if hasattr(test, 'config') and hasattr(test.config, 'step'):
+            fast_mode = getattr(test.config.step, 'fast_mode', False)
+        
+        # Get cursor_controller from test if available
+        cursor_controller = None
+        if hasattr(test, 'cursor_manager') and hasattr(test.cursor_manager, 'controller'):
+            cursor_controller = test.cursor_manager.controller
+        
+        # Build args string for unified parser (same format as CLI)
+        if selector:
+            args_str = f'{text} into selector {selector}'
+        elif description:
+            args_str = f'{text} into {description}'
         else:
-            # Fallback to SimpleTestBase if PlaywrightCommands not available
-            logger.warning("PlaywrightCommands not available, using SimpleTestBase.type")
-            await test.type(
-                selector or '',
-                text,
-                description
-            )
+            # Try to find field by common patterns (email, password, etc)
+            args_str = f'{text} into input'
+        
+        # Parse arguments using unified parser
+        parsed = parse_type_args(args_str)
+        
+        # Initialize cache if not exists
+        if not hasattr(test, '_playwright_commands_cache'):
+            test._playwright_commands_cache = {}
+        
+        # Use unified type function
+        success = await unified_type(
+            page=test.page,
+            text=parsed['text'],
+            into=parsed['into'],
+            selector=parsed['selector'],
+            cursor_controller=cursor_controller,
+            fast_mode=fast_mode,
+            cache_key=test,
+            cache=test._playwright_commands_cache
+        )
+        
+        if not success:
+            field = parsed['selector'] or parsed['into'] or description or 'field'
+            raise Exception(f"Failed to type '{text}' into {field}")
     
     @staticmethod
     async def _execute_submit(step: Dict[str, Any], test: SimpleTestBase, commands: Optional['PlaywrightCommands']) -> None:
-        """Execute submit action using PlaywrightCommands (same code as recording)."""
+        """Execute submit action using unified function (same code as recording)."""
+        from .playwright_commands.unified import unified_submit
+        
         button_text = step.get('button_text') or step.get('text')
         description = step.get('description', '')
         
         logger.debug(f"[ACTION] Executando submit: button_text='{button_text}'")
         
-        if commands:
-            # Use PlaywrightCommands (same code as recording)
-            success = await commands.submit_form(button_text=button_text)
-            if not success:
-                raise Exception(f"Failed to submit form: {description or button_text or 'form'}")
-        else:
-            # Fallback to SimpleTestBase if PlaywrightCommands not available
-            logger.warning("PlaywrightCommands not available, using SimpleTestBase.submit")
-            await test.submit(button_text, description)
+        if not test.page:
+            raise ValueError("Page not available for submit action")
+        
+        # Get fast_mode from test config
+        fast_mode = False
+        if hasattr(test, 'config') and hasattr(test.config, 'step'):
+            fast_mode = getattr(test.config.step, 'fast_mode', False)
+        
+        # Get cursor_controller from test if available
+        cursor_controller = None
+        if hasattr(test, 'cursor_manager') and hasattr(test.cursor_manager, 'controller'):
+            cursor_controller = test.cursor_manager.controller
+        
+        # Initialize cache if not exists
+        if not hasattr(test, '_playwright_commands_cache'):
+            test._playwright_commands_cache = {}
+        
+        # Use unified submit function
+        success = await unified_submit(
+            page=test.page,
+            button_text=button_text,
+            cursor_controller=cursor_controller,
+            fast_mode=fast_mode,
+            cache_key=test,
+            cache=test._playwright_commands_cache
+        )
+        
+        if not success:
+            raise Exception(f"Failed to submit form: {description or button_text or 'form'}")
     
     @staticmethod
     async def _execute_wait(step: Dict[str, Any], test: SimpleTestBase) -> None:
