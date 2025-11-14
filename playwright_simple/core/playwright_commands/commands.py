@@ -29,7 +29,7 @@ class PlaywrightCommands:
         self.page = page
         self.fast_mode = fast_mode
         self._element_finder = ElementFinder(page)
-        self._element_interactions = ElementInteractions(page)
+        self._element_interactions = ElementInteractions(page, fast_mode=fast_mode)
         self._page_operations = PageOperations(page)
         self._visual_feedback = VisualFeedback(page, fast_mode=fast_mode)
     
