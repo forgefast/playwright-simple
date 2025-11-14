@@ -670,7 +670,7 @@ class ElementInteractions:
                 if coords_to_use:
                     # Use visual feedback to move cursor and show click animation (even in fast_mode)
                     if visual_feedback and cursor_controller:
-                        logger.debug(f"Using visual feedback to click at ({coords_to_use['x']}, {coords_to_use['y']})")
+                        logger.info(f"🎯 Using visual feedback to click at ({coords_to_use['x']}, {coords_to_use['y']})")
                         await visual_feedback.show_click_feedback(
                             coords_to_use['x'],
                             coords_to_use['y'],
@@ -678,7 +678,7 @@ class ElementInteractions:
                         )
                     else:
                         # Fallback: direct mouse click without animation
-                        logger.debug(f"Clicking directly at ({coords_to_use['x']}, {coords_to_use['y']}) [no visual feedback]")
+                        logger.warning(f"⚠️  Clicking directly at ({coords_to_use['x']}, {coords_to_use['y']}) [no visual feedback - visual_feedback={visual_feedback is not None}, cursor_controller={cursor_controller is not None}]")
                         await self.page.mouse.click(coords_to_use['x'], coords_to_use['y'])
                     clicked = True
                     # Small delay to allow click event to be captured

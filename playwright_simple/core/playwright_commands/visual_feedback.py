@@ -50,6 +50,8 @@ class VisualFeedback:
                 has_move = hasattr(cursor_controller, 'move')
                 has_move_to = hasattr(cursor_controller, 'move_to')
                 
+                logger.info(f"🎬 Visual feedback: moving cursor to ({x}, {y}) [has_move={has_move}, has_move_to={has_move_to}, enable_animations={self.enable_animations}]")
+                
                 if has_move:
                     # CursorController interface
                     await cursor_controller.show()
@@ -62,6 +64,7 @@ class VisualFeedback:
                 elif has_move_to:
                     # CursorManager interface
                     # Move cursor to position with smooth animation
+                    logger.info(f"🎬 Moving cursor using CursorManager.move_to({x}, {y})")
                     await cursor_controller.move_to(x, y)
                     # Wait for cursor to reach position (only if smooth animation)
                     if self.enable_animations:
@@ -69,6 +72,7 @@ class VisualFeedback:
                     
                     # Use CursorManager's show_click_effect if available
                     if hasattr(cursor_controller, 'show_click_effect'):
+                        logger.info(f"🎬 Showing click effect at ({x}, {y})")
                         await cursor_controller.show_click_effect(x, y)
                         if self.enable_animations:
                             await asyncio.sleep(0.1)  # Small delay for animation
