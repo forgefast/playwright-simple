@@ -194,3 +194,100 @@ def _handle_html(args):
         print(f"❌ Erro: {result.get('error', 'Unknown error')}")
         sys.exit(1)
 
+
+def _handle_save(args):
+    """Handle save command."""
+    result = send_command('save', '')
+    if result.get('success'):
+        message = result.get('result', {}).get('message', 'YAML saved')
+        print(f"✅ {message}")
+    else:
+        print(f"❌ Erro: {result.get('error', 'Unknown error')}")
+        sys.exit(1)
+
+
+def _handle_exit(args):
+    """Handle exit command."""
+    result = send_command('exit', '')
+    if result.get('success'):
+        message = result.get('result', {}).get('message', 'Exiting')
+        print(f"✅ {message}")
+    else:
+        print(f"❌ Erro: {result.get('error', 'Unknown error')}")
+        sys.exit(1)
+
+
+def _handle_pause(args):
+    """Handle pause command."""
+    result = send_command('pause', '')
+    if result.get('success'):
+        message = result.get('result', {}).get('message', 'Recording paused')
+        print(f"✅ {message}")
+    else:
+        print(f"❌ Erro: {result.get('error', 'Unknown error')}")
+        sys.exit(1)
+
+
+def _handle_resume(args):
+    """Handle resume command."""
+    result = send_command('resume', '')
+    if result.get('success'):
+        message = result.get('result', {}).get('message', 'Recording resumed')
+        print(f"✅ {message}")
+    else:
+        print(f"❌ Erro: {result.get('error', 'Unknown error')}")
+        sys.exit(1)
+
+
+def _handle_start(args):
+    """Handle start command."""
+    result = send_command('start', '')
+    if result.get('success'):
+        message = result.get('result', {}).get('message', 'Recording started')
+        print(f"✅ {message}")
+    else:
+        print(f"❌ Erro: {result.get('error', 'Unknown error')}")
+        sys.exit(1)
+
+
+def _handle_caption(args):
+    """Handle caption command."""
+    if not hasattr(args, 'text') or not args.text:
+        print("❌ Texto da legenda é obrigatório")
+        sys.exit(1)
+    
+    result = send_command('caption', args.text)
+    if result.get('success'):
+        message = result.get('result', {}).get('message', 'Caption added')
+        print(f"✅ {message}")
+    else:
+        print(f"❌ Erro: {result.get('error', 'Unknown error')}")
+        sys.exit(1)
+
+
+def _handle_audio(args):
+    """Handle audio command."""
+    if not hasattr(args, 'text') or not args.text:
+        print("❌ Texto para narração é obrigatório")
+        sys.exit(1)
+    
+    result = send_command('audio', args.text)
+    if result.get('success'):
+        message = result.get('result', {}).get('message', 'Audio added')
+        print(f"✅ {message}")
+    else:
+        print(f"❌ Erro: {result.get('error', 'Unknown error')}")
+        sys.exit(1)
+
+
+def _handle_screenshot(args):
+    """Handle screenshot command."""
+    name = getattr(args, 'name', None) or ''
+    result = send_command('screenshot', name)
+    if result.get('success'):
+        message = result.get('result', {}).get('message', 'Screenshot added')
+        print(f"✅ {message}")
+    else:
+        print(f"❌ Erro: {result.get('error', 'Unknown error')}")
+        sys.exit(1)
+
