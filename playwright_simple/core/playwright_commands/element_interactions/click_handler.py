@@ -274,6 +274,25 @@ class ClickHandler:
                     'x': int(box['x'] + box['width'] / 2),
                     'y': int(box['y'] + box['height'] / 2)
                 }
+                # CRITICAL: Save cursor position BEFORE clicking link (for navigation persistence)
+                if is_link:
+                    await self.page.evaluate(f"""
+                        () => {{
+                            const position = {{
+                                x: {element_coords['x']},
+                                y: {element_coords['y']}
+                            }};
+                            window.__playwright_cursor_last_position = position;
+                            try {{
+                                sessionStorage.setItem('__playwright_cursor_last_position', JSON.stringify(position));
+                            }} catch (e) {{
+                                // sessionStorage might not be available
+                            }}
+                        }}
+                    """)
+                    if DEBUG_CURSOR:
+                        logger.info(f"🖱️  [DEBUG] Saved cursor position ({element_coords['x']}, {element_coords['y']}) before link click")
+                
                 if visual_feedback and cursor_controller:
                     if DEBUG_CURSOR:
                         logger.info(f"🖱️  [DEBUG] Moving cursor to element at ({element_coords['x']}, {element_coords['y']})")

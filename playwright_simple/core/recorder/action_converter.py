@@ -54,6 +54,9 @@ class ActionConverter:
         # Also use placeholder and type to better identify input fields
         element_placeholder = element_info.get('placeholder', '')
         element_type = element_info.get('type', '')
+        # Get label text to detect label->input clicks
+        label_text = element_info.get('label', '')
+        
         # Create a more specific key for input fields
         if element_tag == 'INPUT':
             element_key = f"{element_tag}:{element_id}:{element_name}:{element_placeholder}:{element_type}"
@@ -64,19 +67,34 @@ class ActionConverter:
         # Check if this is a duplicate click on the same element
         if self._last_click:
             last_key = self._last_click.get('key', '')
+            last_tag = self._last_click.get('tag', '')
             last_timestamp = self._last_click.get('timestamp', 0)
             time_diff = timestamp - last_timestamp
             
-            # Filter if same element clicked within 500ms (increased from 200ms)
-            # This allows clicks on labels and then on fields (they're different elements)
-            # But filters out rapid duplicate clicks on the same input field
+            # Filter if same element clicked within 500ms
             if last_key == element_key and time_diff < 500:
                 logger.debug(f"Filtering duplicate click on {element_key} within {time_diff}ms")
                 return None  # Ignore duplicate click
+            
+            # CRITICAL: Filter clicks on INPUT that happen right after a click on LABEL
+            # When you click a label, it automatically focuses/clicks the associated input
+            # So we should ignore the input click if it happens within 300ms of a label click
+            if (last_tag == 'LABEL' and element_tag == 'INPUT' and time_diff < 300):
+                # Check if this input is associated with the label
+                # The label text should match the input's label or the input should have the label's 'for' attribute
+                last_text = self._last_click.get('text', '').lower()
+                # If label text matches input label or input name/id, it's likely the associated input
+                if (label_text and last_text in label_text.lower()) or \
+                   (element_name and last_text in element_name.lower()) or \
+                   (element_id and last_text in element_id.lower()):
+                    logger.debug(f"Filtering input click after label click: label='{last_text}', input='{element_name or element_id}' within {time_diff}ms")
+                    return None  # Ignore input click caused by label click
         
-        # Store this click
+        # Store this click (include tag and text for label->input detection)
         self._last_click = {
             'key': element_key,
+            'tag': element_tag,
+            'text': element_info.get('text', '') or element_info.get('label', ''),
             'timestamp': timestamp
         }
         
