@@ -46,33 +46,33 @@ class ActionConverter:
             logger.warning("convert_click: No element_info in event_data")
             return None
         
-               # Filter duplicate clicks on the same element within 500ms
-               # This prevents capturing rapid duplicate clicks, but allows clicks on different elements
-               element_id = element_info.get('id', '')
-               element_name = element_info.get('name', '')
-               element_tag = element_info.get('tagName', '').upper()
-               # Also use placeholder and type to better identify input fields
-               element_placeholder = element_info.get('placeholder', '')
-               element_type = element_info.get('type', '')
-               # Create a more specific key for input fields
-               if element_tag == 'INPUT':
-                   element_key = f"{element_tag}:{element_id}:{element_name}:{element_placeholder}:{element_type}"
-               else:
-                   element_key = f"{element_tag}:{element_id}:{element_name}"
-               timestamp = event_data.get('timestamp', 0)
-               
-               # Check if this is a duplicate click on the same element
-               if self._last_click:
-                   last_key = self._last_click.get('key', '')
-                   last_timestamp = self._last_click.get('timestamp', 0)
-                   time_diff = timestamp - last_timestamp
-                   
-                   # Filter if same element clicked within 500ms (increased from 200ms)
-                   # This allows clicks on labels and then on fields (they're different elements)
-                   # But filters out rapid duplicate clicks on the same input field
-                   if last_key == element_key and time_diff < 500:
-                       logger.debug(f"Filtering duplicate click on {element_key} within {time_diff}ms")
-                       return None  # Ignore duplicate click
+        # Filter duplicate clicks on the same element within 500ms
+        # This prevents capturing rapid duplicate clicks, but allows clicks on different elements
+        element_id = element_info.get('id', '')
+        element_name = element_info.get('name', '')
+        element_tag = element_info.get('tagName', '').upper()
+        # Also use placeholder and type to better identify input fields
+        element_placeholder = element_info.get('placeholder', '')
+        element_type = element_info.get('type', '')
+        # Create a more specific key for input fields
+        if element_tag == 'INPUT':
+            element_key = f"{element_tag}:{element_id}:{element_name}:{element_placeholder}:{element_type}"
+        else:
+            element_key = f"{element_tag}:{element_id}:{element_name}"
+        timestamp = event_data.get('timestamp', 0)
+        
+        # Check if this is a duplicate click on the same element
+        if self._last_click:
+            last_key = self._last_click.get('key', '')
+            last_timestamp = self._last_click.get('timestamp', 0)
+            time_diff = timestamp - last_timestamp
+            
+            # Filter if same element clicked within 500ms (increased from 200ms)
+            # This allows clicks on labels and then on fields (they're different elements)
+            # But filters out rapid duplicate clicks on the same input field
+            if last_key == element_key and time_diff < 500:
+                logger.debug(f"Filtering duplicate click on {element_key} within {time_diff}ms")
+                return None  # Ignore duplicate click
         
         # Store this click
         self._last_click = {
