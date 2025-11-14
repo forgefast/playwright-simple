@@ -17,9 +17,10 @@ logger = logging.getLogger(__name__)
 class ElementInteractions:
     """Handles interactions with elements."""
     
-    def __init__(self, page: Page):
+    def __init__(self, page: Page, fast_mode: bool = False):
         """Initialize element interactions."""
         self.page = page
+        self.fast_mode = fast_mode
     
     async def click(
         self,
@@ -501,7 +502,7 @@ class ElementInteractions:
                         await element.click()
                 
                 # Reduce delay in fast mode
-                delay = 0.01 if (visual_feedback and visual_feedback.fast_mode) else 0.1
+                delay = 0.01 if self.fast_mode else 0.1
                 await asyncio.sleep(delay)  # Small delay after click
                 
                 if clear:
@@ -510,14 +511,17 @@ class ElementInteractions:
                 # Type text character by character to trigger input events
                 # This ensures events are captured by event_capture
                 text_str = str(text)
+                type_delay = 1 if self.fast_mode else 10  # Much faster in fast mode
                 for char in text_str:
-                    await element.type(char, delay=10)
-                    # Small delay to ensure events are processed
-                    await asyncio.sleep(0.01)
+                    await element.type(char, delay=type_delay)
+                    # Small delay to ensure events are processed (reduced in fast mode)
+                    if not self.fast_mode:
+                        await asyncio.sleep(0.01)
                 
                 # Trigger blur event to finalize input (so it's captured)
                 await element.evaluate('el => el.blur()')
-                await asyncio.sleep(0.1)  # Small delay for blur event to be captured
+                # Reduced delay in fast mode
+                await asyncio.sleep(0.01 if self.fast_mode else 0.1)
                 
                 return True
             
@@ -675,8 +679,8 @@ class ElementInteractions:
                 # Fallback: use mouse click
                 await self.page.mouse.click(x, y)
             
-            # Small delay to ensure click event is captured
-            await asyncio.sleep(0.1)
+            # Small delay to ensure click event is captured (reduced in fast mode)
+            await asyncio.sleep(0.01 if self.fast_mode else 0.1)
             
             logger.info(f"Form submitted (button: '{button_text_found}')")
             return True
