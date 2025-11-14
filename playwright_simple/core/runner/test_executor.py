@@ -316,7 +316,7 @@ class TestExecutor:
                 await page.mouse.move(initial_x, initial_y)
             else:
                 # Move cursor to center of screen to ensure it's visible
-            await test.cursor_manager.move_to(center_x, center_y)
+                await test.cursor_manager.move_to(center_x, center_y)
                 # Sync Playwright mouse position
                 await page.mouse.move(center_x, center_y)
             
