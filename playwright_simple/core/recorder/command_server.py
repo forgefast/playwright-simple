@@ -246,6 +246,11 @@ class CommandServer:
         from ..playwright_commands import PlaywrightCommands
         commands = PlaywrightCommands(page)
         
+        # Get cursor controller if available
+        cursor_controller = None
+        if hasattr(self.recorder, 'cursor_controller') and self.recorder.cursor_controller:
+            cursor_controller = self.recorder.cursor_controller
+        
         args = args.strip()
         
         if ' into ' in args.lower():
@@ -256,9 +261,9 @@ class CommandServer:
                 
                 if field.startswith('selector '):
                     selector = field[9:].strip().strip('"\'')
-                    success = await commands.type_text(text, selector=selector)
+                    success = await commands.type_text(text, selector=selector, cursor_controller=cursor_controller)
                 else:
-                    success = await commands.type_text(text, into=field)
+                    success = await commands.type_text(text, into=field, cursor_controller=cursor_controller)
                 
                 return {'success': success}
         

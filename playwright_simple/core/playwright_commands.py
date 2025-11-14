@@ -501,7 +501,8 @@ class PlaywrightCommands:
         text: str,
         into: Optional[str] = None,
         selector: Optional[str] = None,
-        clear: bool = True
+        clear: bool = True,
+        cursor_controller = None
     ) -> bool:
         """
         Type text into an input field.
@@ -511,44 +512,126 @@ class PlaywrightCommands:
             into: Text label of the input field
             selector: CSS selector of the input field
             clear: Clear field before typing
+            cursor_controller: Optional CursorController instance for visual feedback
         
         Returns:
             True if typed successfully, False otherwise
         """
         try:
             element = None
+            element_coords = None
             
             if into:
-                # Find input by label text
-                element = await self.page.evaluate_handle("""
+                # Find input by label text and get coordinates
+                result = await self.page.evaluate("""
                     (labelText) => {
                         const labels = Array.from(document.querySelectorAll('label'));
                         for (const label of labels) {
                             if ((label.textContent || '').includes(labelText)) {
                                 const inputId = label.getAttribute('for');
+                                let input = null;
                                 if (inputId) {
-                                    return document.getElementById(inputId);
+                                    input = document.getElementById(inputId);
                                 }
-                                // Try to find input near label
-                                const input = label.parentElement?.querySelector('input, textarea');
-                                if (input) return input;
+                                if (!input) {
+                                    input = label.parentElement?.querySelector('input, textarea');
+                                }
+                                if (input) {
+                                    const rect = input.getBoundingClientRect();
+                                    return {
+                                        found: true,
+                                        x: Math.floor(rect.left + rect.width / 2),
+                                        y: Math.floor(rect.top + rect.height / 2)
+                                    };
+                                }
                             }
                         }
                         // Try to find input with placeholder
                         const inputs = Array.from(document.querySelectorAll('input, textarea'));
                         for (const input of inputs) {
                             if ((input.placeholder || '').includes(labelText)) {
-                                return input;
+                                const rect = input.getBoundingClientRect();
+                                return {
+                                    found: true,
+                                    x: Math.floor(rect.left + rect.width / 2),
+                                    y: Math.floor(rect.top + rect.height / 2)
+                                };
                             }
                         }
-                        return null;
+                        return {found: false};
                     }
                 """, into)
+                
+                if result.get('found'):
+                    element_coords = {'x': result.get('x'), 'y': result.get('y')}
+                    # Find element handle for typing
+                    element = await self.page.evaluate_handle("""
+                        (labelText) => {
+                            const labels = Array.from(document.querySelectorAll('label'));
+                            for (const label of labels) {
+                                if ((label.textContent || '').includes(labelText)) {
+                                    const inputId = label.getAttribute('for');
+                                    if (inputId) {
+                                        return document.getElementById(inputId);
+                                    }
+                                    const input = label.parentElement?.querySelector('input, textarea');
+                                    if (input) return input;
+                                }
+                            }
+                            const inputs = Array.from(document.querySelectorAll('input, textarea'));
+                            for (const input of inputs) {
+                                if ((input.placeholder || '').includes(labelText)) {
+                                    return input;
+                                }
+                            }
+                            return null;
+                        }
+                    """, into)
             
             if selector and not element:
                 element = await self.page.query_selector(selector)
+                if element:
+                    box = await element.bounding_box()
+                    if box:
+                        element_coords = {
+                            'x': int(box['x'] + box['width'] / 2),
+                            'y': int(box['y'] + box['height'] / 2)
+                        }
             
             if element:
+                # Click on field before typing (for better UX in videos)
+                if element_coords and cursor_controller:
+                    try:
+                        await cursor_controller.show()
+                        await cursor_controller.move(element_coords['x'], element_coords['y'], smooth=True)
+                        await asyncio.sleep(0.2)  # Small delay so user can see cursor move
+                        
+                        # Show click animation
+                        await self.page.evaluate(f"""
+                            () => {{
+                                const clickIndicator = document.getElementById('__playwright_cursor_click');
+                                if (clickIndicator) {{
+                                    clickIndicator.style.left = '{element_coords['x']}px';
+                                    clickIndicator.style.top = '{element_coords['y']}px';
+                                    clickIndicator.style.display = 'block';
+                                    setTimeout(() => {{
+                                        clickIndicator.style.display = 'none';
+                                    }}, 300);
+                                }}
+                            }}
+                        """)
+                        await asyncio.sleep(0.1)
+                    except Exception as e:
+                        logger.debug(f"Error showing cursor feedback: {e}")
+                
+                # Click on element to focus (even if already focused, for visual clarity)
+                if element_coords:
+                    await self.page.mouse.click(element_coords['x'], element_coords['y'])
+                else:
+                    await element.click()
+                
+                await asyncio.sleep(0.1)  # Small delay after click
+                
                 if clear:
                     await element.fill('')
                 await element.type(text)

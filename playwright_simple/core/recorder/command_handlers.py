@@ -482,6 +482,9 @@ class CommandHandlers:
             print("❌ Page not available")
             return
         
+        # Get cursor controller if available
+        cursor_controller = self._get_cursor_controller()
+        
         if not args:
             print("❌ Usage: pw-type \"text\" into \"field\" | pw-type \"text\" selector \"#id\"")
             return
@@ -497,9 +500,9 @@ class CommandHandlers:
                 
                 if field.startswith('selector '):
                     selector = field[9:].strip().strip('"\'')
-                    success = await commands.type_text(text, selector=selector)
+                    success = await commands.type_text(text, selector=selector, cursor_controller=cursor_controller)
                 else:
-                    success = await commands.type_text(text, into=field)
+                    success = await commands.type_text(text, into=field, cursor_controller=cursor_controller)
                 
                 if success:
                     print(f"✅ Typed '{text}' into '{field}'")
