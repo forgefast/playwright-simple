@@ -29,7 +29,8 @@ class ElementInteractions:
         role: Optional[str] = None,
         index: int = 0,
         cursor_controller = None,
-        visual_feedback = None
+        visual_feedback = None,
+        description: str = ""
     ) -> bool:
         """
         Click on an element.
@@ -41,12 +42,15 @@ class ElementInteractions:
             index: Index if multiple matches (default: 0)
             cursor_controller: Optional CursorController instance for visual feedback
             visual_feedback: Optional VisualFeedback instance
+            description: Optional description for logging
         
         Returns:
             True if clicked successfully, False otherwise
         """
+        logger.debug(f"[ELEMENT_INTERACTIONS] click: text='{text}', selector='{selector}', role='{role}', description='{description}'")
         try:
             if text:
+                logger.debug(f"[ELEMENT_INTERACTIONS] Procurando elemento por texto: '{text}'")
                 # Find by text - prioritize submit buttons and get coordinates
                 result = await self.page.evaluate("""
                     ({text, index}) => {
@@ -125,7 +129,49 @@ class ElementInteractions:
                             }
                         }
                         
-                        // Strategy 3: Any clickable element with text (lowest priority)
+                        // Strategy 3: Labels that can be clicked to focus their associated input
+                        const labels = Array.from(document.querySelectorAll('label'));
+                        for (const label of labels) {
+                            if (label.offsetParent === null || label.style.display === 'none') {
+                                continue;
+                            }
+                            
+                            const labelText = (label.textContent || label.innerText || '').trim().toLowerCase();
+                            // More flexible matching: check if label text contains the search text or vice versa
+                            if (labelText.includes(textLower) || textLower.includes(labelText) || labelText === textLower) {
+                                // Find associated input
+                                let input = null;
+                                const forAttr = label.getAttribute('for');
+                                if (forAttr) {
+                                    input = document.getElementById(forAttr);
+                                }
+                                if (!input) {
+                                    input = label.querySelector('input, textarea, select');
+                                }
+                                if (input && input.offsetParent !== null) {
+                                    const rect = input.getBoundingClientRect();
+                                    matches.push({
+                                        element: input,
+                                        x: Math.floor(rect.left + rect.width / 2),
+                                        y: Math.floor(rect.top + rect.height / 2),
+                                        priority: 4,  // Higher than generic clickable, lower than buttons
+                                        isSubmit: false
+                                    });
+                                } else {
+                                    // If no input found, click the label itself (some labels are clickable)
+                                    const rect = label.getBoundingClientRect();
+                                    matches.push({
+                                        element: label,
+                                        x: Math.floor(rect.left + rect.width / 2),
+                                        y: Math.floor(rect.top + rect.height / 2),
+                                        priority: 3,
+                                        isSubmit: false
+                                    });
+                                }
+                            }
+                        }
+                        
+                        // Strategy 4: Any clickable element with text (lowest priority)
                         if (matches.length <= index) {
                             const allElements = Array.from(document.querySelectorAll('*'));
                             for (const el of allElements) {
@@ -183,22 +229,29 @@ class ElementInteractions:
                 return False
             
             if selector:
+                logger.debug(f"[ELEMENT_INTERACTIONS] Procurando elemento por selector: '{selector}'")
                 element = await self.page.query_selector(selector)
                 if element:
+                    logger.debug(f"[ELEMENT_INTERACTIONS] Elemento encontrado por selector")
                     # Get coordinates for visual feedback
                     box = await element.bounding_box()
                     if box:
                         x = int(box['x'] + box['width'] / 2)
                         y = int(box['y'] + box['height'] / 2)
+                        logger.debug(f"[ELEMENT_INTERACTIONS] Coordenadas: ({x}, {y})")
                         
                         # Show visual feedback
                         if visual_feedback and cursor_controller:
                             await visual_feedback.show_click_feedback(x, y, cursor_controller)
                         
+                        logger.debug(f"[ELEMENT_INTERACTIONS] Executando click em ({x}, {y})...")
                         await self.page.mouse.click(x, y)
+                        logger.debug(f"[ELEMENT_INTERACTIONS] Click executado com sucesso!")
                     else:
+                        logger.debug(f"[ELEMENT_INTERACTIONS] Sem bounding box, usando element.click()")
                         await element.click()
                     return True
+                logger.warning(f"[ELEMENT_INTERACTIONS] Elemento não encontrado: selector='{selector}'")
                 return False
             
             if role:
@@ -224,7 +277,7 @@ class ElementInteractions:
             return False
             
         except Exception as e:
-            logger.error(f"Error clicking element: {e}")
+            logger.error(f"[ELEMENT_INTERACTIONS] Erro ao clicar: {e}", exc_info=True)
             return False
     
     async def type_text(

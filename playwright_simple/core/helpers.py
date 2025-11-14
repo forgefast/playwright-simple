@@ -109,24 +109,35 @@ class TestBaseHelpers:
                 await helpers.move_cursor_to_element(x, y)
             ```
         """
-        element = await self.selector_manager.find_element(selector, description)
-        if element is None:
-            from .exceptions import ElementNotFoundError
-            raise ElementNotFoundError(
-                f"Element not found: {description or selector}"
-            )
-        
-        # Get element position for cursor movement
+        logger.debug(f"[HELPERS] prepare_element_interaction: selector='{selector}', description='{description}'")
         try:
-            box = await element.bounding_box()
-            if box:
-                x = box['x'] + box['width'] / 2
-                y = box['y'] + box['height'] / 2
-                return element, x, y
+            element = await self.selector_manager.find_element(selector, description)
+            logger.debug(f"[HELPERS] Element encontrado: {element}")
+            if element is None:
+                logger.error(f"[HELPERS] Element não encontrado: {selector}")
+                from .exceptions import ElementNotFoundError
+                raise ElementNotFoundError(
+                    f"Element not found: {description or selector}"
+                )
+            
+            # Get element position for cursor movement
+            try:
+                logger.debug(f"[HELPERS] Obtendo bounding box do elemento...")
+                box = await element.bounding_box()
+                logger.debug(f"[HELPERS] Bounding box: {box}")
+                if box:
+                    x = box['x'] + box['width'] / 2
+                    y = box['y'] + box['height'] / 2
+                    logger.debug(f"[HELPERS] Coordenadas calculadas: x={x}, y={y}")
+                    return element, x, y
+            except Exception as e:
+                logger.debug(f"[HELPERS] Erro ao obter bounding box para {selector}: {e}")
+            
+            logger.debug(f"[HELPERS] Retornando elemento sem coordenadas")
+            return element, None, None
         except Exception as e:
-            logger.debug(f"Could not get bounding box for {selector}: {e}")
-        
-        return element, None, None
+            logger.error(f"[HELPERS] Erro em prepare_element_interaction: {e}", exc_info=True)
+            raise
     
     async def detect_state_change(
         self,

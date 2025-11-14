@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Script para executar/reproduzir um teste YAML gerado.
+Script para executar/reproduzir um teste YAML gerado em background.
+Permite interação via CLI durante a execução.
 """
-
 import asyncio
 import logging
 from pathlib import Path
@@ -26,8 +26,8 @@ logging.getLogger('playwright_simple.core.base').setLevel(logging.DEBUG)
 
 logger = logging.getLogger(__name__)
 
-async def replay_yaml(yaml_path: Path):
-    """Reproduzir um teste YAML."""
+async def replay_yaml_background(yaml_path: Path):
+    """Reproduzir um teste YAML em background, mantendo o processo rodando."""
     logger.debug(f"Iniciando replay do YAML: {yaml_path}")
     print(f"📄 Carregando YAML: {yaml_path}")
     
@@ -53,12 +53,24 @@ async def replay_yaml(yaml_path: Path):
     logger.debug("TestRunner criado")
     
     # Executar teste (browser será criado automaticamente se não fornecido)
-    print(f"▶️  Executando teste...")
+    print(f"▶️  Executando teste em background...")
+    print(f"💡 Deixe este processo rodando e use comandos CLI em outro terminal")
+    print(f"   Exemplo: playwright-simple find \"Entrar\"")
     logger.debug("Iniciando execução do teste...")
+    
     try:
+        # Executar teste em background
         result = await runner.run_test(test_name, test_func)
         logger.debug(f"Teste executado com sucesso. Resultado: {result}")
         print(f"✅ Teste concluído!")
+        
+        # Manter processo rodando para permitir interação
+        print(f"💡 Processo mantido rodando. Use Ctrl+C para parar.")
+        try:
+            await asyncio.sleep(3600)  # 1 hora
+        except KeyboardInterrupt:
+            print("\n🛑 Parando...")
+        
         return result
     except Exception as e:
         logger.error(f"Erro ao executar teste: {e}", exc_info=True)
@@ -90,18 +102,9 @@ if __name__ == '__main__':
     except Exception as e:
         logger.debug(f"Error cleaning up orphan processes before test: {e}")
     
-    # Timeout aumentado para permitir interação manual (5 minutos)
+    # Executar sem timeout (permite interação manual)
     try:
-        asyncio.run(asyncio.wait_for(replay_yaml(yaml_path), timeout=300.0))
-    except asyncio.TimeoutError:
-        print("❌ Timeout: O teste demorou mais de 30 segundos")
-        # Limpar processos órfãos mesmo em caso de timeout
-        try:
-            from playwright_simple.core.recorder.command_server import cleanup_old_sessions
-            cleanup_old_sessions(force=True, timeout=5.0)
-        except:
-            pass
-        exit(1)
+        asyncio.run(replay_yaml_background(yaml_path))
     except KeyboardInterrupt:
         print("\n⚠️  Interrompido pelo usuário")
         # Limpar processos órfãos mesmo em caso de interrupção

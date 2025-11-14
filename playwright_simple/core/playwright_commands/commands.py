@@ -43,12 +43,13 @@ class PlaywrightCommands:
         return await self._element_finder.find_all_elements(*args, **kwargs)
     
     # Delegate to element interactions
-    async def click(self, *args, cursor_controller=None, **kwargs):
+    async def click(self, *args, cursor_controller=None, description="", **kwargs):
         """Click on an element."""
         return await self._element_interactions.click(
             *args,
             cursor_controller=cursor_controller,
             visual_feedback=self._visual_feedback,
+            description=description,
             **kwargs
         )
     

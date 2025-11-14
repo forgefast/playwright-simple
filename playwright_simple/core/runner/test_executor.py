@@ -99,6 +99,8 @@ class TestExecutor:
         self.video_processor = video_processor
         self.subtitle_generator = subtitle_generator
         self.audio_processor = audio_processor
+        self._command_server = None
+        self._test_instance = None
     
     def _create_test_instance(self, page: Page, test_name: str, test_func: Callable) -> SimpleTestBase:
         """
@@ -244,6 +246,7 @@ class TestExecutor:
             # Check if test function has Odoo-specific attributes or annotations
             print(f"  🔧 Criando instância de teste...")
             test = self._create_test_instance(page, test_name, test_func)
+            self._test_instance = test  # Store for CommandServer access
             test_type = type(test).__name__
             print(f"  ✅ Instância criada: {test_type}")
             _log_action("test_instance_created", test_name, {"test_type": test_type})
@@ -256,6 +259,25 @@ class TestExecutor:
             except Exception as e:
                 logger.debug(f"Could not initialize control interface: {e}")
                 test._control_interface = None
+            
+            # Criar CommandServer para permitir comandos CLI durante execução
+            try:
+                from ..recorder.command_server import CommandServer
+                
+                # Criar mock Recorder que expõe a página e test instance
+                class MockRecorder:
+                    def __init__(self, page, test_instance):
+                        self.page = page
+                        self.test_instance = test_instance
+                        self.cursor_controller = None  # Não necessário para comandos básicos
+                
+                mock_recorder = MockRecorder(page, test)
+                self._command_server = CommandServer(mock_recorder)
+                await self._command_server.start()
+                logger.debug("CommandServer iniciado para comandos CLI durante execução")
+            except Exception as e:
+                logger.debug(f"Could not start CommandServer: {e}")
+                self._command_server = None
             
             # Inject cursor IMMEDIATELY after creating test instance (before navigation)
             # This ensures cursor is visible from the start of the video
@@ -543,6 +565,16 @@ class TestExecutor:
                     await browser.close()
                 if hasattr(self, '_playwright') and self._playwright:
                     await self._playwright.stop()
+            
+            # Stop CommandServer if it was started
+            if self._command_server:
+                try:
+                    await self._command_server.stop()
+                    logger.debug("CommandServer parado após execução do teste")
+                except Exception as e:
+                    logger.debug(f"Error stopping CommandServer: {e}")
+                finally:
+                    self._command_server = None
             
             # Cleanup orphan browser processes
             try:
