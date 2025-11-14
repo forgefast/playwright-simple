@@ -42,20 +42,40 @@ class VisualFeedback:
         Args:
             x: X coordinate
             y: Y coordinate
-            cursor_controller: Optional CursorController instance
+            cursor_controller: Optional CursorController or CursorManager instance
         """
         if cursor_controller:
             try:
-                await cursor_controller.show()
-                # Move cursor to position (this will save position automatically)
-                # Use smooth animation if animations are enabled (even in fast_mode for recording)
-                await cursor_controller.move(x, y, smooth=self.enable_animations)
-                # Wait for cursor to reach position (only if smooth animation)
-                if self.enable_animations:
-                    await asyncio.sleep(0.3)  # Smooth animation takes ~0.3s
+                # Check if it's CursorController (has move method) or CursorManager (has move_to method)
+                has_move = hasattr(cursor_controller, 'move')
+                has_move_to = hasattr(cursor_controller, 'move_to')
                 
-                # Show click animation (if animations are enabled)
-                if self.enable_animations:
+                if has_move:
+                    # CursorController interface
+                    await cursor_controller.show()
+                    # Move cursor to position (this will save position automatically)
+                    # Use smooth animation if animations are enabled (even in fast_mode for recording)
+                    await cursor_controller.move(x, y, smooth=self.enable_animations)
+                    # Wait for cursor to reach position (only if smooth animation)
+                    if self.enable_animations:
+                        await asyncio.sleep(0.3)  # Smooth animation takes ~0.3s
+                elif has_move_to:
+                    # CursorManager interface
+                    # Move cursor to position with smooth animation
+                    await cursor_controller.move_to(x, y)
+                    # Wait for cursor to reach position (only if smooth animation)
+                    if self.enable_animations:
+                        await asyncio.sleep(0.3)  # Smooth animation takes ~0.3s
+                    
+                    # Use CursorManager's show_click_effect if available
+                    if hasattr(cursor_controller, 'show_click_effect'):
+                        await cursor_controller.show_click_effect(x, y)
+                        if self.enable_animations:
+                            await asyncio.sleep(0.1)  # Small delay for animation
+                        return  # CursorManager handles click effect, no need for manual animation
+                
+                # Show click animation manually (for CursorController or fallback)
+                if self.enable_animations and has_move:  # Only for CursorController
                     animation_duration = 300
                     await self.page.evaluate(f"""
                         () => {{

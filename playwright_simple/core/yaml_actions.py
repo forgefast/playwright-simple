@@ -199,10 +199,11 @@ class ActionMapper:
         if hasattr(test, 'config') and hasattr(test.config, 'step'):
             fast_mode = getattr(test.config.step, 'fast_mode', False)
         
-        # Get cursor_controller from test if available
+        # Get cursor_manager from test if available (for visual feedback)
+        # CursorManager can be used directly with visual_feedback (it has move_to method)
         cursor_controller = None
-        if hasattr(test, 'cursor_manager') and hasattr(test.cursor_manager, 'controller'):
-            cursor_controller = test.cursor_manager.controller
+        if hasattr(test, 'cursor_manager') and test.cursor_manager:
+            cursor_controller = test.cursor_manager
         
         # Build args string for unified parser (same format as CLI)
         args_str = ''
@@ -327,10 +328,11 @@ class ActionMapper:
         if hasattr(test, 'config') and hasattr(test.config, 'step'):
             fast_mode = getattr(test.config.step, 'fast_mode', False)
         
-        # Get cursor_controller from test if available
+        # Get cursor_manager from test if available (for visual feedback)
+        # CursorManager can be used directly with visual_feedback (it has move_to method)
         cursor_controller = None
-        if hasattr(test, 'cursor_manager') and hasattr(test.cursor_manager, 'controller'):
-            cursor_controller = test.cursor_manager.controller
+        if hasattr(test, 'cursor_manager') and test.cursor_manager:
+            cursor_controller = test.cursor_manager
         
         # Build args string for unified parser (same format as CLI)
         if selector:
@@ -382,10 +384,11 @@ class ActionMapper:
         if hasattr(test, 'config') and hasattr(test.config, 'step'):
             fast_mode = getattr(test.config.step, 'fast_mode', False)
         
-        # Get cursor_controller from test if available
+        # Get cursor_manager from test if available (for visual feedback)
+        # CursorManager can be used directly with visual_feedback (it has move_to method)
         cursor_controller = None
-        if hasattr(test, 'cursor_manager') and hasattr(test.cursor_manager, 'controller'):
-            cursor_controller = test.cursor_manager.controller
+        if hasattr(test, 'cursor_manager') and test.cursor_manager:
+            cursor_controller = test.cursor_manager
         
         # Initialize cache if not exists
         if not hasattr(test, '_playwright_commands_cache'):
