@@ -100,7 +100,13 @@ class LogCapture:
 
 @pytest.mark.asyncio
 async def test_login_no_duplicate_clicks(browser_page: Page):
-    """Testa que não há cliques duplicados durante o login."""
+    """
+    TDD: Testa que não há cliques duplicados durante o login.
+    
+    FALHA se:
+    - Houver cliques duplicados no mesmo elemento
+    - Clique em label causar clique duplicado no input associado
+    """
     capture = LogCapture()
     capture.setup()
     
@@ -125,7 +131,12 @@ async def test_login_no_duplicate_clicks(browser_page: Page):
         
         # Executar fluxo de login
         await interactions.type_text(text="test@example.com", into="Email")
+        
+        # CRITICAL: Type password - clicar no label "Password" pode causar clique duplicado
+        clicks_before_password = len(capture.clicks)
         await interactions.type_text(text="password123", into="Password")
+        clicks_after_password = len(capture.clicks)
+        
         await interactions.submit_form(button_text="Login")
         
         # Aguardar um pouco para capturar todos os logs
@@ -148,9 +159,20 @@ async def test_login_no_duplicate_clicks(browser_page: Page):
                     if msg1 == msg2 or (len(msg1) > 20 and msg1[:20] == msg2[:20]):
                         duplicate_clicks.append((click1, click2, time_diff))
         
+        # Verificar especificamente cliques no password
+        password_clicks = [c for c in click_messages if 'password' in c['message'].lower() or 'senha' in c['message'].lower()]
+        password_duplicates = []
+        for i, click1 in enumerate(password_clicks):
+            for click2 in password_clicks[i+1:]:
+                time_diff = abs(click2['timestamp'] - click1['timestamp'])
+                if time_diff < 300:  # 300ms - janela para label->input
+                    password_duplicates.append((click1, click2, time_diff))
+        
         # Log detalhado para debug
         logger.info(f"Total de cliques capturados: {len(click_messages)}")
+        logger.info(f"Cliques no password: {len(password_clicks)}")
         logger.info(f"Cliques duplicados encontrados: {len(duplicate_clicks)}")
+        logger.info(f"Cliques duplicados no password: {len(password_duplicates)}")
         
         for click in click_messages:
             logger.debug(f"Click: {click['message']}")
@@ -161,8 +183,16 @@ async def test_login_no_duplicate_clicks(browser_page: Page):
                 logger.error(f"  Click 1: {dup1['message']}")
                 logger.error(f"  Click 2: {dup2['message']}")
         
-        # Assert: não deve haver cliques duplicados
-        assert len(duplicate_clicks) == 0, f"Encontrados {len(duplicate_clicks)} cliques duplicados durante o login"
+        # CRITICAL ASSERT: não deve haver cliques duplicados no password
+        assert len(password_duplicates) == 0, \
+            f"❌ PROBLEMA DETECTADO: Cliques duplicados no password! " \
+            f"Encontrados {len(password_duplicates)} pares de cliques duplicados. " \
+            f"Total de cliques no password: {len(password_clicks)}. " \
+            f"Detalhes: {password_duplicates}"
+        
+        # Assert: não deve haver cliques duplicados em geral
+        assert len(duplicate_clicks) == 0, \
+            f"❌ PROBLEMA DETECTADO: Encontrados {len(duplicate_clicks)} cliques duplicados durante o login"
         
     finally:
         capture.teardown()
@@ -170,7 +200,13 @@ async def test_login_no_duplicate_clicks(browser_page: Page):
 
 @pytest.mark.asyncio
 async def test_cursor_position_after_navigation(browser_page: Page):
-    """Testa que o cursor mantém a posição após navegação."""
+    """
+    TDD: Testa que o cursor mantém a posição após navegação.
+    
+    FALHA se:
+    - Cursor for criado no centro após navegação
+    - Cursor não manter posição original
+    """
     from playwright_simple.core.cursor import CursorManager
     from playwright_simple.core.config import TestConfig
     
@@ -180,7 +216,7 @@ async def test_cursor_position_after_navigation(browser_page: Page):
     # Iniciar cursor
     await cursor_manager.inject(force=True)
     
-    # Mover cursor para posição específica
+    # Mover cursor para posição específica (não centro)
     initial_x, initial_y = 500, 300
     await cursor_manager.move_to(initial_x, initial_y)
     await asyncio.sleep(0.2)  # Aguardar animação
@@ -231,12 +267,31 @@ async def test_cursor_position_after_navigation(browser_page: Page):
     
     assert final_pos is not None, "Cursor deve existir após navegação"
     
+    # CRITICAL: Verificar que NÃO está no centro
+    viewport = browser_page.viewport_size
+    center_x = viewport['width'] / 2
+    center_y = viewport['height'] / 2
+    
+    x_diff_from_center = abs(final_pos['x'] - center_x)
+    y_diff_from_center = abs(final_pos['y'] - center_y)
+    is_at_center = x_diff_from_center < 30 and y_diff_from_center < 30
+    
+    assert not is_at_center, \
+        f"❌ PROBLEMA DETECTADO: Cursor está no centro após navegação! " \
+        f"Posição: ({final_pos['x']}, {final_pos['y']}), " \
+        f"Centro: ({center_x}, {center_y}), " \
+        f"Esperado próximo de: ({initial_x}, {initial_y})"
+    
     # Verificar se a posição foi mantida (com tolerância de 10px)
     x_diff = abs(final_pos['x'] - initial_x)
     y_diff = abs(final_pos['y'] - initial_y)
     
-    assert x_diff < 10, f"Cursor X deve manter posição após navegação. Esperado: {initial_x}, Atual: {final_pos['x']}, Diferença: {x_diff}"
-    assert y_diff < 10, f"Cursor Y deve manter posição após navegação. Esperado: {initial_y}, Atual: {final_pos['y']}, Diferença: {y_diff}"
+    assert x_diff < 10, \
+        f"❌ PROBLEMA DETECTADO: Cursor X não manteve posição após navegação. " \
+        f"Esperado: {initial_x}, Atual: {final_pos['x']}, Diferença: {x_diff}"
+    assert y_diff < 10, \
+        f"❌ PROBLEMA DETECTADO: Cursor Y não manteve posição após navegação. " \
+        f"Esperado: {initial_y}, Atual: {final_pos['y']}, Diferença: {y_diff}"
 
 
 @pytest.mark.asyncio
