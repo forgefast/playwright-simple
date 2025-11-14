@@ -24,13 +24,15 @@ class PlaywrightHandlers:
         self,
         yaml_writer,
         page_getter: Optional[Callable] = None,
-        cursor_controller_getter: Optional[Callable] = None
+        cursor_controller_getter: Optional[Callable] = None,
+        recorder = None
     ):
         """Initialize Playwright handlers."""
         self.yaml_writer = yaml_writer
         self._get_page = page_getter
         self._get_cursor_controller = cursor_controller_getter
         self._playwright_commands = None
+        self._recorder = recorder  # Store recorder reference for fast_mode
     
     def _get_playwright_commands(self):
         """Get or create PlaywrightCommands instance."""
@@ -47,7 +49,12 @@ class PlaywrightHandlers:
         if not page:
             return None
         
-        self._playwright_commands = PlaywrightCommands(page)
+        # Get fast_mode from recorder if available
+        fast_mode = False
+        if self._recorder:
+            fast_mode = getattr(self._recorder, 'fast_mode', False)
+        
+        self._playwright_commands = PlaywrightCommands(page, fast_mode=fast_mode)
         return self._playwright_commands
     
     async def handle_find(self, args: str) -> None:

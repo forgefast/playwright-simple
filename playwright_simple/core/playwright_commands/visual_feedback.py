@@ -17,9 +17,10 @@ logger = logging.getLogger(__name__)
 class VisualFeedback:
     """Handles visual feedback for interactions."""
     
-    def __init__(self, page: Page):
+    def __init__(self, page: Page, fast_mode: bool = False):
         """Initialize visual feedback."""
         self.page = page
+        self.fast_mode = fast_mode
     
     async def show_click_feedback(
         self,
@@ -39,11 +40,16 @@ class VisualFeedback:
             try:
                 await cursor_controller.show()
                 # Move cursor to position (this will save position automatically)
-                await cursor_controller.move(x, y, smooth=True)
-                # Wait for cursor to reach position (smooth animation takes ~0.3s)
-                await asyncio.sleep(0.3)
+                # In fast mode, use instant movement instead of smooth animation
+                await cursor_controller.move(x, y, smooth=not self.fast_mode)
+                # Wait for cursor to reach position (only if smooth animation)
+                if not self.fast_mode:
+                    await asyncio.sleep(0.3)  # Smooth animation takes ~0.3s
+                else:
+                    await asyncio.sleep(0.01)  # Minimal delay in fast mode
                 
                 # Show click animation
+                animation_duration = 50 if self.fast_mode else 300
                 await self.page.evaluate(f"""
                     () => {{
                         const clickIndicator = document.getElementById('__playwright_cursor_click');
@@ -53,11 +59,12 @@ class VisualFeedback:
                             clickIndicator.style.display = 'block';
                             setTimeout(() => {{
                                 clickIndicator.style.display = 'none';
-                            }}, 300);
+                            }}, {animation_duration});
                         }}
                     }}
                 """)
-                await asyncio.sleep(0.1)  # Small delay for animation
+                delay = 0.01 if self.fast_mode else 0.1
+                await asyncio.sleep(delay)  # Small delay for animation
             except Exception as e:
                 logger.debug(f"Error showing cursor feedback: {e}")
 

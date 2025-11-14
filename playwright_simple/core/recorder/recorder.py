@@ -34,7 +34,7 @@ except ImportError:
 class Recorder:
     """Main recorder class that coordinates event capture, conversion, and YAML writing."""
     
-    def __init__(self, output_path: Path, initial_url: str = None, headless: bool = False, debug: bool = False):
+    def __init__(self, output_path: Path, initial_url: str = None, headless: bool = False, debug: bool = False, fast_mode: bool = False):
         """
         Initialize recorder.
         
@@ -58,6 +58,7 @@ class Recorder:
         
         self.is_recording = False
         self.is_paused = False
+        self.fast_mode = fast_mode  # Accelerate steps (reduce delays, instant animations)
         
         # Initialize command server for external commands
         self.command_server: Optional[CommandServer] = None

@@ -18,7 +18,8 @@ async def test_odoo_login():
     yaml_path = Path('test_odoo_login_real.yaml')
     
     print("🚀 Iniciando recorder...")
-    recorder = Recorder(yaml_path, initial_url='http://localhost:18069', headless=False)
+    # Enable fast mode to accelerate steps (delays can be adjusted in video post-processing)
+    recorder = Recorder(yaml_path, initial_url='http://localhost:18069', headless=False, fast_mode=True)
     
     # Iniciar recorder (vai esperar pelo console, então executamos em background)
     async def run_recorder():
@@ -27,18 +28,34 @@ async def test_odoo_login():
     # Executar recorder em background
     recorder_task = asyncio.create_task(run_recorder())
     
-    # Aguardar recorder iniciar (com timeout)
+    # Aguardar recorder iniciar (com timeout dinâmico)
     try:
-        # Dar tempo para o recorder inicializar
-        await asyncio.sleep(5)
-        print("✅ Recorder iniciado!")
+        # Wait for recorder to be ready using dynamic wait
+        page = None
+        for attempt in range(10):  # Try up to 10 times
+            try:
+                if hasattr(recorder, 'page') and recorder.page:
+                    page = recorder.page
+                    # Check if page is ready
+                    await asyncio.wait_for(
+                        page.wait_for_load_state('domcontentloaded', timeout=1000),
+                        timeout=1.5
+                    )
+                    break
+            except:
+                await asyncio.sleep(0.2)  # Small delay between attempts
+        
+        if page:
+            print("✅ Recorder iniciado!")
+        else:
+            print("⚠️  Recorder iniciado (página ainda carregando)")
     except Exception as e:
         print(f"⚠️  Erro ao iniciar recorder: {e}")
     
     print("📝 Testando comandos diretamente...\n")
     
-    # Aguardar página carregar
-    await asyncio.sleep(3)
+    # Aguardar página carregar (reduzido em fast mode)
+    await asyncio.sleep(0.5)  # Reduced from 3s
     
     # Usar command_handlers diretamente
     handlers = recorder.command_handlers
@@ -66,7 +83,8 @@ async def test_odoo_login():
         await recorder.stop(save=False)
         return
     print("   ✅ Elemento encontrado")
-    await asyncio.sleep(1)
+    if not recorder.fast_mode:
+        await asyncio.sleep(1)
     
     # 2. Clicar em "Entrar"
     print("\n2️⃣  Clicando em 'Entrar'...")
@@ -93,8 +111,9 @@ async def test_odoo_login():
             )
             print("   ✅ Campos de login detectados")
     except Exception as e:
-        print(f"   ⚠️  Timeout aguardando campos: {e}")
-    await asyncio.sleep(1)
+            print(f"   ⚠️  Timeout aguardando campos: {e}")
+    if not recorder.fast_mode:
+        await asyncio.sleep(1)
     
     # 3. Encontrar campo Email
     print("\n3️⃣  Procurando campo 'Email'...")
@@ -108,7 +127,8 @@ async def test_odoo_login():
         await recorder.stop(save=False)
         return
     print("   ✅ Campo encontrado")
-    await asyncio.sleep(1)
+    if not recorder.fast_mode:
+        await asyncio.sleep(1)
     
     # 4. Digitar email
     print("\n4️⃣  Digitando email...")
@@ -122,7 +142,8 @@ async def test_odoo_login():
         await recorder.stop(save=False)
         return
     print("   ✅ Email digitado")
-    await asyncio.sleep(1)
+    if not recorder.fast_mode:
+        await asyncio.sleep(1)
     
     # 5. Encontrar campo Password
     print("\n5️⃣  Procurando campo 'Password'...")
@@ -136,7 +157,8 @@ async def test_odoo_login():
         await recorder.stop(save=False)
         return
     print("   ✅ Campo encontrado")
-    await asyncio.sleep(1)
+    if not recorder.fast_mode:
+        await asyncio.sleep(1)
     
     # 6. Digitar senha
     print("\n6️⃣  Digitando senha...")
@@ -150,7 +172,8 @@ async def test_odoo_login():
         await recorder.stop(save=False)
         return
     print("   ✅ Senha digitada")
-    await asyncio.sleep(1)
+    if not recorder.fast_mode:
+        await asyncio.sleep(1)
     
     # 7. Submeter formulário
     print("\n7️⃣  Submetendo formulário...")
@@ -164,7 +187,10 @@ async def test_odoo_login():
         await recorder.stop(save=False)
         return
     print("   ✅ Formulário submetido")
-    await asyncio.sleep(3)
+    if not recorder.fast_mode:
+        await asyncio.sleep(3)
+    else:
+        await asyncio.sleep(0.5)  # Reduced delay in fast mode
     
     # 8. Verificar info
     print("\n8️⃣  Verificando estado da página...")

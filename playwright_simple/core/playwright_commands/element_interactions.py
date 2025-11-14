@@ -453,7 +453,9 @@ class ElementInteractions:
                     except:
                         await element.click()
                 
-                await asyncio.sleep(0.1)  # Small delay after click
+                # Reduce delay in fast mode
+                delay = 0.01 if (visual_feedback and visual_feedback.fast_mode) else 0.1
+                await asyncio.sleep(delay)  # Small delay after click
                 
                 if clear:
                     await element.fill('')
