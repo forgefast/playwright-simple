@@ -505,15 +505,12 @@ class ElementInteractions:
                 delay = 0.01 if self.fast_mode else 0.1
                 await asyncio.sleep(delay)  # Small delay after click
                 
-                if clear:
-                    await element.fill('')
-                
                 if self.fast_mode:
-                    # In fast mode, use fill() for instant typing, then trigger events manually
+                    # In fast mode, clear and type instantly via evaluate (all in one call)
                     text_str = str(text)
-                    # Use evaluate to set value instantly (faster than fill())
                     await element.evaluate("""
                         (el, value) => {
+                            // Clear and set value instantly
                             el.value = value;
                             // Trigger input events for each character (for event_capture)
                             for (let i = 0; i < value.length; i++) {
@@ -527,6 +524,8 @@ class ElementInteractions:
                 else:
                     # Type text character by character to trigger input events
                     # This ensures events are captured by event_capture
+                    if clear:
+                        await element.fill('')
                     text_str = str(text)
                     for char in text_str:
                         await element.type(char, delay=10)
