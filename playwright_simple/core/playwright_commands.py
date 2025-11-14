@@ -303,17 +303,56 @@ class PlaywrightCommands:
         """
         try:
             if text:
-                # Find by text - prioritize clickable elements and get coordinates
+                # Find by text - prioritize submit buttons and get coordinates
                 result = await self.page.evaluate("""
                     ({text, index}) => {
                         const textLower = text.toLowerCase();
                         const matches = [];
                         
-                        // Strategy 1: Prioritize clickable elements (links, buttons)
-                        const clickableSelectors = ['a', 'button', 'input[type="button"]', 'input[type="submit"]', '[role="button"]', '[role="link"]'];
+                        // Strategy 1: Prioritize SUBMIT buttons first (most important for forms)
+                        const submitSelectors = ['input[type="submit"]', 'button[type="submit"]', 'button:not([type])'];
+                        for (const selector of submitSelectors) {
+                            const elements = Array.from(document.querySelectorAll(selector));
+                            for (const el of elements) {
+                                if (el.offsetParent === null || el.style.display === 'none') {
+                                    continue;
+                                }
+                                
+                                // Check if it's inside a form
+                                const isInForm = el.closest('form') !== null;
+                                
+                                // Check direct text content
+                                const directText = Array.from(el.childNodes)
+                                    .filter(node => node.nodeType === Node.TEXT_NODE)
+                                    .map(node => node.textContent.trim())
+                                    .join(' ')
+                                    .trim();
+                                const elText = (directText || el.textContent || el.innerText || el.value || '').trim();
+                                
+                                if (elText.toLowerCase() === textLower || elText.toLowerCase().includes(textLower)) {
+                                    const rect = el.getBoundingClientRect();
+                                    // Higher priority for submit buttons in forms
+                                    matches.push({
+                                        element: el,
+                                        x: Math.floor(rect.left + rect.width / 2),
+                                        y: Math.floor(rect.top + rect.height / 2),
+                                        priority: isInForm ? 10 : 5,  // Higher priority if in form
+                                        isSubmit: true
+                                    });
+                                }
+                            }
+                        }
+                        
+                        // Strategy 2: Other clickable elements (links, buttons) - but lower priority
+                        const clickableSelectors = ['button', 'a', 'input[type="button"]', '[role="button"]', '[role="link"]'];
                         for (const selector of clickableSelectors) {
                             const elements = Array.from(document.querySelectorAll(selector));
                             for (const el of elements) {
+                                // Skip if already in matches
+                                if (matches.some(m => m.element === el)) {
+                                    continue;
+                                }
+                                
                                 if (el.offsetParent === null || el.style.display === 'none') {
                                     continue;
                                 }
@@ -328,16 +367,21 @@ class PlaywrightCommands:
                                 
                                 if (elText.toLowerCase() === textLower || elText.toLowerCase().includes(textLower)) {
                                     const rect = el.getBoundingClientRect();
+                                    const tag = el.tagName.toLowerCase();
+                                    const isInForm = el.closest('form') !== null;
+                                    // Lower priority for links, especially if not in form
                                     matches.push({
                                         element: el,
                                         x: Math.floor(rect.left + rect.width / 2),
-                                        y: Math.floor(rect.top + rect.height / 2)
+                                        y: Math.floor(rect.top + rect.height / 2),
+                                        priority: (tag === 'a' && !isInForm) ? 1 : 3,  // Links outside forms have lowest priority
+                                        isSubmit: false
                                     });
                                 }
                             }
                         }
                         
-                        // Strategy 2: Any clickable element with text
+                        // Strategy 3: Any clickable element with text (lowest priority)
                         if (matches.length <= index) {
                             const allElements = Array.from(document.querySelectorAll('*'));
                             for (const el of allElements) {
@@ -356,19 +400,25 @@ class PlaywrightCommands:
                                         matches.push({
                                             element: el,
                                             x: Math.floor(rect.left + rect.width / 2),
-                                            y: Math.floor(rect.top + rect.height / 2)
+                                            y: Math.floor(rect.top + rect.height / 2),
+                                            priority: 2,
+                                            isSubmit: false
                                         });
                                     }
                                 }
                             }
                         }
                         
+                        // Sort by priority (highest first) - submit buttons in forms first
+                        matches.sort((a, b) => b.priority - a.priority);
+                        
                         if (matches.length > index && matches[index]) {
                             return {
                                 found: true,
                                 x: matches[index].x,
                                 y: matches[index].y,
-                                element: matches[index].element
+                                element: matches[index].element,
+                                isSubmit: matches[index].isSubmit || false
                             };
                         }
                         return {found: false};
