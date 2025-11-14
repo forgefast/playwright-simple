@@ -53,6 +53,7 @@ class CommandServer:
         self.register_handler('find-all', self._handle_find_all)
         self.register_handler('click', self._handle_click)
         self.register_handler('type', self._handle_type)
+        self.register_handler('submit', self._handle_submit)
         self.register_handler('wait', self._handle_wait)
         self.register_handler('info', self._handle_info)
         self.register_handler('html', self._handle_html)
@@ -268,6 +269,27 @@ class CommandServer:
                 return {'success': success}
         
         return {'error': 'Usage: type "text" into "field"'}
+    
+    async def _handle_submit(self, args: str) -> Dict[str, Any]:
+        """Handle submit command."""
+        page = self._get_page()
+        if not page:
+            return {'error': 'Page not available'}
+        
+        from ..playwright_commands import PlaywrightCommands
+        commands = PlaywrightCommands(page)
+        
+        # Get cursor controller if available
+        cursor_controller = None
+        if hasattr(self.recorder, 'cursor_controller') and self.recorder.cursor_controller:
+            cursor_controller = self.recorder.cursor_controller
+        
+        # Parse button text (optional)
+        button_text = args.strip().strip('"\'') if args.strip() else None
+        
+        success = await commands.submit_form(button_text=button_text, cursor_controller=cursor_controller)
+        
+        return {'success': success}
     
     async def _handle_wait(self, args: str) -> Dict[str, Any]:
         """Handle wait command."""

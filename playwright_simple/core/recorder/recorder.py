@@ -101,6 +101,7 @@ class Recorder:
         self.console.register_command('find-all', self.command_handlers.handle_find_all)
         self.console.register_command('pw-click', self.command_handlers.handle_pw_click)
         self.console.register_command('pw-type', self.command_handlers.handle_pw_type)
+        self.console.register_command('pw-submit', self.command_handlers.handle_pw_submit)
         self.console.register_command('pw-wait', self.command_handlers.handle_pw_wait)
         self.console.register_command('pw-info', self.command_handlers.handle_pw_info)
         self.console.register_command('pw-html', self.command_handlers.handle_pw_html)

@@ -1,34 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Console command handlers for recorder.
+Command Handlers (Legacy - redirects to new modular structure).
 
-Handles user commands during recording session.
+This file is kept for backward compatibility.
+All functionality has been moved to playwright_simple/core/recorder/command_handlers/ module.
 """
 
-import logging
-from typing import Optional, Dict, Any, Callable
+# Import from new modular structure
+from playwright_simple.core.recorder.command_handlers.handlers import CommandHandlers
 
-logger = logging.getLogger(__name__)
-
-# Try to import PlaywrightCommands
-try:
-    from ..playwright_commands import PlaywrightCommands
-    PLAYWRIGHT_COMMANDS_AVAILABLE = True
-except ImportError:
-    PlaywrightCommands = None
-    PLAYWRIGHT_COMMANDS_AVAILABLE = False
-
-# Try to import cursor controller (optional)
-try:
-    from .cursor_controller import CursorController
-    CURSOR_AVAILABLE = True
-except ImportError:
-    CursorController = None
-    CURSOR_AVAILABLE = False
-
-
-class CommandHandlers:
+__all__ = ['CommandHandlers']
     """Handles console commands during recording."""
     
     def __init__(
@@ -513,6 +495,38 @@ class CommandHandlers:
         # No "into" - just type the text
         text = args.strip('"\'')
         print(f"⚠️  No field specified. Use: pw-type \"{text}\" into \"field\"")
+    
+    async def handle_pw_submit(self, args: str) -> None:
+        """Handle pw-submit command - submit form using Playwright."""
+        if not PLAYWRIGHT_COMMANDS_AVAILABLE:
+            print("❌ Playwright commands not available")
+            return
+        
+        commands = self._get_playwright_commands()
+        if not commands:
+            print("❌ Page not available")
+            return
+        
+        # Get cursor controller if available
+        cursor_controller = self._get_cursor_controller()
+        
+        # Parse button text (optional)
+        button_text = args.strip().strip('"\'') if args.strip() else None
+        
+        success = await commands.submit_form(button_text=button_text, cursor_controller=cursor_controller)
+        
+        if success:
+            if button_text:
+                print(f"✅ Form submitted (button: '{button_text}')")
+            else:
+                print("✅ Form submitted")
+        else:
+            if button_text:
+                print(f"❌ Failed to submit form (button: '{button_text}' not found)")
+            else:
+                print("❌ Failed to submit form (no submit button found)")
+            print("   💡 Make sure you're on a page with a form")
+            print("   💡 Try: pw-submit \"Entrar\" to specify button text")
     
     async def handle_pw_wait(self, args: str) -> None:
         """Handle pw-wait command - wait for element using Playwright."""

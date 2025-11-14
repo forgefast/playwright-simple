@@ -213,41 +213,31 @@ async def test_odoo_login_automated():
                 return False
         await asyncio.sleep(1)  # Pequeno delay antes de submit
         
-        # Passo 4: Clicar no botão de submit (ou pressionar Enter)
+        # Passo 4: Submeter formulário usando comando específico
         print("\n8️⃣ Submetendo formulário...")
         
-        # Priorizar botões submit via seletor CSS (mais confiável)
+        # Usar comando submit específico (mais confiável)
         submit_clicked = False
         
-        # Estratégia 1: Tentar seletor CSS específico para submit buttons
-        submit_selectors = [
-            'button[type="submit"]',
-            'input[type="submit"]',
-            'button:not([type])',  # Button sem type é submit por padrão em forms
-            'form button',  # Qualquer button dentro de form
-        ]
+        # Tentar com texto do botão primeiro
+        submit_labels = ['Entrar', 'Login', 'login', 'Submit', 'submit', 'Enviar', 'enviar']
         
-        for selector in submit_selectors:
-            click_result = send_command('click', f'selector {selector}', session_id=session_id, timeout=10)
-            if click_result.get('success') and click_result.get('result', {}).get('success', False):
-                print(f"✅ Botão de submit clicado (seletor: {selector})")
+        for label in submit_labels:
+            submit_result = send_command('submit', label, session_id=session_id, timeout=10)
+            if submit_result.get('success') and submit_result.get('result', {}).get('success', False):
+                print(f"✅ Formulário submetido (botão: '{label}')")
                 submit_clicked = True
                 break
         
-        # Estratégia 2: Se seletor não funcionou, tentar por texto (agora com prioridade para submit)
+        # Se não encontrou com texto, tentar sem texto (qualquer submit button)
         if not submit_clicked:
-            submit_labels = ['Entrar', 'Login', 'login', 'Submit', 'submit', 'Enviar', 'enviar']
-            
-            for label in submit_labels:
-                click_result = send_command('click', label, session_id=session_id, timeout=10)
-                if click_result.get('success') and click_result.get('result', {}).get('success', False):
-                    print(f"✅ Botão de submit clicado (texto: {label})")
-                    submit_clicked = True
-                    break
+            submit_result = send_command('submit', '', session_id=session_id, timeout=10)
+            if submit_result.get('success') and submit_result.get('result', {}).get('success', False):
+                print("✅ Formulário submetido (botão submit encontrado automaticamente)")
+                submit_clicked = True
         
-        # Estratégia 3: Debug e fallback
         if not submit_clicked:
-            print("⚠️  Não foi possível clicar no botão de submit")
+            print("⚠️  Não foi possível submeter formulário")
             print("   Tentando encontrar botão via HTML...")
             html_result = send_command('html', '--max-length 10000', session_id=session_id, timeout=10)
             if html_result.get('success'):
@@ -255,12 +245,6 @@ async def test_odoo_login_automated():
                 # Salvar para análise
                 Path('/tmp/odoo_submit_debug.html').write_text(html)
                 print(f"   HTML salvo em /tmp/odoo_submit_debug.html para análise")
-                
-                # Tentar qualquer button dentro de form
-                click_result = send_command('click', 'selector form button', session_id=session_id, timeout=10)
-                if click_result.get('success') and click_result.get('result', {}).get('success', False):
-                    print("✅ Botão clicado via seletor 'form button'")
-                    submit_clicked = True
         
         # Aguardar navegação após login
         print("\n9️⃣ Aguardando navegação após login...")
