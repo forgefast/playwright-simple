@@ -25,11 +25,17 @@ async def main():
     print("📋 Instruções:")
     print("   1. O navegador será aberto na página inicial do Odoo")
     print("   2. Clique no link 'Entrar' com o mouse")
-    print("   3. Aguarde alguns segundos após o clique")
-    print("   4. O script verificará se o clique foi capturado no YAML")
+    print("   3. Aguarde a navegação acontecer (você verá a tela de login)")
+    print("   4. O script verificará automaticamente se o clique foi capturado")
     print()
     
     output_file = Path("test_user_click_entrar.yaml")
+    
+    # Remove YAML anterior se existir
+    if output_file.exists():
+        output_file.unlink()
+        print(f"🗑️  Removido YAML anterior: {output_file}")
+        print()
     
     # Create recorder
     recorder = Recorder(
@@ -47,38 +53,47 @@ async def main():
         print("✅ Gravação iniciada!")
         print()
         print("👆 AGORA: Clique no link 'Entrar' na página do navegador")
-        print("   (Aguarde alguns segundos após o clique para a navegação acontecer)")
+        print("   (Aguarde a navegação acontecer - você verá a tela de login)")
         print()
         
-        # Wait for user to click (give them time)
-        print("⏳ Aguardando você clicar em 'Entrar'...")
-        print("   (Pressione Enter quando terminar de clicar)")
+        # Wait for navigation to happen (user clicks "Entrar")
+        print("⏳ Aguardando você clicar em 'Entrar' e a navegação acontecer...")
+        print("   (Aguardando até 30 segundos)")
         
-        # Wait for Enter key or timeout
-        import select
-        import termios
-        import tty
+        # Wait for URL to change (navigation happened)
+        initial_url = recorder.page.url
+        max_wait = 30  # seconds
+        waited = 0
+        navigation_detected = False
         
-        # Set terminal to raw mode temporarily
-        old_settings = termios.tcgetattr(sys.stdin)
-        try:
-            tty.setraw(sys.stdin.fileno())
-            # Wait up to 30 seconds for Enter key
-            for _ in range(300):  # 30 seconds with 0.1s intervals
-                if select.select([sys.stdin], [], [], 0.1)[0]:
-                    key = sys.stdin.read(1)
-                    if key == '\n' or key == '\r':  # Enter key
-                        break
-                await asyncio.sleep(0.1)
-        finally:
-            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+        while waited < max_wait:
+            try:
+                current_url = recorder.page.url
+                if current_url != initial_url:
+                    print(f"\n✅ Navegação detectada! URL mudou de '{initial_url}' para '{current_url}'")
+                    navigation_detected = True
+                    break
+            except Exception:
+                # Page might be navigating, continue waiting
+                pass
+            
+            await asyncio.sleep(0.5)
+            waited += 0.5
+            if waited % 5 == 0:
+                print(f"   ... ainda aguardando ({int(waited)}s)")
+        else:
+            if not navigation_detected:
+                print("\n⚠️  Timeout: Navegação não detectada após 30 segundos")
+                print("   Mas vamos verificar se o clique foi capturado mesmo assim...")
         
-        print("\n✅ Continuando verificação...")
+        # Give a bit more time for event processing
+        print("\n⏳ Aguardando processamento de eventos...")
+        await asyncio.sleep(2)
         
         # Check how many steps were captured
         steps_count = recorder.yaml_writer.get_steps_count()
         print()
-        print(f"📊 Steps capturados até agora: {steps_count}")
+        print(f"📊 Steps capturados: {steps_count}")
         
         if steps_count > 1:  # More than just the go_to
             print("✅ Clique detectado! Verificando YAML...")
@@ -106,22 +121,27 @@ async def main():
                 print()
                 print("✅ SUCESSO: 'Entrar' encontrado no YAML!")
                 print("   O clique do usuário foi capturado corretamente.")
+                return True
             else:
                 print()
                 print("❌ PROBLEMA: 'Entrar' NÃO encontrado no YAML!")
                 print("   O clique do usuário pode não ter sido capturado.")
                 print("   Verifique os logs acima para mais detalhes.")
+                return False
         else:
             print(f"❌ Arquivo YAML não foi criado: {output_file}")
+            return False
             
     except KeyboardInterrupt:
         print("\n⚠️  Interrompido pelo usuário")
         await recorder.stop(save=True)
+        return False
     except Exception as e:
         print(f"\n❌ Erro: {e}")
         import traceback
         traceback.print_exc()
         await recorder.stop(save=False)
+        return False
     finally:
         print()
         print("=" * 60)
@@ -129,5 +149,6 @@ async def main():
         print("=" * 60)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    success = asyncio.run(main())
+    sys.exit(0 if success else 1)
 
