@@ -4,7 +4,9 @@
 
 Validar que os comandos CLI funcionam corretamente durante uma gravação ativa, permitindo que IAs e usuários controlem o browser programaticamente.
 
-**Nota**: Para validação específica do feedback visual do cursor, veja `phase13_cursor_visual_validation.md`.
+**Notas**:
+- Para validação específica do feedback visual do cursor, veja `phase13_cursor_visual_validation.md`.
+- Para validação das melhorias de UX para vídeos (clique no campo antes de digitar, clique no submit), veja `phase13_ux_improvements_validation.md`.
 
 ---
 

@@ -339,6 +339,8 @@ Este documento contém o plano completo de implementação do playwright-simple,
 - [x] Integração com `Recorder` ativo
 - [x] `PlaywrightCommands` interface criada (incluindo `get_html()`)
 - [x] Feedback visual do cursor durante cliques (movimento + efeito visual)
+- [x] Clique no campo antes de digitar (melhora UX em vídeos)
+- [x] Clique no botão submit ao invés de Enter (já implementado, melhorado)
 - [x] Documentação completa (`CLI_COMMANDS.md`, `PLAYWRIGHT_COMMANDS.md`)
 - [x] Melhorias na captura de cliques (links sempre capturados)
 
@@ -346,6 +348,8 @@ Este documento contém o plano completo de implementação do playwright-simple,
 - ✅ Comandos CLI funcionando durante gravação
 - ✅ Interface `PlaywrightCommands` para uso programático
 - ✅ Feedback visual do cursor (movimento + efeito de clique)
+- ✅ Clique no campo antes de digitar (melhora clareza em vídeos)
+- ✅ Clique no botão submit ao invés de Enter
 - ✅ Documentação completa
 - ✅ Sistema IPC funcionando
 - ✅ Testes E2E (Odoo e feedback visual)
