@@ -258,7 +258,10 @@ class ElementInteractions:
                 # Support multiple search strategies for better compatibility
                 labelTextLower = into.lower()
                 result = await self.page.evaluate("""
-                    (labelText, labelTextLower) => {
+                    (args) => {
+                        const labelText = args.labelText;
+                        const labelTextLower = args.labelTextLower;
+                        
                         // Strategy 1: Find by label text
                         const labels = Array.from(document.querySelectorAll('label'));
                         for (const label of labels) {
@@ -338,7 +341,7 @@ class ElementInteractions:
                         
                         return {found: false};
                     }
-                """, into, labelTextLower)
+                """, {'labelText': into, 'labelTextLower': labelTextLower})
                 
                 if result.get('found'):
                     element_coords = {'x': result.get('x'), 'y': result.get('y')}
