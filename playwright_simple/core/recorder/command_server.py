@@ -49,6 +49,7 @@ class CommandServer:
     
     def _register_default_handlers(self):
         """Register default command handlers."""
+        # Playwright commands
         self.register_handler('find', self._handle_find)
         self.register_handler('find-all', self._handle_find_all)
         self.register_handler('click', self._handle_click)
@@ -58,6 +59,18 @@ class CommandServer:
         self.register_handler('info', self._handle_info)
         self.register_handler('html', self._handle_html)
         self.register_handler('navigate', self._handle_navigate)
+        
+        # Recording control commands
+        self.register_handler('save', self._handle_save)
+        self.register_handler('exit', self._handle_exit)
+        self.register_handler('pause', self._handle_pause)
+        self.register_handler('resume', self._handle_resume)
+        self.register_handler('start', self._handle_start)
+        
+        # Metadata commands
+        self.register_handler('caption', self._handle_caption)
+        self.register_handler('audio', self._handle_audio)
+        self.register_handler('screenshot', self._handle_screenshot)
     
     def register_handler(self, command: str, handler: Callable):
         """Register a command handler."""
@@ -411,6 +424,83 @@ class CommandServer:
         url = args.strip().strip('"\'')
         success = await commands.navigate(url)
         return {'success': success}
+    
+    # Recording control handlers
+    async def _handle_save(self, args: str) -> Dict[str, Any]:
+        """Handle save command."""
+        if not hasattr(self.recorder, 'command_handlers'):
+            return {'error': 'Command handlers not available'}
+        
+        await self.recorder.command_handlers.handle_save(args)
+        return {'success': True, 'message': 'YAML saved (recording continues)'}
+    
+    async def _handle_exit(self, args: str) -> Dict[str, Any]:
+        """Handle exit command."""
+        if not hasattr(self.recorder, 'command_handlers'):
+            return {'error': 'Command handlers not available'}
+        
+        await self.recorder.command_handlers.handle_exit(args)
+        return {'success': True, 'message': 'Exiting without saving'}
+    
+    async def _handle_pause(self, args: str) -> Dict[str, Any]:
+        """Handle pause command."""
+        if not hasattr(self.recorder, 'command_handlers'):
+            return {'error': 'Command handlers not available'}
+        
+        await self.recorder.command_handlers.handle_pause(args)
+        return {'success': True, 'message': 'Recording paused'}
+    
+    async def _handle_resume(self, args: str) -> Dict[str, Any]:
+        """Handle resume command."""
+        if not hasattr(self.recorder, 'command_handlers'):
+            return {'error': 'Command handlers not available'}
+        
+        await self.recorder.command_handlers.handle_resume(args)
+        return {'success': True, 'message': 'Recording resumed'}
+    
+    async def _handle_start(self, args: str) -> Dict[str, Any]:
+        """Handle start command."""
+        if not hasattr(self.recorder, 'command_handlers'):
+            return {'error': 'Command handlers not available'}
+        
+        is_recording = getattr(self.recorder, 'is_recording', False)
+        await self.recorder.command_handlers.handle_start(args, is_recording)
+        return {'success': True, 'message': 'Recording started'}
+    
+    # Metadata handlers
+    async def _handle_caption(self, args: str) -> Dict[str, Any]:
+        """Handle caption command."""
+        if not hasattr(self.recorder, 'command_handlers'):
+            return {'error': 'Command handlers not available'}
+        
+        text = args.strip().strip('"\'')
+        if not text:
+            return {'error': 'Caption text is required'}
+        
+        await self.recorder.command_handlers.handle_caption(text)
+        return {'success': True, 'message': f'Caption added: {text}'}
+    
+    async def _handle_audio(self, args: str) -> Dict[str, Any]:
+        """Handle audio command."""
+        if not hasattr(self.recorder, 'command_handlers'):
+            return {'error': 'Command handlers not available'}
+        
+        text = args.strip().strip('"\'')
+        if not text:
+            return {'error': 'Audio text is required'}
+        
+        await self.recorder.command_handlers.handle_audio(text)
+        return {'success': True, 'message': f'Audio added: {text}'}
+    
+    async def _handle_screenshot(self, args: str) -> Dict[str, Any]:
+        """Handle screenshot command."""
+        if not hasattr(self.recorder, 'command_handlers'):
+            return {'error': 'Command handlers not available'}
+        
+        # Parse name if provided
+        name = args.strip().strip('"\'') if args.strip() else None
+        await self.recorder.command_handlers.handle_screenshot(name or '')
+        return {'success': True, 'message': f'Screenshot added: {name or "auto"}'}
 
 
 def find_active_sessions() -> list:

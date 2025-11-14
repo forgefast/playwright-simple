@@ -133,6 +133,27 @@ def _add_command_parsers(subparsers):
     html_parser.add_argument('--selector', type=str, help='Seletor CSS do elemento (opcional, se omitido retorna HTML da página)')
     html_parser.add_argument('--pretty', '-p', action='store_true', help='Formatar HTML com indentação')
     html_parser.add_argument('--max-length', '--max', type=int, help='Comprimento máximo do HTML a retornar')
+    
+    # Recording control commands
+    save_parser = subparsers.add_parser('save', help='Salvar gravação YAML (continua gravando)')
+    
+    exit_parser = subparsers.add_parser('exit', help='Sair da gravação sem salvar')
+    
+    pause_parser = subparsers.add_parser('pause', help='Pausar gravação')
+    
+    resume_parser = subparsers.add_parser('resume', help='Retomar gravação')
+    
+    start_parser = subparsers.add_parser('start', help='Iniciar gravação')
+    
+    # Metadata commands
+    caption_parser = subparsers.add_parser('caption', help='Adicionar legenda/subtítulo')
+    caption_parser.add_argument('text', type=str, help='Texto da legenda')
+    
+    audio_parser = subparsers.add_parser('audio', help='Adicionar narração de áudio')
+    audio_parser.add_argument('text', type=str, help='Texto para narração')
+    
+    screenshot_parser = subparsers.add_parser('screenshot', help='Tirar screenshot')
+    screenshot_parser.add_argument('--name', type=str, help='Nome do screenshot (opcional)')
 
 
 def _add_logging_options(parser):
