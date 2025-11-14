@@ -71,10 +71,14 @@ async def run_generation():
             print("─" * 80)
             with open(YAML_PATH, 'r') as f:
                 lines = f.readlines()
-                for i, line in enumerate(lines[:50], 1):  # Primeiras 50 linhas
+                # Contar steps
+                step_count = sum(1 for line in lines if line.strip().startswith('- action:'))
+                print(f"  📊 Total de steps: {step_count}")
+                print("─" * 80)
+                for i, line in enumerate(lines[:40], 1):  # Primeiras 40 linhas
                     print(f"  {i:3d}: {line.rstrip()}")
-                if len(lines) > 50:
-                    print(f"  ... ({len(lines) - 50} linhas restantes)")
+                if len(lines) > 40:
+                    print(f"  ... ({len(lines) - 40} linhas restantes)")
             print("─" * 80)
             
             return True, result.returncode == 0
@@ -119,10 +123,26 @@ async def run_reproduction():
         # Verificar resultado
         success = result.returncode == 0
         
-        if success:
-            print(f"\n✅ Reprodução concluída com sucesso!")
+        # Extrair informações do resultado
+        if "test_finished" in result.stdout or "test_passed" in result.stdout:
+            # Tentar extrair informações do teste
+            if "status" in result.stdout:
+                if '"status": "passed"' in result.stdout:
+                    print(f"\n✅ Reprodução concluída com sucesso!")
+                elif '"status": "failed"' in result.stdout:
+                    print(f"\n❌ Reprodução falhou!")
+                else:
+                    print(f"\n⚠️  Reprodução completou com status desconhecido")
+            else:
+                if success:
+                    print(f"\n✅ Reprodução concluída com sucesso!")
+                else:
+                    print(f"\n❌ Reprodução falhou (código: {result.returncode})")
         else:
-            print(f"\n❌ Reprodução falhou (código: {result.returncode})")
+            if success:
+                print(f"\n✅ Reprodução concluída com sucesso!")
+            else:
+                print(f"\n❌ Reprodução falhou (código: {result.returncode})")
         
         return True, success
         
