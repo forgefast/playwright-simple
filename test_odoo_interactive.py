@@ -304,15 +304,16 @@ async def test_odoo_login():
             
             # Adicionar passo estático ao YAML (modelagem, não execução)
             # O delay será aplicado durante a reprodução, não durante a gravação
-            print("   ⏸️  Adicionando passo estático ao YAML...")
-            static_step = {
-                'action': 'wait',
-                'description': 'Passo estático (feedback visual)',
-                'static': True
-                # Não especificar 'seconds' - será determinado durante a reprodução
-            }
-            recorder.yaml_writer.add_step(static_step)
-            print("   ✅ Passo estático adicionado (delay será aplicado na reprodução)")
+            # COMENTADO TEMPORARIAMENTE para acelerar desenvolvimento
+            # print("   ⏸️  Adicionando passo estático ao YAML...")
+            # static_step = {
+            #     'action': 'wait',
+            #     'description': 'Passo estático (feedback visual)',
+            #     'static': True
+            #     # Não especificar 'seconds' - será determinado durante a reprodução
+            # }
+            # recorder.yaml_writer.add_step(static_step)
+            # print("   ✅ Passo estático adicionado (delay será aplicado na reprodução)")
     except Exception as e:
         print(f"   ⚠️  Erro aguardando próxima tela: {e}")
         # Wait a bit anyway
