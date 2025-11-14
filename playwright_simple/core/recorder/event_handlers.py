@@ -123,11 +123,20 @@ class EventHandlers:
             logger.debug(f"Skipping navigation to initial URL: {url}")
             return
         
-        # CRITICAL: Clear all pending inputs on navigation
-        # Events from the previous page should NOT be finalized after navigation
-        # This prevents capturing input events that happened before navigation
+        # CRITICAL: Finalize all pending inputs BEFORE clearing on navigation
+        # This ensures inputs are captured even if blur wasn't received (e.g., submit button clicked)
         if self.action_converter.pending_inputs:
-            logger.debug(f"Clearing {len(self.action_converter.pending_inputs)} pending input(s) on navigation (from previous page)")
+            logger.info(f"Navigation detected: finalizing {len(self.action_converter.pending_inputs)} pending input(s) before navigation")
+            for element_key in list(self.action_converter.pending_inputs.keys()):
+                action = self.action_converter.finalize_input(element_key)
+                if action:
+                    self.yaml_writer.add_step(action)
+                    value_preview = action.get('text', '')[:50]
+                    if len(action.get('text', '')) > 50:
+                        value_preview += '...'
+                    logger.info(f"Finalized input on navigation: {action.get('description', '')} = '{value_preview}'")
+                    print(f"📝 Type: {action.get('description', '')} = '{value_preview}'")
+            # Clear after finalizing
             self.action_converter.pending_inputs.clear()
         
         # Skip all navigations - they're caused by clicks which are already captured as 'click' actions
