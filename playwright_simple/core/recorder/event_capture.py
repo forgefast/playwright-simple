@@ -354,6 +354,11 @@ class EventCapture:
                                     // IMPORTANT: Links (A tags) should ALWAYS be captured, even without text
                                     // This is critical for capturing the first "Entrar" link on Odoo homepage
                                     if (tag === 'A' && hasHref) {
+                                        // CRITICAL: Prevent default navigation temporarily to ensure event is processed
+                                        // This is the standard pattern: preventDefault -> process -> allow navigation
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        
                                         // Always capture links, even if they don't have visible text
                                         // (text might be in child elements or CSS)
                                         // Also check for text in child elements if not in direct text
@@ -376,6 +381,23 @@ class EventCapture:
                                         // This helps ensure the event is processed before navigation
                                         window.__playwright_recording_link_click = true;
                                         window.__playwright_recording_link_click_time = Date.now();
+                                        
+                                        // CRITICAL: Trigger immediate processing by dispatching a custom event
+                                        // This signals that a link click happened and needs immediate processing
+                                        window.dispatchEvent(new CustomEvent('__playwright_link_click', {
+                                            detail: { href: serialized.href, text: serialized.text }
+                                        }));
+                                        
+                                        // Allow navigation after a small delay to ensure event is processed
+                                        // Use setTimeout to allow event processing before navigation
+                                        setTimeout(() => {
+                                            // Navigate to the link's href
+                                            if (interactiveEl.href) {
+                                                window.location.href = interactiveEl.href;
+                                            } else if (interactiveEl.getAttribute('href')) {
+                                                window.location.href = interactiveEl.getAttribute('href');
+                                            }
+                                        }, 50); // Small delay to ensure event is added to array
                                         
                                         return; // Early return for links
                                     }
@@ -504,6 +526,21 @@ class EventCapture:
         # Register listeners BEFORE injecting to catch early events
         self.page.on('load', on_load)
         self.page.on('domcontentloaded', on_dom_content_loaded)
+        
+        # CRITICAL: Listen for custom link click events to trigger immediate processing
+        async def on_link_click_event(event_data):
+            """Handle custom link click event - process immediately."""
+            try:
+                # This event is dispatched from JavaScript when a link is clicked
+                # It signals that we need to process events immediately
+                logger.info("🔗 Link click event detected - processing events immediately")
+                # Trigger immediate event processing
+                await self._process_pending_events_immediately()
+            except Exception as e:
+                logger.debug(f"Error handling link click event: {e}")
+        
+        # Listen for the custom event via page evaluation
+        # We'll check for this in the polling loop
         
         # Inject immediately if page is already loaded
         await inject_on_page()
