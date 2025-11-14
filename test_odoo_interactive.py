@@ -288,21 +288,21 @@ async def test_odoo_login():
                 print("   ✅ Continuando (fast_mode)")
             else:
                 # Normal mode: wait for navigation to complete (but with shorter timeouts)
-                try:
-                    # Wait for URL to change (indicating navigation started)
-                    initial_url = page.url
-                    await asyncio.wait_for(
-                        page.wait_for_function(
-                            f"window.location.href !== '{initial_url}'",
+            try:
+                # Wait for URL to change (indicating navigation started)
+                initial_url = page.url
+                await asyncio.wait_for(
+                    page.wait_for_function(
+                        f"window.location.href !== '{initial_url}'",
                             timeout=5000
-                        ),
+                    ),
                         timeout=2.0
-                    )
-                    print("   ✅ Navegação detectada")
-                except:
-                    # Fallback: wait for load state
-                    pass
-                
+                )
+                print("   ✅ Navegação detectada")
+            except:
+                # Fallback: wait for load state
+                pass
+            
                 # Wait for new page to be loaded (shorter timeouts, skip networkidle)
                 try:
                     await asyncio.wait_for(

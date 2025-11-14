@@ -42,6 +42,10 @@ class CursorMovement:
             x: X coordinate
             y: Y coordinate
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.debug(f"[CURSOR] move_to called: target=({x}, {y})")
+        
         # Get viewport for default position
         viewport = self.page.viewport_size or {
             "width": DEFAULT_VIEWPORT_WIDTH,
@@ -49,6 +53,7 @@ class CursorMovement:
         }
         default_x = viewport['width'] / 2
         default_y = viewport['height'] / 2
+        logger.debug(f"[CURSOR] Viewport: {viewport}, default=({default_x}, {default_y})")
         
         # Get current cursor position first - use actual position, not default
         cursor_id = CURSOR_ELEMENT_ID
@@ -80,10 +85,14 @@ class CursorMovement:
         
         if not current_pos.get('exists'):
             current_pos = {'x': default_x, 'y': default_y}
+            logger.debug(f"[CURSOR] Cursor not found, using default position: ({default_x}, {default_y})")
+        else:
+            logger.debug(f"[CURSOR] Current cursor position: ({current_pos.get('x')}, {current_pos.get('y')})")
         
         # Use actual position - don't default to center if position is valid
         current_x = current_pos.get('x', default_x)
         current_y = current_pos.get('y', default_y)
+        logger.debug(f"[CURSOR] Moving from ({current_x}, {current_y}) to ({x}, {y})")
         
         # Move cursor with smooth animation - use Promise to wait for completion
         # Use a minimum duration to ensure movement is visible in videos (but fast enough)
@@ -150,10 +159,13 @@ class CursorMovement:
         
         # Wait for animation to complete - the JavaScript Promise will resolve when done
         # Add a minimal buffer to ensure animation is fully rendered in video
+        logger.debug(f"[CURSOR] Waiting for animation to complete (delay={CURSOR_AFTER_MOVE_DELAY}s)")
         await asyncio.sleep(CURSOR_AFTER_MOVE_DELAY)
-        
+        logger.debug(f"[CURSOR] Animation completed, cursor at ({x}, {y})")
+
         # Store position for persistence across navigations
         # Use both window property and sessionStorage for reliability
+        logger.debug(f"[CURSOR] Storing cursor position ({x}, {y}) for persistence")
         await self.page.evaluate(f"""
             () => {{
                 const position = {{
@@ -169,4 +181,5 @@ class CursorMovement:
                 }}
             }}
         """)
+        logger.debug(f"[CURSOR] Position stored: ({x}, {y})")
 

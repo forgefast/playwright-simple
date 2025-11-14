@@ -75,11 +75,10 @@ class ElementIdentifier:
             result['description'] = position_description or "Elemento"
         
         # Add fallback selector if needed (for debugging)
-        # Use double quotes to avoid YAML parsing issues
         if element_info.get('id'):
             result['selector'] = f"#{element_info['id']}"
         elif element_info.get('name'):
-            result['selector'] = f'[name="{element_info["name"]}"]'
+            result['selector'] = f"[name='{element_info['name']}']"
         
         return result
     
