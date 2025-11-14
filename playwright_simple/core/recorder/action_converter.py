@@ -48,14 +48,11 @@ class ActionConverter:
         tag_name = element_info.get('tagName', '').upper()
         text = (element_info.get('text', '') or element_info.get('value', '') or '').lower()
         
-        # Links (A tags) should NEVER be converted to submit, even if they have submit-like text
-        # They should always be click actions
+        # Check if this is a submit button (including links with submit-like text)
         is_submit_button = (
-            tag_name != 'A' and (  # Links are never submit buttons
-                element_type == 'submit' or
-                (tag_name == 'BUTTON' and element_type in ('submit', '')) or
-                any(keyword in text for keyword in ['entrar', 'login', 'submit', 'enviar', 'salvar', 'save', 'confirmar', 'confirm', 'log in', 'sign in'])
-            )
+            element_type == 'submit' or
+            (tag_name == 'BUTTON' and element_type in ('submit', '')) or
+            any(keyword in text for keyword in ['entrar', 'login', 'submit', 'enviar', 'salvar', 'save', 'confirmar', 'confirm', 'log in', 'sign in'])
         )
         
         # Identify element
