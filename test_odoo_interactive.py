@@ -301,48 +301,48 @@ async def test_odoo_login():
         # Wait a bit anyway
         await asyncio.sleep(1 if not recorder.fast_mode else 0.3)
     
-    # 8. Verificar info
-    print("\n8️⃣  Verificando estado da página...")
-    success, error = await run_with_timeout(
-        handlers.handle_pw_info(''),
-        timeout_seconds=10.0,
-        step_name="info"
-    )
-    if success:
-        print("   ✅ Info obtida")
-    else:
-        print(f"   ⚠️  Erro ao obter info: {error}")
-    
-    # 9. Salvar
-    print("\n9️⃣  Salvando YAML...")
-    success, error = await run_with_timeout(
-        handlers.handle_save(''),
-        timeout_seconds=5.0,
-        step_name="save"
-    )
-    if success:
-        print("   ✅ YAML salvo")
-    else:
-        print(f"   ⚠️  Erro ao salvar: {error}")
-    
-    # 10. Parar
-    print("\n🔟 Parando recorder...")
+    # 8. Salvar e parar imediatamente (após wait)
+    print("\n8️⃣  Salvando YAML e parando gravação...")
     try:
-        # Parar recorder diretamente (já salvamos antes)
-        # Não esperar pelo recorder_task para evitar delays
-        await asyncio.wait_for(recorder.stop(save=True), timeout=5.0)
-        print("   ✅ Recorder parado")
+        # Salvar primeiro
+        success, error = await run_with_timeout(
+            handlers.handle_save(''),
+            timeout_seconds=3.0,
+            step_name="save"
+        )
+        if success:
+            print("   ✅ YAML salvo")
+        else:
+            print(f"   ⚠️  Erro ao salvar: {error}")
         
-        # Cancelar task do recorder depois (não bloqueia)
+        # Parar recorder imediatamente (sem esperar muito)
+        print("   🛑 Parando recorder...")
+        # Não esperar pelo recorder_task para evitar delays
+        recorder.is_recording = False  # Marcar como não gravando primeiro
+        
+        # Parar recorder com timeout curto
+        try:
+            await asyncio.wait_for(recorder.stop(save=False), timeout=3.0)
+            print("   ✅ Recorder parado")
+        except asyncio.TimeoutError:
+            print("   ⚠️  Timeout ao parar recorder (continuando...)")
+        except Exception as e:
+            print(f"   ⚠️  Erro ao parar recorder: {e}")
+        
+        # Cancelar task do recorder (não bloqueia)
         recorder_task.cancel()
         try:
-            await asyncio.wait_for(recorder_task, timeout=1.0)
+            await asyncio.wait_for(recorder_task, timeout=0.5)
         except (asyncio.CancelledError, asyncio.TimeoutError):
             pass  # Ignore - já paramos o recorder
-    except asyncio.TimeoutError:
-        print("   ⚠️  Timeout ao parar recorder")
     except Exception as e:
-        print(f"   ⚠️  Erro ao parar recorder: {e}")
+        print(f"   ⚠️  Erro ao salvar/parar: {e}")
+        # Tentar parar mesmo assim
+        try:
+            recorder.is_recording = False
+            recorder_task.cancel()
+        except:
+            pass
     
     # Verificar YAML gerado
     if yaml_path.exists():
