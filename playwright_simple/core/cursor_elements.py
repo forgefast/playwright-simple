@@ -147,6 +147,7 @@ class CursorElements:
         cursor_style = CursorStyles.get_cursor_css(self.config)
         click_effect_style = CursorStyles.get_click_effect_css(self.config)
         
+        # Always try to create/ensure cursor exists
         await self.page.evaluate(f"""
             (function() {{
                 const centerX = {center_x};
