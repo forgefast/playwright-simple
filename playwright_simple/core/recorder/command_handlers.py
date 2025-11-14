@@ -431,6 +431,9 @@ class CommandHandlers:
             print("❌ Page not available")
             return
         
+        # Get cursor controller if available
+        cursor_controller = self._get_cursor_controller()
+        
         if not args:
             print("❌ Usage: pw-click \"text\" | pw-click selector \"#id\" | pw-click role button [index]")
             return
@@ -450,14 +453,14 @@ class CommandHandlers:
         # Try to parse different formats
         if args.startswith('selector '):
             selector = args[9:].strip().strip('"\'')
-            success = await commands.click(selector=selector)
+            success = await commands.click(selector=selector, cursor_controller=cursor_controller)
         elif args.startswith('role '):
             role = args[5:].strip().strip('"\'')
-            success = await commands.click(role=role, index=index)
+            success = await commands.click(role=role, index=index, cursor_controller=cursor_controller)
         else:
             # Treat as text
             text = args.strip('"\'')
-            success = await commands.click(text=text, index=index)
+            success = await commands.click(text=text, index=index, cursor_controller=cursor_controller)
         
         if success:
             print(f"✅ Clicked successfully")

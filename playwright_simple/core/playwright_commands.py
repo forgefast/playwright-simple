@@ -285,7 +285,8 @@ class PlaywrightCommands:
         text: Optional[str] = None,
         selector: Optional[str] = None,
         role: Optional[str] = None,
-        index: int = 0
+        index: int = 0,
+        cursor_controller = None
     ) -> bool:
         """
         Click on an element.
@@ -295,14 +296,15 @@ class PlaywrightCommands:
             selector: CSS selector
             role: ARIA role
             index: Index if multiple matches (default: 0)
+            cursor_controller: Optional CursorController instance for visual feedback
         
         Returns:
             True if clicked successfully, False otherwise
         """
         try:
             if text:
-                # Find by text - prioritize clickable elements
-                clicked = await self.page.evaluate("""
+                # Find by text - prioritize clickable elements and get coordinates
+                result = await self.page.evaluate("""
                     ({text, index}) => {
                         const textLower = text.toLowerCase();
                         const matches = [];
@@ -325,7 +327,12 @@ class PlaywrightCommands:
                                 const elText = (directText || el.textContent || el.innerText || '').trim();
                                 
                                 if (elText.toLowerCase() === textLower || elText.toLowerCase().includes(textLower)) {
-                                    matches.push(el);
+                                    const rect = el.getBoundingClientRect();
+                                    matches.push({
+                                        element: el,
+                                        x: Math.floor(rect.left + rect.width / 2),
+                                        y: Math.floor(rect.top + rect.height / 2)
+                                    });
                                 }
                             }
                         }
@@ -345,32 +352,141 @@ class PlaywrightCommands:
                                         el.getAttribute('role') === 'button' ||
                                         el.getAttribute('onclick') ||
                                         el.style.cursor === 'pointer') {
-                                        matches.push(el);
+                                        const rect = el.getBoundingClientRect();
+                                        matches.push({
+                                            element: el,
+                                            x: Math.floor(rect.left + rect.width / 2),
+                                            y: Math.floor(rect.top + rect.height / 2)
+                                        });
                                     }
                                 }
                             }
                         }
                         
                         if (matches.length > index && matches[index]) {
-                            matches[index].click();
-                            return true;
+                            return {
+                                found: true,
+                                x: matches[index].x,
+                                y: matches[index].y,
+                                element: matches[index].element
+                            };
                         }
-                        return false;
+                        return {found: false};
                     }
                 """, {'text': text, 'index': index})
-                return clicked
+                
+                if result.get('found'):
+                    x = result.get('x')
+                    y = result.get('y')
+                    
+                    # Move cursor and show visual feedback if cursor_controller available
+                    if cursor_controller:
+                        try:
+                            await cursor_controller.show()
+                            await cursor_controller.move(x, y, smooth=True)
+                            await asyncio.sleep(0.3)  # Small delay so user can see cursor move
+                            
+                            # Show click animation
+                            await self.page.evaluate(f"""
+                                () => {{
+                                    const clickIndicator = document.getElementById('__playwright_cursor_click');
+                                    if (clickIndicator) {{
+                                        clickIndicator.style.left = '{x}px';
+                                        clickIndicator.style.top = '{y}px';
+                                        clickIndicator.style.display = 'block';
+                                        setTimeout(() => {{
+                                            clickIndicator.style.display = 'none';
+                                        }}, 300);
+                                    }}
+                                }}
+                            """)
+                            await asyncio.sleep(0.1)  # Small delay for animation
+                        except Exception as e:
+                            logger.debug(f"Error showing cursor feedback: {e}")
+                    
+                    # Perform actual click
+                    await self.page.mouse.click(x, y)
+                    return True
+                return False
             
             if selector:
                 element = await self.page.query_selector(selector)
                 if element:
-                    await element.click()
+                    # Get coordinates for visual feedback
+                    box = await element.bounding_box()
+                    if box:
+                        x = int(box['x'] + box['width'] / 2)
+                        y = int(box['y'] + box['height'] / 2)
+                        
+                        # Move cursor and show visual feedback if cursor_controller available
+                        if cursor_controller:
+                            try:
+                                await cursor_controller.show()
+                                await cursor_controller.move(x, y, smooth=True)
+                                await asyncio.sleep(0.3)
+                                
+                                # Show click animation
+                                await self.page.evaluate(f"""
+                                    () => {{
+                                        const clickIndicator = document.getElementById('__playwright_cursor_click');
+                                        if (clickIndicator) {{
+                                            clickIndicator.style.left = '{x}px';
+                                            clickIndicator.style.top = '{y}px';
+                                            clickIndicator.style.display = 'block';
+                                            setTimeout(() => {{
+                                                clickIndicator.style.display = 'none';
+                                            }}, 300);
+                                        }}
+                                    }}
+                                """)
+                                await asyncio.sleep(0.1)
+                            except Exception as e:
+                                logger.debug(f"Error showing cursor feedback: {e}")
+                        
+                        await self.page.mouse.click(x, y)
+                    else:
+                        await element.click()
                     return True
                 return False
             
             if role:
                 elements = await self.page.query_selector_all(f'[role="{role}"]')
                 if elements and len(elements) > index:
-                    await elements[index].click()
+                    element = elements[index]
+                    # Get coordinates for visual feedback
+                    box = await element.bounding_box()
+                    if box:
+                        x = int(box['x'] + box['width'] / 2)
+                        y = int(box['y'] + box['height'] / 2)
+                        
+                        # Move cursor and show visual feedback if cursor_controller available
+                        if cursor_controller:
+                            try:
+                                await cursor_controller.show()
+                                await cursor_controller.move(x, y, smooth=True)
+                                await asyncio.sleep(0.3)
+                                
+                                # Show click animation
+                                await self.page.evaluate(f"""
+                                    () => {{
+                                        const clickIndicator = document.getElementById('__playwright_cursor_click');
+                                        if (clickIndicator) {{
+                                            clickIndicator.style.left = '{x}px';
+                                            clickIndicator.style.top = '{y}px';
+                                            clickIndicator.style.display = 'block';
+                                            setTimeout(() => {{
+                                                clickIndicator.style.display = 'none';
+                                            }}, 300);
+                                        }}
+                                    }}
+                                """)
+                                await asyncio.sleep(0.1)
+                            except Exception as e:
+                                logger.debug(f"Error showing cursor feedback: {e}")
+                        
+                        await self.page.mouse.click(x, y)
+                    else:
+                        await element.click()
                     return True
                 return False
             

@@ -208,6 +208,11 @@ class CommandServer:
         from ..playwright_commands import PlaywrightCommands
         commands = PlaywrightCommands(page)
         
+        # Get cursor controller if available
+        cursor_controller = None
+        if hasattr(self.recorder, 'cursor_controller') and self.recorder.cursor_controller:
+            cursor_controller = self.recorder.cursor_controller
+        
         args = args.strip()
         index = 0
         
@@ -228,7 +233,7 @@ class CommandServer:
             success = await commands.click(role=role, index=index)
         else:
             text = args.strip('"\'')
-            success = await commands.click(text=text, index=index)
+            success = await commands.click(text=text, index=index, cursor_controller=cursor_controller)
         
         return {'success': success}
     
