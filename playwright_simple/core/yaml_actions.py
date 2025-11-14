@@ -130,6 +130,10 @@ class ActionMapper:
                 step.get('description', '')
             ),
             'fill_form': lambda: test.fill_form(step.get('fields', {})),
+            'submit': lambda: test.submit(
+                step.get('button_text') or step.get('text'),
+                step.get('description', '')
+            ),
             'screenshot': lambda: test.screenshot(
                 step.get('name'),
                 step.get('full_page'),

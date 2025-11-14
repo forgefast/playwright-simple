@@ -62,6 +62,32 @@ class FormsMixin:
         """
         raise NotImplementedError("type must be implemented by base class")
     
+    async def submit(self, button_text: Optional[str] = None, description: str = "") -> 'FormsMixin':
+        """
+        Submit a form by clicking the submit button.
+        
+        Args:
+            button_text: Optional text to identify specific submit button (e.g., "Entrar", "Login")
+            description: Optional description for logging
+            
+        Returns:
+            Self for method chaining
+        """
+        await self._ensure_cursor()
+        
+        # Use PlaywrightCommands to submit form
+        from ..playwright_commands import PlaywrightCommands
+        commands = PlaywrightCommands(self.page, fast_mode=self.config.step.fast_mode)
+        
+        success = await commands.submit_form(button_text=button_text)
+        if not success:
+            raise ElementNotFoundError(
+                f"Botão de submit não encontrado{f' (texto: {button_text})' if button_text else ''}"
+            )
+        
+        await asyncio.sleep(ACTION_DELAY)
+        return self
+    
     async def fill_form(self, fields: Dict[str, str]) -> 'FormsMixin':
         """
         Fill a form with multiple fields.

@@ -42,5 +42,10 @@ if __name__ == '__main__':
         print(f"❌ YAML não encontrado: {yaml_path}")
         exit(1)
     
-    asyncio.run(replay_yaml(yaml_path))
+    # Timeout reduzido para login rápido (30 segundos)
+    try:
+        asyncio.run(asyncio.wait_for(replay_yaml(yaml_path), timeout=30.0))
+    except asyncio.TimeoutError:
+        print("❌ Timeout: O teste demorou mais de 30 segundos")
+        exit(1)
 

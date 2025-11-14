@@ -27,6 +27,7 @@ class ActionConverter:
         """
         Convert click event to YAML action.
         All clicks are converted to 'click' action, never 'go_to'.
+        Submit buttons are converted to 'submit' action.
         
         Args:
             event_data: Click event data
@@ -38,19 +39,42 @@ class ActionConverter:
         if not element_info:
             return None
         
+        # Check if this is a submit button
+        element_type = element_info.get('type', '').lower()
+        tag_name = element_info.get('tagName', '').upper()
+        text = (element_info.get('text', '') or element_info.get('value', '') or '').lower()
+        
+        is_submit_button = (
+            element_type == 'submit' or
+            (tag_name == 'BUTTON' and element_type in ('submit', '')) or
+            any(keyword in text for keyword in ['entrar', 'login', 'submit', 'enviar', 'salvar', 'save', 'confirmar', 'confirm', 'log in', 'sign in'])
+        )
+        
         # Identify element
         identification = ElementIdentifier.identify(element_info)
         
-        # Always convert to click action, regardless of element type (link, button, etc.)
-        action = {
-            'action': 'click',
-            'description': identification['description']
-        }
-        
-        if identification['text']:
-            action['text'] = identification['text']
-        elif identification['selector']:
-            action['selector'] = identification['selector']
+        if is_submit_button:
+            # Convert to submit action
+            action = {
+                'action': 'submit',
+                'description': f"Submeter formulário: {identification['description']}"
+            }
+            
+            if identification['text']:
+                action['button_text'] = identification['text']
+            elif identification['selector']:
+                action['selector'] = identification['selector']
+        else:
+            # Convert to click action
+            action = {
+                'action': 'click',
+                'description': identification['description']
+            }
+            
+            if identification['text']:
+                action['text'] = identification['text']
+            elif identification['selector']:
+                action['selector'] = identification['selector']
         
         return action
     

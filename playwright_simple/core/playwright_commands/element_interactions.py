@@ -659,52 +659,12 @@ class ElementInteractions:
             if visual_feedback and cursor_controller:
                 await visual_feedback.show_click_feedback(x, y, cursor_controller)
             
-            # Find the actual button element and click it via DOM (triggers events that event_capture can catch)
-            button_found = await self.page.evaluate("""
-                (args) => {
-                    const x = args.x;
-                    const y = args.y;
-                    const buttonText = args.buttonText;
-                    
-                    // Find element at coordinates
-                    let element = document.elementFromPoint(x, y);
-                    
-                    // If not found, find by text
-                    if (!element) {
-                        const buttons = Array.from(document.querySelectorAll('button, input[type="submit"]'));
-                        for (const btn of buttons) {
-                            const btnText = (btn.textContent || btn.innerText || btn.value || '').trim();
-                            if (buttonText && btnText.toLowerCase().includes(buttonText.toLowerCase())) {
-                                element = btn;
-                                break;
-                            }
-                        }
-                    }
-                    
-                    if (element) {
-                        // Dispatch click event first (for event_capture), then do actual click
-                        const clickEvent = new MouseEvent('click', {
-                            bubbles: true,
-                            cancelable: true,
-                            view: window,
-                            detail: 1
-                        });
-                        element.dispatchEvent(clickEvent);
-                        // Then do actual click
-                        element.click();
-                        return true;
-                    }
-                    
-                    return false;
-                }
-            """, {'x': x, 'y': y, 'buttonText': button_text})
-            
-            if not button_found:
-                # Fallback: use mouse click (this should also trigger DOM events)
-                await self.page.mouse.click(x, y)
+            # Use mouse click directly - this will trigger DOM events that event_capture can catch
+            # The mouse.click() from Playwright triggers native browser events that are captured by event_capture
+            await self.page.mouse.click(x, y)
             
             # Small delay to ensure click event is captured (reduced in fast mode)
-            await asyncio.sleep(0.01 if self.fast_mode else 0.1)
+            await asyncio.sleep(0.05 if self.fast_mode else 0.15)
             
             logger.info(f"Form submitted (button: '{button_text_found}')")
             return True
