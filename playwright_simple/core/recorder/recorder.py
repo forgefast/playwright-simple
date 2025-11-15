@@ -479,9 +479,11 @@ class Recorder:
             try:
                 test_name = self.yaml_data.get('name', 'playback') if self.yaml_data else 'playback'
                 
-                # Wait a bit before closing context to ensure all actions are captured
-                # This is important for video recording - gives time for final actions to complete
-                await asyncio.sleep(1.0)
+                # Wait before closing context to ensure all actions are captured in video
+                # Playwright writes video asynchronously, so we need to wait for all frames
+                # The delay should be proportional to the test duration
+                # For now, use a fixed delay that should cover most cases
+                await asyncio.sleep(2.0)  # Increased from 1.0 to 2.0 seconds
                 logger.info("Waiting before closing context to ensure video captures all actions")
                 
                 # Close context first (this finalizes video)
