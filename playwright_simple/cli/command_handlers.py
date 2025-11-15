@@ -43,6 +43,22 @@ def handle_command_commands(args) -> None:
         _handle_audio(args)
     elif args.command == 'screenshot':
         _handle_screenshot(args)
+    elif args.command == 'video-enable':
+        _handle_video_enable(args)
+    elif args.command == 'video-disable':
+        _handle_video_disable(args)
+    elif args.command == 'video-quality':
+        _handle_video_quality(args)
+    elif args.command == 'video-codec':
+        _handle_video_codec(args)
+    elif args.command == 'video-dir':
+        _handle_video_dir(args)
+    elif args.command == 'video-speed':
+        _handle_video_speed(args)
+    elif args.command == 'video-subtitles':
+        _handle_video_subtitles(args)
+    elif args.command == 'video-audio':
+        _handle_video_audio(args)
 
 
 def _handle_find(args):
@@ -286,6 +302,100 @@ def _handle_screenshot(args):
     result = send_command('screenshot', name)
     if result.get('success'):
         message = result.get('result', {}).get('message', 'Screenshot added')
+        print(f"✅ {message}")
+    else:
+        print(f"❌ Erro: {result.get('error', 'Unknown error')}")
+        sys.exit(1)
+
+
+def _handle_video_enable(args):
+    """Handle video-enable command."""
+    result = send_command('video-enable', '')
+    if result.get('success'):
+        message = result.get('result', {}).get('message', 'Video enabled')
+        print(f"✅ {message}")
+    else:
+        print(f"❌ Erro: {result.get('error', 'Unknown error')}")
+        sys.exit(1)
+
+
+def _handle_video_disable(args):
+    """Handle video-disable command."""
+    result = send_command('video-disable', '')
+    if result.get('success'):
+        message = result.get('result', {}).get('message', 'Video disabled')
+        print(f"✅ {message}")
+    else:
+        print(f"❌ Erro: {result.get('error', 'Unknown error')}")
+        sys.exit(1)
+
+
+def _handle_video_quality(args):
+    """Handle video-quality command."""
+    quality = args.quality
+    result = send_command('video-quality', quality)
+    if result.get('success'):
+        message = result.get('result', {}).get('message', f'Video quality set to {quality}')
+        print(f"✅ {message}")
+    else:
+        print(f"❌ Erro: {result.get('error', 'Unknown error')}")
+        sys.exit(1)
+
+
+def _handle_video_codec(args):
+    """Handle video-codec command."""
+    codec = args.codec
+    result = send_command('video-codec', codec)
+    if result.get('success'):
+        message = result.get('result', {}).get('message', f'Video codec set to {codec}')
+        print(f"✅ {message}")
+    else:
+        print(f"❌ Erro: {result.get('error', 'Unknown error')}")
+        sys.exit(1)
+
+
+def _handle_video_dir(args):
+    """Handle video-dir command."""
+    video_dir = args.dir
+    result = send_command('video-dir', video_dir)
+    if result.get('success'):
+        message = result.get('result', {}).get('message', f'Video directory set to {video_dir}')
+        print(f"✅ {message}")
+    else:
+        print(f"❌ Erro: {result.get('error', 'Unknown error')}")
+        sys.exit(1)
+
+
+def _handle_video_speed(args):
+    """Handle video-speed command."""
+    speed = str(args.speed)
+    result = send_command('video-speed', speed)
+    if result.get('success'):
+        message = result.get('result', {}).get('message', f'Video speed set to {speed}')
+        print(f"✅ {message}")
+    else:
+        print(f"❌ Erro: {result.get('error', 'Unknown error')}")
+        sys.exit(1)
+
+
+def _handle_video_subtitles(args):
+    """Handle video-subtitles command."""
+    enabled = args.enabled.lower() in ['true', 'enable']
+    result = send_command('video-subtitles', 'true' if enabled else 'false')
+    if result.get('success'):
+        message = result.get('result', {}).get('message', f'Video subtitles {"enabled" if enabled else "disabled"}')
+        print(f"✅ {message}")
+    else:
+        print(f"❌ Erro: {result.get('error', 'Unknown error')}")
+        sys.exit(1)
+
+
+def _handle_video_audio(args):
+    """Handle video-audio command."""
+    enabled = args.enabled.lower() in ['true', 'enable']
+    result = send_command('video-audio', 'true' if enabled else 'false')
+    if result.get('success'):
+        message = result.get('result', {}).get('message', f'Video audio {"enabled" if enabled else "disabled"}')
         print(f"✅ {message}")
     else:
         print(f"❌ Erro: {result.get('error', 'Unknown error')}")

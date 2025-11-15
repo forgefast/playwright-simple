@@ -44,7 +44,9 @@ def main():
     command_commands = [
         'find', 'click', 'type', 'submit', 'wait', 'info', 'html',
         'save', 'exit', 'pause', 'resume', 'start',
-        'caption', 'audio', 'screenshot'
+        'caption', 'audio', 'screenshot',
+        'video-enable', 'video-disable', 'video-quality', 'video-codec',
+        'video-dir', 'video-speed', 'video-subtitles', 'video-audio'
     ]
     if args.command in command_commands:
         handle_command_commands(args)

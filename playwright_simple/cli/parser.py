@@ -154,6 +154,28 @@ def _add_command_parsers(subparsers):
     
     screenshot_parser = subparsers.add_parser('screenshot', help='Tirar screenshot')
     screenshot_parser.add_argument('--name', type=str, help='Nome do screenshot (opcional)')
+    
+    # Video config commands
+    video_enable_parser = subparsers.add_parser('video-enable', help='Habilitar gravação de vídeo no YAML')
+    video_disable_parser = subparsers.add_parser('video-disable', help='Desabilitar gravação de vídeo no YAML')
+    
+    video_quality_parser = subparsers.add_parser('video-quality', help='Definir qualidade do vídeo no YAML')
+    video_quality_parser.add_argument('quality', choices=['low', 'medium', 'high'], help='Qualidade do vídeo')
+    
+    video_codec_parser = subparsers.add_parser('video-codec', help='Definir codec do vídeo no YAML')
+    video_codec_parser.add_argument('codec', choices=['webm', 'mp4'], help='Codec do vídeo')
+    
+    video_dir_parser = subparsers.add_parser('video-dir', help='Definir diretório de vídeos no YAML')
+    video_dir_parser.add_argument('dir', type=str, help='Diretório para salvar vídeos')
+    
+    video_speed_parser = subparsers.add_parser('video-speed', help='Definir velocidade do vídeo no YAML')
+    video_speed_parser.add_argument('speed', type=float, help='Velocidade do vídeo (1.0 = normal, 2.0 = 2x mais rápido)')
+    
+    video_subtitles_parser = subparsers.add_parser('video-subtitles', help='Habilitar/desabilitar legendas no YAML')
+    video_subtitles_parser.add_argument('enabled', choices=['true', 'false', 'enable', 'disable'], help='Habilitar ou desabilitar legendas')
+    
+    video_audio_parser = subparsers.add_parser('video-audio', help='Habilitar/desabilitar áudio no YAML')
+    video_audio_parser.add_argument('enabled', choices=['true', 'false', 'enable', 'disable'], help='Habilitar ou desabilitar áudio')
 
 
 def _add_logging_options(parser):

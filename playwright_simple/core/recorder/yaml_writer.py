@@ -31,6 +31,7 @@ class YAMLWriter:
             'name': 'Gravação Automática',
             'description': f'Gravação interativa do usuário - {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}'
         }
+        self.config: Dict[str, Any] = {}  # Configuração do YAML (video, browser, etc.)
         self._ensure_directory()
     
     def _ensure_directory(self):
@@ -104,6 +105,53 @@ class YAMLWriter:
         if description:
             self.metadata['description'] = description
     
+    def set_config(self, section: str, key: Optional[str] = None, value: Any = None, config_dict: Optional[Dict[str, Any]] = None):
+        """
+        Set configuration in YAML.
+        
+        Args:
+            section: Config section (e.g., 'video', 'browser', 'step')
+            key: Config key (e.g., 'enabled', 'quality') - if None, config_dict is used
+            value: Config value - if None, config_dict is used
+            config_dict: Dictionary with config values (alternative to key/value)
+        
+        Examples:
+            writer.set_config('video', 'enabled', True)
+            writer.set_config('video', config_dict={'enabled': True, 'quality': 'high'})
+        """
+        if section not in self.config:
+            self.config[section] = {}
+        
+        if config_dict:
+            # Update entire section
+            self.config[section].update(config_dict)
+            logger.info(f"Config updated: {section} = {config_dict}")
+        elif key is not None:
+            # Update single key
+            self.config[section][key] = value
+            logger.info(f"Config updated: {section}.{key} = {value}")
+        else:
+            logger.warning(f"set_config called without key or config_dict for section: {section}")
+    
+    def get_config(self, section: str, key: Optional[str] = None) -> Any:
+        """
+        Get configuration value.
+        
+        Args:
+            section: Config section (e.g., 'video', 'browser')
+            key: Config key (if None, returns entire section)
+        
+        Returns:
+            Config value or entire section dict
+        """
+        if section not in self.config:
+            return None if key else {}
+        
+        if key:
+            return self.config[section].get(key)
+        else:
+            return self.config[section]
+    
     def save(self):
         """Save YAML to file."""
         try:
@@ -111,6 +159,10 @@ class YAMLWriter:
                 **self.metadata,
                 'steps': self.steps
             }
+            
+            # Add config if it exists
+            if self.config:
+                yaml_data['config'] = self.config
             
             logger.debug(f"Preparing to save YAML with {len(self.steps)} steps")
             logger.debug(f"Metadata: {self.metadata}")
@@ -148,5 +200,10 @@ class YAMLWriter:
             **self.metadata,
             'steps': self.steps
         }
+        
+        # Add config if it exists
+        if self.config:
+            yaml_data['config'] = self.config
+        
         return yaml.dump(yaml_data, allow_unicode=True, default_flow_style=False, sort_keys=False)
 

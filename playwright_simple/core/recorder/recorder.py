@@ -10,6 +10,7 @@ import asyncio
 import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
+from datetime import datetime
 
 from .event_capture import EventCapture
 from .action_converter import ActionConverter
@@ -21,6 +22,18 @@ from .command_handlers import CommandHandlers
 from .command_server import CommandServer
 
 logger = logging.getLogger(__name__)
+
+# Try to import video management (optional, for video recording in read mode)
+try:
+    from ..video import VideoManager
+    from ..extensions.video.config import VideoConfig
+    from ..constants import VIDEO_FINALIZATION_DELAY
+    VIDEO_AVAILABLE = True
+except ImportError:
+    VideoManager = None
+    VideoConfig = None
+    VIDEO_FINALIZATION_DELAY = 0.1
+    VIDEO_AVAILABLE = False
 
 # Try to import cursor controller (optional)
 try:
@@ -61,6 +74,7 @@ class Recorder:
         if mode == 'write':
             self.yaml_writer = YAMLWriter(self.output_path)
             self.yaml_steps = None
+            self.yaml_data = None
         else:  # read mode
             self.yaml_writer = None
             # Load YAML file
@@ -69,12 +83,44 @@ class Recorder:
             import yaml
             with open(self.output_path, 'r', encoding='utf-8') as f:
                 yaml_data = yaml.safe_load(f)
+            self.yaml_data = yaml_data
             self.yaml_steps = yaml_data.get('steps', [])
             # Get initial_url from YAML if not provided
             if not initial_url:
                 first_step = self.yaml_steps[0] if self.yaml_steps else {}
                 if first_step.get('action') == 'go_to':
                     self.initial_url = first_step.get('url', 'about:blank')
+                elif 'base_url' in yaml_data:
+                    self.initial_url = yaml_data.get('base_url', 'about:blank')
+            
+            # Load video configuration from YAML if available
+            self.video_config = None
+            self.video_manager = None
+            self.video_start_time = None
+            if VIDEO_AVAILABLE and yaml_data and 'config' in yaml_data and 'video' in yaml_data['config']:
+                try:
+                    video_data = yaml_data['config']['video']
+                    self.video_config = VideoConfig(
+                        enabled=video_data.get('enabled', False),
+                        quality=video_data.get('quality', 'high'),
+                        codec=video_data.get('codec', 'webm'),
+                        dir=video_data.get('dir', 'videos'),
+                        speed=video_data.get('speed', 1.0),
+                        subtitles=video_data.get('subtitles', False),
+                        hard_subtitles=video_data.get('hard_subtitles', False),
+                        audio=video_data.get('audio', False),
+                        narration=video_data.get('narration', False),
+                        narration_lang=video_data.get('narration_lang', 'pt-BR'),
+                        narration_engine=video_data.get('narration_engine', 'gtts'),
+                        narration_slow=video_data.get('narration_slow', False)
+                    )
+                    if self.video_config.enabled:
+                        self.video_manager = VideoManager(self.video_config)
+                        logger.info(f"Video recording enabled: {self.video_config.dir}, quality={self.video_config.quality}, codec={self.video_config.codec}")
+                except Exception as e:
+                    logger.warning(f"Error loading video config from YAML: {e}")
+                    self.video_config = None
+                    self.video_manager = None
         
         self.console = ConsoleInterface()
         
@@ -148,8 +194,56 @@ class Recorder:
             except Exception as e:
                 logger.warning(f"Error during cleanup (continuing anyway): {e}")
             
-            page = await self.browser_manager.start()
-            self.page = page  # Store page reference for command handlers
+            # If video is enabled in read mode, we need to create context with video options
+            if self.mode == 'read' and self.video_manager and self.video_config and self.video_config.enabled:
+                # Get test name from YAML
+                test_name = self.yaml_data.get('name', 'playback') if self.yaml_data else 'playback'
+                
+                # Get viewport from browser config or YAML, or use default
+                viewport = {'width': 1920, 'height': 1080}
+                if self.yaml_data and 'config' in self.yaml_data and 'browser' in self.yaml_data['config']:
+                    browser_config = self.yaml_data['config']['browser']
+                    # Viewport not typically in browser config, but check anyway
+                    if 'viewport' in browser_config:
+                        viewport = browser_config['viewport']
+                
+                # Get video options from VideoManager
+                video_options = self.video_manager.get_context_options(test_name, viewport=viewport)
+                
+                # Start browser and create context with video options
+                from playwright.async_api import async_playwright
+                playwright = await async_playwright().start()
+                browser = await playwright.chromium.launch(
+                    headless=self.headless,
+                    slow_mo=100
+                )
+                
+                # Capture context creation time - this is when video recording actually begins
+                self.video_start_time = datetime.now()
+                
+                # Create context with video options
+                context = await browser.new_context(
+                    viewport=viewport,
+                    **video_options
+                )
+                
+                # Register context for video management
+                self.video_manager.register_context(context, test_name)
+                
+                # Create page
+                page = await context.new_page()
+                
+                # Store references
+                self._playwright = playwright
+                self._browser = browser
+                self._context = context
+                self.page = page
+                
+                logger.info(f"Browser started with video recording enabled for test: {test_name}")
+            else:
+                # Normal browser start (no video or write mode)
+                page = await self.browser_manager.start()
+                self.page = page  # Store page reference for command handlers
             
             # Initialize event capture only in write mode
             if self.mode == 'write':
@@ -375,9 +469,87 @@ class Recorder:
                 print(f"   ⚠️  {steps_count} steps will be lost")
                 print(f"   Use 'save' command before 'exit' to save progress")
         
+        # Handle video recording in read mode
+        if self.mode == 'read' and self.video_manager and self.video_config and self.video_config.enabled:
+            try:
+                test_name = self.yaml_data.get('name', 'playback') if self.yaml_data else 'playback'
+                
+                # Close context first (this finalizes video)
+                if hasattr(self, '_context') and self._context:
+                    await self._context.close()
+                    logger.info("Context closed, video should be finalized")
+                
+                # Wait for video to be finalized
+                await asyncio.sleep(VIDEO_FINALIZATION_DELAY)
+                
+                # Find the most recently created video file in video_dir
+                import re
+                video_extensions = ['.webm', '.mp4']
+                all_videos = []
+                for ext in video_extensions:
+                    all_videos.extend(list(self.video_manager.video_dir.glob(f"*{ext}")))
+                
+                if all_videos:
+                    # Get the most recent video (should be from this test)
+                    found_video = max(all_videos, key=lambda p: p.stat().st_mtime)
+                    
+                    # Expected name based on test name and codec
+                    expected_name = f"{test_name}.webm" if self.video_config.codec == "webm" else f"{test_name}.mp4"
+                    expected_path = self.video_manager.video_dir / expected_name
+                    
+                    # Rename video to test name
+                    if found_video != expected_path:
+                        if expected_path.exists():
+                            expected_path.unlink()
+                        found_video.rename(expected_path)
+                        logger.info(f"Video renamed to: {expected_path.name}")
+                        print(f"📹 Vídeo renomeado para: {expected_path.name}")
+                    else:
+                        logger.info(f"Video already has correct name: {expected_path.name}")
+                        print(f"📹 Vídeo salvo: {expected_path.name}")
+                    
+                    # Clean up old videos with hash-based names
+                    for video_file in all_videos:
+                        if video_file == expected_path:
+                            continue
+                        
+                        video_name = video_file.stem
+                        is_hash_based = re.match(r'^[a-f0-9]{8}-[a-f0-9]{4}-', video_name)
+                        is_technical = len(video_name) < 10 and not any(c.isalpha() for c in video_name[:5])
+                        
+                        if is_hash_based or is_technical:
+                            try:
+                                video_file.unlink()
+                                logger.debug(f"Deleted old video: {video_file.name}")
+                            except Exception as e:
+                                logger.warning(f"Error deleting old video {video_file.name}: {e}")
+                else:
+                    logger.warning("No video files found in video directory")
+                
+                # Close browser and playwright
+                if hasattr(self, '_browser') and self._browser:
+                    await self._browser.close()
+                if hasattr(self, '_playwright') and self._playwright:
+                    await self._playwright.stop()
+                    
+            except Exception as e:
+                logger.error(f"Error handling video recording: {e}", exc_info=True)
+                # Still try to close browser
+                try:
+                    if hasattr(self, '_browser') and self._browser:
+                        await self._browser.close()
+                    if hasattr(self, '_playwright') and self._playwright:
+                        await self._playwright.stop()
+                except:
+                    pass
+        
         # Close browser (always, even if save=False)
         try:
-            await self.browser_manager.stop()
+            if hasattr(self, '_browser') and self._browser:
+                # Already closed above if video was enabled
+                pass
+            else:
+                await self.browser_manager.stop()
             logger.info("Browser closed successfully")
         except Exception as e:
             logger.error(f"Error closing browser: {e}", exc_info=True)
