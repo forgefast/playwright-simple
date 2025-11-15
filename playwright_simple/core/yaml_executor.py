@@ -109,6 +109,21 @@ class StepExecutor:
         if context is None:
             context = {'vars': {}, 'params': {}}
         
+        # Initialize CursorController at the start of execution (before first step)
+        if previous_state is None:
+            # This is the first step - initialize and show cursor
+            cursor_controller = test._get_cursor_controller()
+            if cursor_controller and not cursor_controller.is_active:
+                # Get viewport to center cursor
+                viewport = test.page.viewport_size or {"width": 1920, "height": 1080}
+                center_x = viewport['width'] // 2
+                center_y = viewport['height'] // 2
+                await cursor_controller.start(initial_x=center_x, initial_y=center_y)
+                await cursor_controller.show()
+                # Set up navigation listener (same method used in recording)
+                cursor_controller.setup_navigation_listener()
+                logger.debug(f"[YAML] CursorController initialized at ({center_x}, {center_y})")
+        
         # Capture state before step
         if previous_state is None:
             previous_state = await WebState.capture(test.page)
@@ -248,13 +263,15 @@ class StepExecutor:
                 if ActionMapper.is_deprecated(action):
                     logger.warning(ActionMapper.get_deprecation_warning(action))
                 try:
+                    logger.info(f"[DEBUG] [YAML] Executando ação '{action}'...")
                     await core_actions[action]()
-                    logger.debug(f"Ação '{action}' executada com sucesso")
+                    logger.info(f"[DEBUG] [YAML] ✓ Ação '{action}' executada com sucesso")
                 except Exception as e:
-                    logger.error(f"Erro ao executar ação '{action}': {e}", exc_info=True)
+                    logger.error(f"[DEBUG] [YAML] ✗ Erro ao executar ação '{action}': {e}", exc_info=True)
                     raise
+                logger.info(f"[DEBUG] [YAML] Capturando novo estado após ação '{action}'...")
                 new_state = await WebState.capture(test.page, step_number=previous_state.step_number, action_type=action_type)
-                logger.debug(f"Estado capturado após ação '{action}'")
+                logger.info(f"[DEBUG] [YAML] ✓ Estado capturado após ação '{action}'. URL: {test.page.url}")
             # Handle deprecated navigate
             elif action == 'navigate':
                 logger.warning(ActionMapper.get_deprecation_warning(action))
@@ -295,19 +312,28 @@ class StepExecutor:
         
         # Wait for page to load after action (unless explicitly disabled)
         step_start_time = time.time()
+        logger.info(f"[DEBUG] [YAML] Verificando se precisa aguardar após ação '{action}'...")
         if step.get('wait', True) is not False:
+            logger.info(f"[DEBUG] [YAML] wait=True, aguardando página...")
             # Check if test has wait_until_ready method (OdooTestBase has it)
             if hasattr(test, 'wait_until_ready'):
+                logger.info(f"[DEBUG] [YAML] Chamando wait_until_ready()...")
                 await test.wait_until_ready()
+                logger.info(f"[DEBUG] [YAML] wait_until_ready() completado")
             else:
                 # Generic wait for load state
                 try:
                     load_state = test.config.browser.wait_for_load
                     timeout = test.config.browser.wait_timeout
+                    logger.info(f"[DEBUG] [YAML] Aguardando load_state='{load_state}' (timeout={timeout})...")
                     if load_state in ["load", "domcontentloaded", "networkidle"]:
                         await test.page.wait_for_load_state(load_state, timeout=timeout)
-                except Exception:
+                        logger.info(f"[DEBUG] [YAML] load_state '{load_state}' completado")
+                except Exception as e:
+                    logger.info(f"[DEBUG] [YAML] Timeout aguardando load_state (normal): {e}")
                     pass  # Don't fail if wait times out
+        else:
+            logger.info(f"[DEBUG] [YAML] wait=False, pulando espera")
         
         # Handle static steps (minimum duration)
         is_static = step.get('static', False)
@@ -317,8 +343,10 @@ class StepExecutor:
             elapsed = time.time() - step_start_time
             remaining = max(0, min_duration - elapsed)
             if remaining > 0:
+                logger.info(f"[DEBUG] [YAML] Aguardando duração mínima estática: {remaining}s...")
                 await asyncio.sleep(remaining)
         
+        logger.info(f"[DEBUG] [YAML] ===== FIM execute_step para ação '{action}' =====")
         return new_state
     
     @staticmethod

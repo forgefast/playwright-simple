@@ -14,7 +14,6 @@ from pathlib import Path
 from playwright.async_api import Page, Locator, TimeoutError as PlaywrightTimeoutError
 
 from .config import TestConfig
-from .cursor import CursorManager
 from .screenshot import ScreenshotManager
 from .selectors import SelectorManager
 from .session import SessionManager
@@ -28,6 +27,14 @@ from .forms import FormsMixin
 from .queries import QueryMixin
 from .ui_helpers import UIHelpersMixin
 from .auth import AuthMixin
+
+# Try to import CursorController (for action execution)
+try:
+    from .recorder.cursor_controller import CursorController
+    CURSOR_CONTROLLER_AVAILABLE = True
+except ImportError:
+    CursorController = None
+    CURSOR_CONTROLLER_AVAILABLE = False
 from .exceptions import (
     ElementNotFoundError,
     NavigationError,
@@ -88,7 +95,6 @@ class SimpleTestBase(
         page: Page,
         config: Optional[TestConfig] = None,
         test_name: Optional[str] = None,
-        cursor_manager: Optional[CursorManager] = None,
         screenshot_manager: Optional[ScreenshotManager] = None,
         selector_manager: Optional[SelectorManager] = None,
         session_manager: Optional[SessionManager] = None,
@@ -104,7 +110,6 @@ class SimpleTestBase(
             page: Playwright page instance
             config: Test configuration (uses defaults if not provided)
             test_name: Name of current test (for organization)
-            cursor_manager: Optional CursorManager instance (creates default if None)
             screenshot_manager: Optional ScreenshotManager instance (creates default if None)
             selector_manager: Optional SelectorManager instance (creates default if None)
             session_manager: Optional SessionManager instance (creates default if None)
@@ -115,15 +120,20 @@ class SimpleTestBase(
         self.test_name = test_name or "default"
         
         # Initialize managers with Dependency Injection
-        self.cursor_manager = cursor_manager or CursorManager(page, self.config.cursor)
+        # CursorController is the single source of truth for cursor visualization
         self.screenshot_manager = screenshot_manager or ScreenshotManager(page, self.config.screenshots, test_name)
         self.selector_manager = selector_manager or SelectorManager(page, self.config.browser.timeout)
         self.session_manager = session_manager or SessionManager()
         
+        # Initialize CursorController for action execution (lazy initialization)
+        self._cursor_controller = None
+        if CURSOR_CONTROLLER_AVAILABLE:
+            # Will be initialized on first use
+            pass
+        
         # Initialize helpers with Dependency Injection
         helpers_instance = helpers or TestBaseHelpers(
             page,
-            self.cursor_manager,
             self.config,
             self.selector_manager
         )
@@ -151,6 +161,25 @@ class SimpleTestBase(
         # Initialize extensions with this test instance
         # (will be called when extensions are registered)
     
+    def _get_cursor_controller(self) -> Optional['CursorController']:
+        """
+        Get or create CursorController instance for action execution.
+        
+        Returns:
+            CursorController instance or None if not available
+        """
+        if not CURSOR_CONTROLLER_AVAILABLE:
+            return None
+        
+        if self._cursor_controller is None:
+            self._cursor_controller = CursorController(self.page)
+            # Start cursor controller (but don't show cursor by default in tests)
+            # The cursor will be shown when actions are executed
+            # IMPORTANT: CursorController will remove any existing cursor (from CursorManager)
+            # to avoid duplication
+        
+        return self._cursor_controller
+    
     async def register_extension(self, extension: Extension) -> None:
         """
         Register an extension.
@@ -166,10 +195,16 @@ class SimpleTestBase(
         await self.extensions.cleanup_all()
     
     async def _ensure_cursor(self) -> None:
-        """Ensure cursor is injected."""
-        if not self._cursor_injected:
-            await self.cursor_manager.inject()
-            self._cursor_injected = True
+        """
+        Ensure cursor is injected.
+        
+        CursorController is the single source of truth for cursor visualization.
+        This method is kept for backward compatibility but does nothing.
+        CursorController will handle cursor injection when actions are executed.
+        """
+        # CursorController handles all cursor visualization
+        # No need to do anything here
+        pass
     
     async def _prepare_element_interaction(
         self, 
@@ -218,14 +253,15 @@ class SimpleTestBase(
             show_click_effect: Whether to show click effect
             click_count: Number of click effects to show (for double-click)
         """
-        # Move cursor to element
-        await self.cursor_manager.move_to(x, y)
+        # CursorController will handle cursor movement when actions are executed
+        # No need to use CursorManager
         
         # Hover effect is disabled - skip it completely
         # Show click effect(s) only
         if show_click_effect:
             for _ in range(click_count):
-                await self.cursor_manager.show_click_effect(x, y)
+                # CursorController will handle click effects when actions are executed
+                # No need to use CursorManager
                 await asyncio.sleep(CURSOR_CLICK_EFFECT_DELAY)
     
     # ==================== Screenshot Methods ====================

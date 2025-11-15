@@ -182,7 +182,25 @@ class OdooFormsMixin:
                             }
                         """)
                         if not is_in_wizard and await btn.is_visible():
-                            await btn.click()
+                            # Try to use CursorController if available
+                            cursor_controller = None
+                            if hasattr(self, '_get_cursor_controller'):
+                                cursor_controller = self._get_cursor_controller()
+                            
+                            if cursor_controller:
+                                # Use CursorController
+                                if not cursor_controller.is_active:
+                                    await cursor_controller.start()
+                                # Get button text for CursorController
+                                button_text = await btn.text_content() or text
+                                success = await cursor_controller.click_by_text(button_text)
+                                if not success:
+                                    # Fallback to direct click
+                                    await btn.click()
+                            else:
+                                # Fallback to direct click
+                                await btn.click()
+                            
                             await asyncio.sleep(0.02)
                             await self.wizard.is_wizard_visible()
                             return self
@@ -203,7 +221,25 @@ class OdooFormsMixin:
                 if count > 0:
                     button = buttons.first
                     if await button.is_visible():
-                        await button.click()
+                        # Try to use CursorController if available
+                        cursor_controller = None
+                        if hasattr(self, '_get_cursor_controller'):
+                            cursor_controller = self._get_cursor_controller()
+                        
+                        if cursor_controller:
+                            # Use CursorController
+                            if not cursor_controller.is_active:
+                                await cursor_controller.start()
+                            # Get button text for CursorController
+                            button_text = await button.text_content() or text
+                            success = await cursor_controller.click_by_text(button_text)
+                            if not success:
+                                # Fallback to direct click
+                                await button.click()
+                        else:
+                            # Fallback to direct click
+                            await button.click()
+                        
                         await asyncio.sleep(0.02)
                         
                         # Update wizard state

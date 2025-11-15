@@ -979,7 +979,27 @@ class EventCapture:
                                 ariaLabel: (element.getAttribute && element.getAttribute('aria-label')) || '',
                                 placeholder: element.placeholder || '',
                                 label: (element.labels && element.labels.length > 0) 
-                                    ? (element.labels[0].textContent || '').trim() 
+                                    ? (function() {
+                                        // Get only direct text content, excluding child elements (like links)
+                                        const label = element.labels[0];
+                                        let labelText = '';
+                                        // Walk through child nodes and get only text nodes
+                                        for (let node = label.firstChild; node; node = node.nextSibling) {
+                                            if (node.nodeType === 3) { // Text node
+                                                labelText += node.textContent;
+                                            }
+                                        }
+                                        // Fallback to textContent if no direct text found, but clean it
+                                        if (!labelText.trim()) {
+                                            labelText = label.textContent || '';
+                                            // Remove text from child elements (links, buttons, etc.)
+                                            const childElements = label.querySelectorAll('a, button, span, strong, em');
+                                            childElements.forEach(child => {
+                                                labelText = labelText.replace(child.textContent, '');
+                                            });
+                                        }
+                                        return labelText.trim();
+                                    })()
                                     : ''
                             };
                         } catch (e) {

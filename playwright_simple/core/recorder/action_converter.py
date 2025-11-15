@@ -253,13 +253,19 @@ class ActionConverter:
             'description': identification['description']
         }
         
-        # Add selector if needed (for fallback)
-        if identification.get('selector'):
-            action['selector'] = identification['selector']
-        elif element_info.get('name'):
-            action['selector'] = f"[name='{element_info['name']}']"
-        elif element_info.get('id'):
-            action['selector'] = f"#{element_info['id']}"
+        # Only add selector if we don't have a label or placeholder (for fallback)
+        # If we have label/placeholder, CursorController can find the field by text
+        label = ElementIdentifier._get_label(element_info)
+        placeholder = ElementIdentifier._get_placeholder(element_info)
+        
+        if not label and not placeholder:
+            # No label or placeholder, add selector as fallback
+            if identification.get('selector'):
+                action['selector'] = identification['selector']
+            elif element_info.get('name'):
+                action['selector'] = f"[name='{element_info['name']}']"
+            elif element_info.get('id'):
+                action['selector'] = f"#{element_info['id']}"
         
         logger.debug(f"finalize_input: Created action - {action.get('description')} = '{value[:30]}...'")
         return action

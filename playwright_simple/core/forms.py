@@ -16,6 +16,7 @@ from .screenshot import ScreenshotManager
 from .selectors import SelectorManager
 from .config import TestConfig
 from .exceptions import ElementNotFoundError
+from .constants import ACTION_DELAY
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,7 @@ class FormsMixin:
     
     async def submit(self, button_text: Optional[str] = None, description: str = "") -> 'FormsMixin':
         """
-        Submit a form by clicking the submit button using unified function.
+        Submit a form by clicking the submit button using CursorController.
         
         Args:
             button_text: Optional text to identify specific submit button (e.g., "Entrar", "Login")
@@ -75,16 +76,28 @@ class FormsMixin:
         """
         await self._ensure_cursor()
         
-        # Use unified submit function (same code as recording and replay)
-        from ..playwright_commands.unified import unified_submit
+        # Get CursorController from test base
+        cursor_controller = None
+        if hasattr(self, '_get_cursor_controller'):
+            cursor_controller = self._get_cursor_controller()
         
-        fast_mode = getattr(self.config.step, 'fast_mode', False) if hasattr(self, 'config') else False
-        
-        success = await unified_submit(
-            page=self.page,
-            button_text=button_text,
-            fast_mode=fast_mode
-        )
+        if not cursor_controller:
+            # Fallback to old method if CursorController not available
+            from ..playwright_commands.unified import unified_submit
+            
+            fast_mode = getattr(self.config.step, 'fast_mode', False) if hasattr(self, 'config') else False
+            
+            success = await unified_submit(
+                page=self.page,
+                button_text=button_text,
+                fast_mode=fast_mode
+            )
+        else:
+            # Use CursorController
+            if not cursor_controller.is_active:
+                await cursor_controller.start()
+            
+            success = await cursor_controller.submit_form(button_text)
         
         if not success:
             raise ElementNotFoundError(

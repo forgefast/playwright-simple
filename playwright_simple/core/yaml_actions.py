@@ -7,6 +7,7 @@ Maps YAML action names to test methods.
 Uses PlaywrightCommands for click, type, submit to reuse the same code from recording.
 """
 
+import asyncio
 import logging
 from typing import Dict, Any, Callable, Optional
 
@@ -182,135 +183,142 @@ class ActionMapper:
     
     @staticmethod
     async def _execute_click(step: Dict[str, Any], test: SimpleTestBase, commands: Optional['PlaywrightCommands']) -> None:
-        """Execute click action using unified function (same code as recording)."""
-        from .playwright_commands.unified import unified_click, parse_click_args
-        
+        """Execute click action using CursorController (same code as recording)."""
         text = step.get('text')
         selector = step.get('selector')
+        role = step.get('role')
+        index = step.get('index', 0)
         description = step.get('description', '')
         
-        logger.debug(f"[ACTION] Executando click: text='{text}', selector='{selector}', description='{description}'")
+        logger.info(f"[DEBUG] [ACTION] ===== INÍCIO _execute_click =====")
+        logger.info(f"[DEBUG] [ACTION] Executando click: text='{text}', selector='{selector}', role='{role}', description='{description}'")
         
         if not test.page:
             raise ValueError("Page not available for click action")
         
-        # Get fast_mode from test config
-        fast_mode = False
-        if hasattr(test, 'config') and hasattr(test.config, 'step'):
-            fast_mode = getattr(test.config.step, 'fast_mode', False)
+        # Get CursorController from test
+        cursor_controller = test._get_cursor_controller()
+        if not cursor_controller:
+            raise ValueError("CursorController not available for click action")
         
-        # Get cursor_manager from test if available (for visual feedback)
-        # CursorManager can be used directly with visual_feedback (it has move_to method)
-        cursor_controller = None
-        if hasattr(test, 'cursor_manager') and test.cursor_manager:
-            cursor_controller = test.cursor_manager
+        logger.info(f"[DEBUG] [ACTION] CursorController obtido: is_active={cursor_controller.is_active}")
         
-        # Build args string for unified parser (same format as CLI)
-        args_str = ''
-        if text:
-            args_str = text
-        elif selector:
-            args_str = f'selector {selector}'
-        else:
-            raise ValueError("Click action requires either 'text' or 'selector'")
+        # Ensure cursor controller is started and visible
+        if not cursor_controller.is_active:
+            logger.info(f"[DEBUG] [ACTION] Iniciando CursorController...")
+            await cursor_controller.start()
+        logger.info(f"[DEBUG] [ACTION] Mostrando cursor...")
+        await cursor_controller.show()  # Ensure cursor is visible
         
-        # Parse arguments using unified parser
-        parsed = parse_click_args(args_str)
-        
-        # Wait for page to be ready (same as before)
+        # Wait for page to be ready
         try:
+            logger.info(f"[DEBUG] [ACTION] Aguardando domcontentloaded...")
             await test.page.wait_for_load_state('domcontentloaded', timeout=2000)
-        except:
-            pass
-        
-        # Initialize cache if not exists
-        if not hasattr(test, '_playwright_commands_cache'):
-            test._playwright_commands_cache = {}
-        
-        # Debug: Check if element exists before clicking
-        logger.debug(f"[ACTION] Verificando se elemento existe antes do click...")
-        element_found = False
-        try:
-            if parsed['text']:
-                # Try to find element by text
-                result = await test.page.evaluate("""
-                    (text) => {
-                        const textLower = text.toLowerCase();
-                        const elements = Array.from(document.querySelectorAll('*'));
-                        for (const el of elements) {
-                            if (el.offsetParent === null) continue;
-                            const elText = (el.textContent || el.innerText || '').trim().toLowerCase();
-                            if (elText.includes(textLower)) {
-                                const rect = el.getBoundingClientRect();
-                                return {
-                                    found: true,
-                                    tag: el.tagName,
-                                    text: elText.substring(0, 50),
-                                    visible: rect.width > 0 && rect.height > 0,
-                                    x: rect.left,
-                                    y: rect.top
-                                };
-                            }
-                        }
-                        return {found: false};
-                    }
-                """, parsed['text'])
-                element_found = result.get('found', False)
-                if element_found:
-                    logger.debug(f"[ACTION] Elemento encontrado: {result}")
-                    print(f"✅ [DIAGNÓSTICO] Elemento '{parsed['text']}' encontrado: {result.get('tag')} - visível={result.get('visible')}")
-                else:
-                    logger.warning(f"[ACTION] Elemento '{parsed['text']}' NÃO encontrado na página")
-                    print(f"⚠️  [DIAGNÓSTICO] Elemento '{parsed['text']}' NÃO encontrado na página")
-                    print(f"💡 [DIAGNÓSTICO] Use comandos CLI para investigar:")
-                    print(f"   playwright-simple find \"{parsed['text']}\"")
-                    print(f"   playwright-simple info")
-                    print(f"   playwright-simple html --max-length 500")
-            elif parsed['selector']:
-                # Try to find element by selector
-                try:
-                    element = await test.page.query_selector(parsed['selector'])
-                    if element:
-                        box = await element.bounding_box()
-                        element_found = True
-                        logger.debug(f"[ACTION] Elemento encontrado por selector: {parsed['selector']}, box={box}")
-                        print(f"✅ [DIAGNÓSTICO] Elemento '{parsed['selector']}' encontrado: visível={box is not None}")
-                    else:
-                        logger.warning(f"[ACTION] Elemento '{parsed['selector']}' NÃO encontrado na página")
-                        print(f"⚠️  [DIAGNÓSTICO] Elemento '{parsed['selector']}' NÃO encontrado na página")
-                except Exception as e:
-                    logger.warning(f"[ACTION] Erro ao buscar elemento por selector: {e}")
-                    print(f"⚠️  [DIAGNÓSTICO] Erro ao buscar '{parsed['selector']}': {e}")
+            logger.info(f"[DEBUG] [ACTION] domcontentloaded OK")
         except Exception as e:
-            logger.debug(f"[ACTION] Erro no diagnóstico: {e}")
+            logger.info(f"[DEBUG] [ACTION] domcontentloaded timeout (normal): {e}")
         
-        # Use unified click function
-        success = await unified_click(
-            page=test.page,
-            text=parsed['text'],
-            selector=parsed['selector'],
-            role=parsed['role'],
-            index=parsed['index'],
-            cursor_controller=cursor_controller,
-            fast_mode=fast_mode,
-            description=description,
-            cache_key=test,
-            cache=test._playwright_commands_cache
-        )
+        # Capture URL BEFORE click to detect navigation
+        url_before = test.page.url
+        logger.info(f"[DEBUG] [ACTION] URL ANTES do clique: {url_before}")
         
-        if not success:
-            error_msg = f"Failed to click: {description or text or selector}"
-            logger.error(f"[ACTION] {error_msg}")
-            print(f"❌ [DIAGNÓSTICO] Falha no click. Use comandos CLI para investigar:")
-            print(f"   playwright-simple find \"{text or selector}\"")
-            print(f"   playwright-simple info")
-            raise Exception(error_msg)
+        try:
+            # Execute click using CursorController
+            logger.info(f"[DEBUG] [ACTION] Executando clique via CursorController...")
+            success = False
+            if text:
+                logger.info(f"[DEBUG] [ACTION] Chamando click_by_text('{text}')...")
+                success = await cursor_controller.click_by_text(text)
+                logger.info(f"[DEBUG] [ACTION] click_by_text retornou: {success}")
+            elif selector:
+                logger.info(f"[DEBUG] [ACTION] Chamando click_by_selector('{selector}')...")
+                success = await cursor_controller.click_by_selector(selector)
+                logger.info(f"[DEBUG] [ACTION] click_by_selector retornou: {success}")
+            elif role:
+                logger.info(f"[DEBUG] [ACTION] Chamando click_by_role('{role}', {index})...")
+                success = await cursor_controller.click_by_role(role, index)
+                logger.info(f"[DEBUG] [ACTION] click_by_role retornou: {success}")
+            else:
+                raise ValueError("Click action requires 'text', 'selector', or 'role'")
+            
+            if not success:
+                error_msg = f"Failed to click: {description or text or selector or role}"
+                logger.error(f"[DEBUG] [ACTION] {error_msg}")
+                raise Exception(error_msg)
+            
+            logger.info(f"[DEBUG] [ACTION] Clique executado com sucesso! Aguardando navegação...")
+            
+            # Wait for navigation after click (using same logic as EventCapture._handle_navigation)
+            logger.info(f"[DEBUG] [ACTION] Chamando wait_for_navigation_after_action(timeout=5.0)...")
+            navigation_occurred = await cursor_controller.wait_for_navigation_after_action(timeout=5.0)
+            logger.info(f"[DEBUG] [ACTION] wait_for_navigation_after_action retornou: {navigation_occurred}")
+            
+            # Check URL after click (even if no event was detected)
+            logger.info(f"[DEBUG] [ACTION] Aguardando 0.2s para URL atualizar...")
+            await asyncio.sleep(0.2)  # Small delay to allow URL to update
+            url_after = test.page.url
+            logger.info(f"[DEBUG] [ACTION] URL APÓS clique: {url_after}")
+            logger.info(f"[DEBUG] [ACTION] URL mudou? {url_before != url_after}, navigation_occurred={navigation_occurred}")
+            
+            # Check if navigation occurred (either event fired or URL changed)
+            if url_before != url_after or navigation_occurred:
+                # Navigation happened, wait for it to complete (additional wait for networkidle)
+                logger.info(f"[DEBUG] [ACTION] ✓ Navegação detectada: {url_before} -> {url_after} (event={navigation_occurred})")
+                try:
+                    logger.info(f"[DEBUG] [ACTION] Aguardando networkidle (timeout=15s)...")
+                    # Wait for navigation to complete
+                    await test.page.wait_for_load_state('networkidle', timeout=15000)
+                    logger.info(f"[DEBUG] [ACTION] ✓ networkidle completado")
+                except Exception as e:
+                    logger.warning(f"[DEBUG] [ACTION] ⚠ Timeout esperando networkidle: {e}")
+                    # Fallback: wait for domcontentloaded
+                    try:
+                        logger.info(f"[DEBUG] [ACTION] Tentando domcontentloaded (timeout=8s)...")
+                        await test.page.wait_for_load_state('domcontentloaded', timeout=8000)
+                        logger.info(f"[DEBUG] [ACTION] ✓ domcontentloaded completado")
+                    except Exception as e2:
+                        logger.warning(f"[DEBUG] [ACTION] ⚠ Timeout esperando domcontentloaded: {e2}")
+                        # Last resort: wait a bit and check if page is interactive
+                        logger.info(f"[DEBUG] [ACTION] Último recurso: aguardando 2s...")
+                        await asyncio.sleep(2)
+                
+                # Additional wait to ensure page is fully interactive (same as EventCapture does)
+                logger.info(f"[DEBUG] [ACTION] Aguardando página estar totalmente interativa...")
+                try:
+                    # Wait for body to be ready and interactive
+                    await test.page.wait_for_function(
+                        "document.readyState === 'complete' && document.body !== null",
+                        timeout=5000
+                    )
+                    logger.info(f"[DEBUG] [ACTION] ✓ Página totalmente interativa")
+                except Exception as e:
+                    logger.info(f"[DEBUG] [ACTION] ⚠ Timeout aguardando página interativa: {e}")
+                    # Small delay as fallback
+                    await asyncio.sleep(0.5)
+            else:
+                # No URL change, but might be SPA navigation or form submission
+                # Wait a bit for any async operations
+                logger.info(f"[DEBUG] [ACTION] Sem mudança de URL, aguardando operações assíncronas...")
+                try:
+                    # Wait for network to be idle (might be form submission, AJAX, etc.)
+                    logger.info(f"[DEBUG] [ACTION] Aguardando networkidle (timeout=5s)...")
+                    await test.page.wait_for_load_state('networkidle', timeout=5000)
+                    logger.info(f"[DEBUG] [ACTION] ✓ Network idle após clique")
+                except Exception as e:
+                    logger.info(f"[DEBUG] [ACTION] Networkidle timeout (normal para alguns cliques): {e}")
+                    # If networkidle times out, wait a bit for any async operations
+                    logger.info(f"[DEBUG] [ACTION] Aguardando 0.5s...")
+                    await asyncio.sleep(0.5)
+            
+            logger.info(f"[DEBUG] [ACTION] ===== FIM _execute_click (sucesso) =====")
+        except Exception as e:
+            logger.error(f"[DEBUG] [ACTION] ===== ERRO em _execute_click: {e} =====", exc_info=True)
+            # Don't fail if wait fails - the click might have succeeded
+            raise
     
     @staticmethod
     async def _execute_type(step: Dict[str, Any], test: SimpleTestBase, commands: Optional['PlaywrightCommands']) -> None:
-        """Execute type action using unified function (same code as recording)."""
-        from .playwright_commands.unified import unified_type, parse_type_args
-        
+        """Execute type action using CursorController (same code as recording)."""
         text = step.get('text', '')
         selector = step.get('selector')
         description = step.get('description', '')
@@ -323,54 +331,29 @@ class ActionMapper:
         if not text:
             raise ValueError("Text is required for type action")
         
-        # Get fast_mode from test config
-        fast_mode = False
-        if hasattr(test, 'config') and hasattr(test.config, 'step'):
-            fast_mode = getattr(test.config.step, 'fast_mode', False)
+        # Get CursorController from test
+        cursor_controller = test._get_cursor_controller()
+        if not cursor_controller:
+            raise ValueError("CursorController not available for type action")
         
-        # Get cursor_manager from test if available (for visual feedback)
-        # CursorManager can be used directly with visual_feedback (it has move_to method)
-        cursor_controller = None
-        if hasattr(test, 'cursor_manager') and test.cursor_manager:
-            cursor_controller = test.cursor_manager
+        # Ensure cursor controller is started and visible
+        if not cursor_controller.is_active:
+            await cursor_controller.start()
+        await cursor_controller.show()  # Ensure cursor is visible
         
-        # Build args string for unified parser (same format as CLI)
-        if selector:
-            args_str = f'{text} into selector {selector}'
-        elif description:
-            args_str = f'{text} into {description}'
-        else:
-            # Try to find field by common patterns (email, password, etc)
-            args_str = f'{text} into input'
+        # Determine field selector (use selector, description, or None for auto-detect)
+        field_selector = selector or description or None
         
-        # Parse arguments using unified parser
-        parsed = parse_type_args(args_str)
-        
-        # Initialize cache if not exists
-        if not hasattr(test, '_playwright_commands_cache'):
-            test._playwright_commands_cache = {}
-        
-        # Use unified type function
-        success = await unified_type(
-            page=test.page,
-            text=parsed['text'],
-            into=parsed['into'],
-            selector=parsed['selector'],
-            cursor_controller=cursor_controller,
-            fast_mode=fast_mode,
-            cache_key=test,
-            cache=test._playwright_commands_cache
-        )
+        # Execute type using CursorController
+        success = await cursor_controller.type_text(text, field_selector)
         
         if not success:
-            field = parsed['selector'] or parsed['into'] or description or 'field'
+            field = selector or description or 'field'
             raise Exception(f"Failed to type '{text}' into {field}")
     
     @staticmethod
     async def _execute_submit(step: Dict[str, Any], test: SimpleTestBase, commands: Optional['PlaywrightCommands']) -> None:
-        """Execute submit action using unified function (same code as recording)."""
-        from .playwright_commands.unified import unified_submit
-        
+        """Execute submit action using CursorController (same code as recording)."""
         button_text = step.get('button_text') or step.get('text')
         description = step.get('description', '')
         
@@ -379,30 +362,18 @@ class ActionMapper:
         if not test.page:
             raise ValueError("Page not available for submit action")
         
-        # Get fast_mode from test config
-        fast_mode = False
-        if hasattr(test, 'config') and hasattr(test.config, 'step'):
-            fast_mode = getattr(test.config.step, 'fast_mode', False)
+        # Get CursorController from test
+        cursor_controller = test._get_cursor_controller()
+        if not cursor_controller:
+            raise ValueError("CursorController not available for submit action")
         
-        # Get cursor_manager from test if available (for visual feedback)
-        # CursorManager can be used directly with visual_feedback (it has move_to method)
-        cursor_controller = None
-        if hasattr(test, 'cursor_manager') and test.cursor_manager:
-            cursor_controller = test.cursor_manager
+        # Ensure cursor controller is started and visible
+        if not cursor_controller.is_active:
+            await cursor_controller.start()
+        await cursor_controller.show()  # Ensure cursor is visible
         
-        # Initialize cache if not exists
-        if not hasattr(test, '_playwright_commands_cache'):
-            test._playwright_commands_cache = {}
-        
-        # Use unified submit function
-        success = await unified_submit(
-            page=test.page,
-            button_text=button_text,
-            cursor_controller=cursor_controller,
-            fast_mode=fast_mode,
-            cache_key=test,
-            cache=test._playwright_commands_cache
-        )
+        # Execute submit using CursorController
+        success = await cursor_controller.submit_form(button_text)
         
         if not success:
             raise Exception(f"Failed to submit form: {description or button_text or 'form'}")

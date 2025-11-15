@@ -145,14 +145,12 @@ class PlaywrightHandlers:
     
     async def handle_pw_click(self, args: str) -> None:
         """
-        Handle pw-click command using unified function.
+        Handle pw-click command using CursorController directly.
         
-        IMPORTANT: Programmatic clicks (CLI commands) should add directly to YAML,
-        not depend on event_capture. This is the standard pattern for test automation.
+        IMPORTANT: Programmatic clicks (CLI commands) trigger DOM events that
+        event_capture will capture and add to YAML automatically.
         """
-        from ...playwright_commands.unified import unified_click, parse_click_args
-        from ..action_converter import ActionConverter
-        from ..element_identifier import ElementIdentifier
+        from ...playwright_commands.unified import parse_click_args
         
         page = self._get_page()
         if not page:
@@ -163,96 +161,37 @@ class PlaywrightHandlers:
             print("❌ Usage: pw-click \"text\" | pw-click selector \"#id\" | pw-click role button [index]")
             return
         
-        # Get fast_mode from recorder if available
-        fast_mode = False
-        if self._recorder:
-            fast_mode = getattr(self._recorder, 'fast_mode', False)
-        
-        # Get cursor controller if available
+        # Get cursor controller
         cursor_controller = None
         if self._get_cursor_controller:
             cursor_controller = self._get_cursor_controller()
         
+        if not cursor_controller:
+            print("❌ CursorController not available")
+            return
+        
+        # Ensure cursor controller is started
+        if not cursor_controller.is_active:
+            await cursor_controller.start()
+        
         # Parse arguments using unified parser
         parsed = parse_click_args(args)
         
-        # CRITICAL: Get element information BEFORE clicking
-        # This allows us to create YAML action directly, without depending on event_capture
-        element_info = None
-        try:
-            # Find the element and get its information
-            element_info = await page.evaluate("""
-                ({text, selector, role, index}) => {
-                    let elements = [];
-                    
-                    if (selector) {
-                        elements = Array.from(document.querySelectorAll(selector));
-                    } else if (role) {
-                        elements = Array.from(document.querySelectorAll(`[role="${role}"]`));
-                    } else if (text) {
-                        const textLower = text.toLowerCase();
-                        // Find by text - same logic as click
-                        const allClickable = document.querySelectorAll('button, a, input[type="button"], input[type="submit"], [role="button"], [role="link"]');
-                        for (const el of allClickable) {
-                            if (el.offsetParent === null || el.style.display === 'none') continue;
-                            const elText = (el.textContent || el.innerText || el.value || '').trim().toLowerCase();
-                            if (elText === textLower || elText.includes(textLower)) {
-                                elements.push(el);
-                            }
-                        }
-                    }
-                    
-                    // Filter visible elements
-                    elements = elements.filter(el => el.offsetParent !== null && el.style.display !== 'none');
-                    
-                    if (elements.length > index && elements[index]) {
-                        const el = elements[index];
-                        // Serialize element info (same format as event_capture)
-                        return {
-                            tagName: el.tagName || '',
-                            text: (el.textContent || el.innerText || el.value || '').trim(),
-                            id: el.id || '',
-                            className: el.className || '',
-                            href: el.href || el.getAttribute('href') || '',
-                            type: el.type || '',
-                            name: el.name || '',
-                            value: el.value || '',
-                            role: el.getAttribute('role') || '',
-                            ariaLabel: el.getAttribute('aria-label') || ''
-                        };
-                    }
-                    return null;
-                }
-            """, {
-                'text': parsed.get('text'),
-                'selector': parsed.get('selector'),
-                'role': parsed.get('role'),
-                'index': parsed.get('index', 0)
-            })
-        except Exception as e:
-            import logging
-            logging.getLogger(__name__).debug(f"Error getting element info before click: {e}")
-        
-        # Use unified click function
-        success = await unified_click(
-            page=page,
-            text=parsed['text'],
-            selector=parsed['selector'],
-            role=parsed['role'],
-            index=parsed['index'],
-            cursor_controller=cursor_controller,
-            fast_mode=fast_mode
-        )
+        # Execute click using CursorController
+        success = False
+        if parsed['text']:
+            success = await cursor_controller.click_by_text(parsed['text'])
+        elif parsed['selector']:
+            success = await cursor_controller.click_by_selector(parsed['selector'])
+        elif parsed['role']:
+            success = await cursor_controller.click_by_role(parsed['role'], parsed['index'])
+        else:
+            print("❌ Usage: pw-click \"text\" | pw-click selector \"#id\" | pw-click role button [index]")
+            return
         
         if success:
             print(f"✅ Clicked successfully")
-            
-            # CRITICAL: Add action directly to YAML for programmatic clicks
-            # This is the standard pattern - programmatic actions don't depend on event_capture
-            # UNIFIED YAML GENERATION: Let event_capture handle all YAML generation
-            # Programmatic clicks trigger DOM events that event_capture will capture
-            # This ensures consistent YAML generation for both user and programmatic actions
-            # No need to add to YAML directly here - event_capture will do it
+            # event_capture will capture the DOM events and add to YAML automatically
         else:
             print(f"❌ Failed to click")
             print("   Usage examples:")
@@ -262,15 +201,12 @@ class PlaywrightHandlers:
     
     async def handle_pw_type(self, args: str) -> None:
         """
-        Handle pw-type command using unified function.
+        Handle pw-type command using CursorController directly.
         
-        IMPORTANT: Programmatic typing (CLI commands) should add steps to YAML:
-        1. Click on the field (to focus it, like a real user would)
-        2. Type the text
-        
-        This ensures the YAML reflects the actual user workflow.
+        IMPORTANT: Programmatic typing (CLI commands) triggers DOM events that
+        event_capture will capture and add to YAML automatically.
         """
-        from ...playwright_commands.unified import unified_type, unified_click, parse_type_args
+        from ...playwright_commands.unified import parse_type_args
         from ..action_converter import ActionConverter
         from ..element_identifier import ElementIdentifier
         
@@ -288,10 +224,18 @@ class PlaywrightHandlers:
         if self._recorder:
             fast_mode = getattr(self._recorder, 'fast_mode', False)
         
-        # Get cursor controller if available
+        # Get cursor controller
         cursor_controller = None
         if self._get_cursor_controller:
             cursor_controller = self._get_cursor_controller()
+        
+        if not cursor_controller:
+            print("❌ CursorController not available")
+            return
+        
+        # Ensure cursor controller is started
+        if not cursor_controller.is_active:
+            await cursor_controller.start()
         
         # Parse arguments using unified parser
         parsed = parse_type_args(args)
@@ -406,48 +350,35 @@ class PlaywrightHandlers:
             import logging
             logging.getLogger(__name__).debug(f"Error getting field element info before type: {e}")
         
-            # STEP 1: Click on the field first (like a real user would)
-            # This focuses the field and ensures it's ready for typing
-            # UNIFIED YAML GENERATION: event_capture will capture this click and add to YAML
-            if field_element_info:
-                # Click on the field using unified_click
-                field_clicked = await unified_click(
-                    page=page,
-                    text=parsed['into'],
-                    selector=parsed['selector'],
-                    cursor_controller=cursor_controller,
-                    fast_mode=fast_mode
-                )
+        # STEP 1: Click on the field first (like a real user would)
+        # This focuses the field and ensures it's ready for typing
+        # event_capture will capture this click and add to YAML
+        if field_element_info and (parsed['into'] or parsed['selector']):
+            field_clicked = False
+            if parsed['selector']:
+                field_clicked = await cursor_controller.click_by_selector(parsed['selector'])
+            elif parsed['into']:
+                field_clicked = await cursor_controller.click_by_text(parsed['into'])
         
-        # STEP 2: Type the text
-        success = await unified_type(
-            page=page,
-            text=parsed['text'],
-            into=parsed['into'],
-            selector=parsed['selector'],
-            cursor_controller=cursor_controller,
-            fast_mode=fast_mode
-        )
+        # STEP 2: Type the text using CursorController
+        field_selector = parsed['selector'] or parsed['into'] or None
+        success = await cursor_controller.type_text(parsed['text'], field_selector)
         
         if success:
             field = parsed['selector'] or parsed['into'] or 'field'
             print(f"✅ Typed '{parsed['text']}' into '{field}'")
-            
-            # UNIFIED YAML GENERATION: event_capture will capture the input events
-            # and add the type step to YAML automatically
-            # No need to add manually here
+            # event_capture will capture the input events and add to YAML automatically
         else:
             field = parsed['selector'] or parsed['into'] or 'field'
             print(f"❌ Failed to type into '{field}'")
     
     async def handle_pw_submit(self, args: str) -> None:
         """
-        Handle pw-submit command using unified function.
+        Handle pw-submit command using CursorController directly.
         
-        IMPORTANT: Programmatic submit (CLI commands) should add step to YAML as 'submit' action,
-        not 'click'. This differentiates submit buttons from regular clicks.
+        IMPORTANT: Programmatic submit (CLI commands) triggers DOM events that
+        event_capture will capture and add to YAML automatically.
         """
-        from ...playwright_commands.unified import unified_submit
         from ..action_converter import ActionConverter
         from ..element_identifier import ElementIdentifier
         
@@ -461,10 +392,18 @@ class PlaywrightHandlers:
         if self._recorder:
             fast_mode = getattr(self._recorder, 'fast_mode', False)
         
-        # Get cursor controller if available
+        # Get cursor controller
         cursor_controller = None
         if self._get_cursor_controller:
             cursor_controller = self._get_cursor_controller()
+        
+        if not cursor_controller:
+            print("❌ CursorController not available")
+            return
+        
+        # Ensure cursor controller is started
+        if not cursor_controller.is_active:
+            await cursor_controller.start()
         
         # Parse button text (optional)
         button_text = args.strip().strip('"\'') if args.strip() else None
@@ -598,13 +537,21 @@ class PlaywrightHandlers:
                 logger.info(f"Added submit step: {action.get('description', '')}")
                 print(f"📝 Submit: {action.get('description', '')}")
         
-        # Use unified submit function
-        success = await unified_submit(
-            page=page,
-            button_text=button_text,
-            cursor_controller=cursor_controller,
-            fast_mode=fast_mode
-        )
+        # Get cursor controller
+        if not cursor_controller:
+            if self._get_cursor_controller:
+                cursor_controller = self._get_cursor_controller()
+        
+        if not cursor_controller:
+            print("❌ CursorController not available")
+            return
+        
+        # Ensure cursor controller is started
+        if not cursor_controller.is_active:
+            await cursor_controller.start()
+        
+        # Use CursorController directly
+        success = await cursor_controller.submit_form(button_text)
         
         if success:
             if button_text:

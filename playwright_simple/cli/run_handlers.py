@@ -13,17 +13,12 @@ from typing import Optional
 
 import argparse
 
-from playwright_simple import TestRunner, TestConfig
-from playwright_simple.core.yaml_parser import YAMLParser
+from playwright_simple.core.recorder.recorder import Recorder
 from playwright_simple.core.logger import get_logger
-from playwright_simple.extensions.debug import DebugExtension, DebugConfig
-from playwright_simple.extensions.video import VideoExtension, VideoConfig
-from playwright_simple.extensions.audio import AudioExtension, AudioConfig
-from playwright_simple.extensions.subtitles import SubtitleExtension, SubtitleConfig
 
 
-async def run_test(yaml_file: str, config: TestConfig, args: argparse.Namespace) -> None:
-    """Run a YAML test file."""
+async def run_test(yaml_file: str, config, args: argparse.Namespace) -> None:
+    """Run a YAML test file using Recorder directly (SAME as test_odoo_interactive.py)."""
     logger = get_logger()
     
     yaml_path = Path(yaml_file)
@@ -35,69 +30,22 @@ async def run_test(yaml_file: str, config: TestConfig, args: argparse.Namespace)
     logger.info(f"Executando teste: {yaml_path}")
     print(f"🧪 Executando teste: {yaml_path}")
     
-    # Parse YAML
-    parser = YAMLParser()
-    test_definition = parser.parse_file(yaml_path)
+    # Use Recorder in read mode (SAME class as recording, just different mode)
+    recorder = Recorder(
+        output_path=yaml_path,  # Input YAML file
+        initial_url=None,  # Will be read from YAML
+        headless=config.browser.headless if hasattr(config, 'browser') else False,
+        debug=args.debug if hasattr(args, 'debug') else False,
+        fast_mode=getattr(config.step, 'fast_mode', False) if hasattr(config, 'step') else False,
+        mode='read'  # Read mode: import YAML instead of export
+    )
     
-    if not test_definition:
-        logger.error("Falha ao parsear YAML")
-        print("❌ Erro ao parsear arquivo YAML")
-        return
-    
-    # Create runner
-    runner = TestRunner(config)
-    
-    # Add extensions based on config
-    if config.video.enabled:
-        video_config = VideoConfig(
-            enabled=True,
-            quality=config.video.quality,
-            codec=config.video.codec,
-            speed=config.video.speed,
-            dir=config.video.dir
-        )
-        runner.add_extension(VideoExtension(video_config))
-    
-    if config.video.audio or config.video.narration:
-        audio_config = AudioConfig(
-            enabled=True,
-            lang=config.video.audio_lang or 'pt-BR',
-            engine=config.video.audio_engine or 'gtts',
-            slow=config.video.audio_slow
-        )
-        runner.add_extension(AudioExtension(audio_config))
-    
-    if config.video.subtitles:
-        subtitle_config = SubtitleConfig(
-            enabled=True,
-            hard=config.video.hard_subtitles
-        )
-        runner.add_extension(SubtitleExtension(subtitle_config))
-    
-    if config.debug.enabled:
-        debug_config = DebugConfig(
-            enabled=True,
-            screenshot_on_failure=config.debug.screenshot_on_failure,
-            pause_on_failure=config.debug.pause_on_failure
-        )
-        runner.add_extension(DebugExtension(debug_config))
-    
-    # Run test
+    # Start recorder (SAME method as recording, but executes YAML steps)
     try:
-        result = await runner.run(test_definition)
-        
-        if result.get('success'):
-            print("✅ Teste passou!")
-        else:
-            print("❌ Teste falhou!")
-            if result.get('error'):
-                print(f"   Erro: {result.get('error')}")
-            sys.exit(1)
+        await recorder.start()
+        print("✅ Teste passou!")
     except Exception as e:
         logger.error(f"Erro ao executar teste: {e}", exc_info=True)
         print(f"❌ Erro ao executar teste: {e}")
         sys.exit(1)
-    
-    if result.get('video_path'):
-        print(f"📹 Vídeo salvo: {result['video_path']}")
 

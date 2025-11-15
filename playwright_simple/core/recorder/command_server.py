@@ -222,56 +222,58 @@ class CommandServer:
         return {'elements': elements}
     
     async def _handle_click(self, args: str) -> Dict[str, Any]:
-        """Handle click command using unified function."""
+        """Handle click command using CursorController directly."""
         page = self._get_page()
         if not page:
             return {'error': 'Page not available'}
         
-        from ..playwright_commands.unified import unified_click, parse_click_args
+        from ..playwright_commands.unified import parse_click_args
         
-        # Get fast_mode from recorder if available
-        fast_mode = False
-        if hasattr(self.recorder, 'fast_mode'):
-            fast_mode = self.recorder.fast_mode
-        
-        # Get cursor controller if available
+        # Get cursor controller
         cursor_controller = None
         if hasattr(self.recorder, 'cursor_controller') and self.recorder.cursor_controller:
             cursor_controller = self.recorder.cursor_controller
+        
+        if not cursor_controller:
+            return {'error': 'CursorController not available'}
+        
+        # Ensure cursor controller is started
+        if not cursor_controller.is_active:
+            await cursor_controller.start()
         
         # Parse arguments using unified parser
         parsed = parse_click_args(args)
         
-        # Use unified click function
-        success = await unified_click(
-            page=page,
-            text=parsed['text'],
-            selector=parsed['selector'],
-            role=parsed['role'],
-            index=parsed['index'],
-            cursor_controller=cursor_controller,
-            fast_mode=fast_mode
-        )
+        # Execute click using CursorController
+        success = False
+        if parsed['text']:
+            success = await cursor_controller.click_by_text(parsed['text'])
+        elif parsed['selector']:
+            success = await cursor_controller.click_by_selector(parsed['selector'])
+        elif parsed['role']:
+            success = await cursor_controller.click_by_role(parsed['role'], parsed['index'])
         
         return {'success': success}
     
     async def _handle_type(self, args: str) -> Dict[str, Any]:
-        """Handle type command using unified function."""
+        """Handle type command using CursorController directly."""
         page = self._get_page()
         if not page:
             return {'error': 'Page not available'}
         
-        from ..playwright_commands.unified import unified_type, parse_type_args
+        from ..playwright_commands.unified import parse_type_args
         
-        # Get fast_mode from recorder if available
-        fast_mode = False
-        if hasattr(self.recorder, 'fast_mode'):
-            fast_mode = self.recorder.fast_mode
-        
-        # Get cursor controller if available
+        # Get cursor controller
         cursor_controller = None
         if hasattr(self.recorder, 'cursor_controller') and self.recorder.cursor_controller:
             cursor_controller = self.recorder.cursor_controller
+        
+        if not cursor_controller:
+            return {'error': 'CursorController not available'}
+        
+        # Ensure cursor controller is started
+        if not cursor_controller.is_active:
+            await cursor_controller.start()
         
         # Parse arguments using unified parser
         parsed = parse_type_args(args)
@@ -279,46 +281,35 @@ class CommandServer:
         if not parsed['text']:
             return {'error': 'Usage: type "text" into "field"'}
         
-        # Use unified type function
-        success = await unified_type(
-            page=page,
-            text=parsed['text'],
-            into=parsed['into'],
-            selector=parsed['selector'],
-            cursor_controller=cursor_controller,
-            fast_mode=fast_mode
-        )
+        # Execute type using CursorController
+        field_selector = parsed['selector'] or parsed['into'] or None
+        success = await cursor_controller.type_text(parsed['text'], field_selector)
         
         return {'success': success}
     
     async def _handle_submit(self, args: str) -> Dict[str, Any]:
-        """Handle submit command using unified function."""
+        """Handle submit command using CursorController directly."""
         page = self._get_page()
         if not page:
             return {'error': 'Page not available'}
         
-        from ..playwright_commands.unified import unified_submit
-        
-        # Get fast_mode from recorder if available
-        fast_mode = False
-        if hasattr(self.recorder, 'fast_mode'):
-            fast_mode = self.recorder.fast_mode
-        
-        # Get cursor controller if available
+        # Get cursor controller
         cursor_controller = None
         if hasattr(self.recorder, 'cursor_controller') and self.recorder.cursor_controller:
             cursor_controller = self.recorder.cursor_controller
         
+        if not cursor_controller:
+            return {'error': 'CursorController not available'}
+        
+        # Ensure cursor controller is started
+        if not cursor_controller.is_active:
+            await cursor_controller.start()
+        
         # Parse button text (optional)
         button_text = args.strip().strip('"\'') if args.strip() else None
         
-        # Use unified submit function
-        success = await unified_submit(
-            page=page,
-            button_text=button_text,
-            cursor_controller=cursor_controller,
-            fast_mode=fast_mode
-        )
+        # Execute submit using CursorController
+        success = await cursor_controller.submit_form(button_text)
         
         return {'success': success}
     

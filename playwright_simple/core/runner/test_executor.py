@@ -279,10 +279,9 @@ class TestExecutor:
                 logger.debug(f"Could not start CommandServer: {e}")
                 self._command_server = None
             
-            # Inject cursor IMMEDIATELY after creating test instance (before navigation)
-            # This ensures cursor is visible from the start of the video
-            print(f"  🖱️  Injetando cursor...")
-            await test.cursor_manager.inject(force=True)
+            # Cursor will be injected by CursorController when actions are executed
+            # CursorController is the single source of truth for cursor visualization
+            # No need to inject CursorManager cursor here
             
             # Try to restore cursor position from storage, or move to center
             viewport = page.viewport_size or {"width": 1920, "height": 1080}
@@ -311,12 +310,14 @@ class TestExecutor:
                 initial_y = int(position.get('y'))
                 logger.info(f"Restoring cursor position from storage: ({initial_x}, {initial_y})")
                 # Move cursor visual first
-                await test.cursor_manager.move_to(initial_x, initial_y)
+                # CursorController will handle cursor positioning when actions are executed
+                # No need to use CursorManager
                 # Then sync Playwright mouse position to match cursor visual
                 await page.mouse.move(initial_x, initial_y)
             else:
                 # Move cursor to center of screen to ensure it's visible
-                await test.cursor_manager.move_to(center_x, center_y)
+                # CursorController will handle cursor positioning when actions are executed
+                # No need to use CursorManager
                 # Sync Playwright mouse position
                 await page.mouse.move(center_x, center_y)
             
@@ -368,16 +369,16 @@ class TestExecutor:
                                 }}
                             }}
                         """)
-                        # Re-inject cursor (will use stored position, not center)
-                        await test.cursor_manager.inject(force=True)
-                        logger.info(f"🖱️  [DEBUG] Cursor injected at ({x}, {y}), syncing mouse")
+                        # CursorController will handle cursor restoration after navigation
+                        # No need to inject CursorManager cursor
+                        logger.info(f"🖱️  [DEBUG] Cursor position restored to ({x}, {y}), syncing mouse")
                         # Sync Playwright mouse position to match cursor visual (cursor already at correct position)
                         await page.mouse.move(x, y)
                         logger.info(f"Cursor restored after navigation: ({x}, {y})")
                         logger.info(f"🖱️  [DEBUG] Cursor and mouse restored to ({x}, {y})")
                     else:
-                        # No saved position, re-inject cursor (will use last position from move_to)
-                        await test.cursor_manager.inject(force=True)
+                        # CursorController will handle cursor restoration after navigation
+                        # No need to inject CursorManager cursor
                         # Try to get current cursor position and sync mouse
                         try:
                             current_pos = await page.evaluate("""
@@ -396,11 +397,7 @@ class TestExecutor:
                             pass
                 except Exception as e:
                     logger.warning(f"Error restoring cursor after navigation: {e}")
-                    # Try to restore anyway
-                    try:
-                        await test.cursor_manager.inject(force=True)
-                    except:
-                        pass
+                    # CursorController will handle cursor restoration
             
             # Listen for navigation events
             page.on('framenavigated', on_navigation)
@@ -450,9 +447,8 @@ class TestExecutor:
                     }, level="ERROR")
                     raise
                 await asyncio.sleep(0.3)  # Reduced delay
-                # After navigation, just ensure cursor exists (don't force re-inject to avoid duplicates)
-                # The init script should handle cursor creation on page load
-                await test.cursor_manager._ensure_cursor_exists()
+                # CursorController will handle cursor restoration after navigation
+                # No need to use CursorManager
                 
                 # Remove hover effect and hide click effect again after navigation (in case they were recreated)
                 await page.evaluate(f"""

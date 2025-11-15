@@ -8,6 +8,6 @@ All functionality has been moved to playwright_simple/core/recorder/cursor_contr
 """
 
 # Import from new modular structure
-from playwright_simple.core.recorder.cursor_controller.controller import CursorController
+from .cursor_controller.controller import CursorController
 
 __all__ = ['CursorController']

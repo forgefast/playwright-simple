@@ -27,7 +27,7 @@ class ClickInteractionMixin(BaseInteractionMixin):
     
     async def click(self, text_or_selector: str, description: str = "") -> 'ClickInteractionMixin':
         """
-        Click on an element by text (preferred) or selector.
+        Click on an element by text (preferred) or selector using CursorController.
         
         Args:
             text_or_selector: Visible text or CSS selector of element to click
@@ -37,33 +37,30 @@ class ClickInteractionMixin(BaseInteractionMixin):
             Self for method chaining
         """
         logger.debug(f"[CLICK] Iniciando click em: '{text_or_selector}', description: '{description}'")
-        if self._helpers is None:
-            logger.error("[CLICK] _helpers não inicializado!")
-            raise RuntimeError("_helpers not initialized")
         
-        try:
-            logger.debug(f"[CLICK] Preparando elemento para interação: '{text_or_selector}'")
-            element, x, y = await self._helpers.prepare_element_interaction(text_or_selector, description)
-            logger.debug(f"[CLICK] Elemento preparado: element={element}, x={x}, y={y}")
-        except Exception as e:
-            logger.error(f"[CLICK] Erro ao preparar elemento: {e}", exc_info=True)
-            structured_logger.info(
-                f"Elemento não encontrado para clique: '{text_or_selector}'",
-                extra={"element": text_or_selector, "action": "click", "selector": text_or_selector, "description": description, "error": str(e)}
-            )
-            raise
+        # Get CursorController from test base
+        cursor_controller = None
+        if hasattr(self, '_get_cursor_controller'):
+            cursor_controller = self._get_cursor_controller()
         
-        if x is not None and y is not None:
-            structured_logger.info(
-                f"Elemento encontrado para clique: '{text_or_selector}' em ({x:.0f}, {y:.0f})",
-                extra={"element": text_or_selector, "action": "click", "selector": text_or_selector, "description": description, "x": x, "y": y}
-            )
-        
-        logger.debug(f"[CLICK] Detectando estado antes do clique...")
-        state_before = await self._helpers.detect_state_change({})
-        logger.debug(f"[CLICK] Estado antes: {state_before}")
-        
-        try:
+        if not cursor_controller:
+            # Fallback to old method if CursorController not available
+            if self._helpers is None:
+                logger.error("[CLICK] _helpers não inicializado!")
+                raise RuntimeError("_helpers not initialized")
+            
+            try:
+                logger.debug(f"[CLICK] Preparando elemento para interação: '{text_or_selector}'")
+                element, x, y = await self._helpers.prepare_element_interaction(text_or_selector, description)
+                logger.debug(f"[CLICK] Elemento preparado: element={element}, x={x}, y={y}")
+            except Exception as e:
+                logger.error(f"[CLICK] Erro ao preparar elemento: {e}", exc_info=True)
+                structured_logger.info(
+                    f"Elemento não encontrado para clique: '{text_or_selector}'",
+                    extra={"element": text_or_selector, "action": "click", "selector": text_or_selector, "description": description, "error": str(e)}
+                )
+                raise
+            
             logger.debug(f"[CLICK] Executando click no elemento...")
             await element.click()
             logger.debug(f"[CLICK] Click executado com sucesso!")
@@ -71,9 +68,53 @@ class ClickInteractionMixin(BaseInteractionMixin):
                 f"Clique executado com sucesso: '{text_or_selector}'",
                 action="click", selector=text_or_selector, description=description
             )
-            logger.debug(f"[CLICK] Aguardando ACTION_DELAY * 2 = {ACTION_DELAY * 2}")
             await asyncio.sleep(ACTION_DELAY * 2)
-            
+            return self
+        
+        # Use CursorController
+        if not cursor_controller.is_active:
+            await cursor_controller.start()
+        
+        # Detect state before click
+        state_before = {}
+        if self._helpers:
+            state_before = await self._helpers.detect_state_change({})
+        
+        # Determine if text_or_selector is a CSS selector (starts with common selector patterns)
+        is_selector = (
+            text_or_selector.startswith('#') or
+            text_or_selector.startswith('.') or
+            text_or_selector.startswith('[') or
+            ' ' in text_or_selector or  # Contains space (likely a selector)
+            text_or_selector.startswith('input') or
+            text_or_selector.startswith('button') or
+            text_or_selector.startswith('a') or
+            text_or_selector.startswith('div')
+        )
+        
+        success = False
+        if is_selector:
+            success = await cursor_controller.click_by_selector(text_or_selector)
+        else:
+            success = await cursor_controller.click_by_text(text_or_selector)
+        
+        if not success:
+            error_msg = f"Failed to click: {text_or_selector}"
+            logger.error(f"[CLICK] {error_msg}")
+            structured_logger.error(
+                f"Falha ao clicar no elemento '{text_or_selector}': {error_msg}",
+                action="click", selector=text_or_selector, description=description, error=error_msg
+            )
+            raise Exception(error_msg)
+        
+        structured_logger.action(
+            f"Clique executado com sucesso: '{text_or_selector}'",
+            action="click", selector=text_or_selector, description=description
+        )
+        await asyncio.sleep(ACTION_DELAY * 2)
+        
+        # Detect state after click
+        if self._helpers:
             state_after = await self._helpers.detect_state_change(state_before)
             if state_after.get('state_changed'):
                 structured_logger.state(
@@ -82,13 +123,6 @@ class ClickInteractionMixin(BaseInteractionMixin):
                     url_changed=state_after.get('url_changed', False),
                     html_changed=state_after.get('html_changed', False)
                 )
-        except Exception as e:
-            logger.error(f"[CLICK] Erro ao clicar no elemento '{text_or_selector}': {e}", exc_info=True)
-            structured_logger.error(
-                f"Falha ao clicar no elemento '{text_or_selector}': {e}",
-                action="click", selector=text_or_selector, description=description, error=str(e)
-            )
-            raise
         
         return self
     

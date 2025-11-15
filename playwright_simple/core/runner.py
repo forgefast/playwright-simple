@@ -228,10 +228,9 @@ class TestRunner:
             print(f"  ✅ Instância criada: {test_type}")
             _log_action("test_instance_created", test_name, {"test_type": test_type})
             
-            # Inject cursor IMMEDIATELY after creating test instance (before navigation)
-            # This ensures cursor is visible from the start of the video
-            print(f"  🖱️  Injetando cursor...")
-            await test.cursor_manager.inject(force=True)
+            # Cursor will be injected by CursorController when actions are executed
+            # CursorController is the single source of truth for cursor visualization
+            # No need to inject CursorManager cursor here
             
             # Remove hover effect and hide click effect if disabled (they might have been created)
             from .constants import CLICK_EFFECT_ELEMENT_ID
@@ -281,7 +280,8 @@ class TestRunner:
                 await asyncio.sleep(0.3)  # Reduced delay
                 # After navigation, just ensure cursor exists (don't force re-inject to avoid duplicates)
                 # The init script should handle cursor creation on page load
-                await test.cursor_manager._ensure_cursor_exists()
+                # CursorController will handle cursor restoration after navigation
+                # No need to use CursorManager
                 
                 # Remove hover effect and hide click effect again after navigation (in case they were recreated)
                 from .constants import CLICK_EFFECT_ELEMENT_ID

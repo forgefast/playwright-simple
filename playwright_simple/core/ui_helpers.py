@@ -128,7 +128,7 @@ class UIHelpersMixin:
         description: str = ""
     ) -> 'UIHelpersMixin':
         """
-        Click a button by its visible text.
+        Click a button by its visible text using CursorController.
         
         Args:
             text: Button text to match
@@ -147,6 +147,24 @@ class UIHelpersMixin:
         if not text or not text.strip():
             raise ValueError("Button text cannot be empty")
         
+        # Get CursorController from test base
+        cursor_controller = None
+        if hasattr(self, '_get_cursor_controller'):
+            cursor_controller = self._get_cursor_controller()
+        
+        if cursor_controller:
+            # Use CursorController
+            if not cursor_controller.is_active:
+                await cursor_controller.start()
+            
+            success = await cursor_controller.click_by_text(text)
+            if not success:
+                raise ElementNotFoundError(
+                    f"Button with text '{text}' not found{f' in context {context}' if context else ''}"
+                )
+            return self
+        
+        # Fallback to old method
         try:
             await self._ensure_cursor()
             

@@ -82,6 +82,14 @@ class CursorInteraction:
             await self.controller.show()
             logger.info(f"Attempting to click by text: '{text}'")
             
+            # Wait for page to be ready (especially after navigation)
+            try:
+                await self.page.wait_for_load_state('domcontentloaded', timeout=5000)
+                # Wait a bit more for dynamic content
+                await asyncio.sleep(0.5)
+            except:
+                pass  # Continue even if timeout
+            
             # Check for special prefixes
             text_lower = text.lower().strip()
             search_placeholder = text_lower.startswith('placeholder ')
@@ -105,42 +113,152 @@ class CursorInteraction:
             # Find element by text
             element_info = await self.page.evaluate(f"""
                 () => {{
-                    // Try multiple strategies
+                    // Try multiple strategies with priority
                     const text = '{escaped_text}';
                     const lowerText = text.toLowerCase();
+                    const candidates = [];
                     
-                    // Strategy 1: Button with exact or partial text match (priority)
-                    let element = Array.from(document.querySelectorAll('button, a, input[type="button"], input[type="submit"]')).find(el => {{
+                    // FIRST: Check if this looks like a form field name (senha, email, usuário, etc.)
+                    // If so, prioritize inputs over links
+                    const fieldKeywords = ['senha', 'password', 'email', 'e-mail', 'usuário', 'user', 'username', 'nome', 'name', 'telefone', 'phone', 'cpf', 'cnpj', 'endereço', 'address'];
+                    const isFieldName = fieldKeywords.some(keyword => lowerText === keyword || lowerText.includes(keyword) || lowerText.includes('email') || lowerText.includes('e-mail'));
+                    
+                    // If it looks like a field name, search inputs first
+                    if (isFieldName) {{
+                        const inputs = Array.from(document.querySelectorAll('input, textarea'));
+                        for (const input of inputs) {{
+                            if (input.offsetParent === null || input.style.display === 'none' || input.style.visibility === 'hidden') {{
+                                continue;
+                            }}
+                            
+                            // Check label
+                            let labelText = '';
+                            const labels = input.labels || [];
+                            for (const label of labels) {{
+                                labelText = (label.textContent || '').trim().toLowerCase();
+                                if (labelText === lowerText || labelText.includes(lowerText)) {{
+                                    const rect = input.getBoundingClientRect();
+                                    candidates.push({{
+                                        element: input,
+                                        priority: 15, // Very high priority for input fields
+                                        text: labelText,
+                                        tagName: input.tagName,
+                                        type: 'input-label'
+                                    }});
+                                    break;
+                                }}
+                            }}
+                            
+                            // Check placeholder
+                            const placeholder = (input.placeholder || '').toLowerCase();
+                            if (placeholder === lowerText || placeholder.includes(lowerText)) {{
+                                const rect = input.getBoundingClientRect();
+                                candidates.push({{
+                                    element: input,
+                                    priority: 14, // High priority for placeholder match
+                                    text: placeholder,
+                                    tagName: input.tagName,
+                                    type: 'input-placeholder'
+                                }});
+                            }}
+                            
+                            // Check name/id
+                            const name = (input.name || '').toLowerCase();
+                            const id = (input.id || '').toLowerCase();
+                            if (name === lowerText || id === lowerText || name.includes(lowerText) || id.includes(lowerText)) {{
+                                const rect = input.getBoundingClientRect();
+                                candidates.push({{
+                                    element: input,
+                                    priority: 13, // High priority for name/id match
+                                    text: name || id,
+                                    tagName: input.tagName,
+                                    type: 'input-name-id'
+                                }});
+                            }}
+                        }}
+                    }}
+                    
+                    // Collect all potential matches with priority scores
+                    const allClickable = Array.from(document.querySelectorAll('button, a, input[type="button"], input[type="submit"], [role="button"], [onclick]'));
+                    
+                    for (const el of allClickable) {{
+                        // Skip hidden elements
+                        if (el.offsetParent === null || el.style.display === 'none' || el.style.visibility === 'hidden') {{
+                            continue;
+                        }}
+                        
                         const elText = (el.textContent || el.value || el.getAttribute('aria-label') || '').trim();
-                        return elText.toLowerCase() === lowerText || elText.toLowerCase().includes(lowerText);
-                    }});
-                    
-                    // Strategy 2: Any clickable element
-                    if (!element) {{
-                        element = Array.from(document.querySelectorAll('a, button, [role="button"], [onclick], input[type="button"], input[type="submit"]')).find(el => {{
-                            const elText = (el.textContent || el.value || el.getAttribute('aria-label') || '').trim();
-                            return elText.toLowerCase().includes(lowerText);
-                        }});
+                        const elTextLower = elText.toLowerCase();
+                        
+                        // Calculate priority score
+                        let priority = 0;
+                        let matches = false;
+                        
+                        // Priority 10: Exact match
+                        if (elTextLower === lowerText) {{
+                            priority = 10;
+                            matches = true;
+                        }}
+                        // Priority 8: Starts with text (for buttons like "Login" vs "Login here")
+                        else if (elTextLower.startsWith(lowerText + ' ') || elTextLower.startsWith(lowerText + '\\n') || elTextLower.startsWith(lowerText + '\\t')) {{
+                            priority = 8;
+                            matches = true;
+                        }}
+                        // Priority 6: Ends with text
+                        else if (elTextLower.endsWith(' ' + lowerText) || elTextLower.endsWith('\\n' + lowerText)) {{
+                            priority = 6;
+                            matches = true;
+                        }}
+                        // Priority 4: Contains as whole word (not part of another word)
+                        // Use regex to match word boundaries
+                        else {{
+                            const wordBoundaryRegex = new RegExp('\\\\b' + lowerText.replace(/[.*+?^${{}}()|[\\\\]\\\\]/g, '\\\\$&') + '\\\\b', 'i');
+                            if (wordBoundaryRegex.test(elText)) {{
+                                priority = 4;
+                                matches = true;
+                            }}
+                            // Priority 2: Contains text (partial match - lowest priority, only if no word boundary match)
+                            else if (elTextLower.includes(lowerText)) {{
+                                priority = 2;
+                                matches = true;
+                            }}
+                        }}
+                        
+                        if (matches) {{
+                            // Bonus for buttons over links
+                            if (el.tagName === 'BUTTON' || el.type === 'button' || el.type === 'submit') {{
+                                priority += 1;
+                            }}
+                            // Penalty for links when we're looking for field names
+                            else if (isFieldName && el.tagName === 'A') {{
+                                priority -= 2; // Reduce priority for links when searching for field names
+                            }}
+                            
+                            candidates.push({{
+                                element: el,
+                                priority: priority,
+                                text: elText,
+                                tagName: el.tagName
+                            }});
+                        }}
                     }}
                     
-                    // Strategy 3: Exact text match in any element
-                    if (!element) {{
-                        element = Array.from(document.querySelectorAll('*')).find(el => {{
-                            const elText = (el.textContent || '').trim();
-                            return elText.toLowerCase() === lowerText || elText.toLowerCase().includes(lowerText);
-                        }});
-                    }}
+                    // Sort by priority (highest first)
+                    candidates.sort((a, b) => b.priority - a.priority);
                     
-                    if (element) {{
-                        const rect = element.getBoundingClientRect();
+                    // Return the highest priority match
+                    if (candidates.length > 0) {{
+                        const best = candidates[0].element;
+                        const rect = best.getBoundingClientRect();
                         return {{
                             found: true,
                             x: Math.floor(rect.left + rect.width / 2),
                             y: Math.floor(rect.top + rect.height / 2),
-                            tagName: element.tagName,
-                            text: (element.textContent || element.value || '').trim(),
-                            id: element.id || '',
-                            name: element.name || ''
+                            tagName: best.tagName,
+                            text: (best.textContent || best.value || '').trim(),
+                            id: best.id || '',
+                            name: best.name || '',
+                            priority: candidates[0].priority
                         }};
                     }}
                     
@@ -155,9 +273,13 @@ class CursorInteraction:
             
             click_x = element_info['x']
             click_y = element_info['y']
+            found_text = element_info.get('text', '')
+            priority = element_info.get('priority', 0)
             
-            logger.info(f"Found element '{text}' at ({click_x}, {click_y})")
+            logger.info(f"Found element '{text}' at ({click_x}, {click_y}), actual text: '{found_text}', priority: {priority}")
             print(f"   ✓ Elemento '{text}' encontrado em ({click_x}, {click_y})")
+            if found_text.lower() != text.lower():
+                print(f"   ℹ️  Texto real do elemento: '{found_text}' (prioridade: {priority})")
             
             # Move cursor to element position with a small delay for visibility
             await self.controller.move(click_x, click_y)
@@ -453,6 +575,146 @@ class CursorInteraction:
         except Exception as e:
             logger.error(f"Error clicking by submit: {e}")
             return False
+    
+    async def click_by_selector(self, selector: str) -> bool:
+        """
+        Click on element by CSS selector.
+        
+        Args:
+            selector: CSS selector for the element
+            
+        Returns:
+            True if element was found and clicked, False otherwise
+        """
+        try:
+            # Ensure cursor is initialized and visible
+            if not self.controller.is_active:
+                await self.controller.start()
+            await self.controller.show()
+            
+            # Find element by selector
+            element = await self.page.query_selector(selector)
+            if not element:
+                logger.warning(f"Element with selector '{selector}' not found")
+                return False
+            
+            # Get element coordinates
+            box = await element.bounding_box()
+            if not box:
+                # If no bounding box, try to click directly
+                await element.click()
+                logger.info(f"Clicked on element with selector '{selector}' (no bounding box)")
+                return True
+            
+            click_x = int(box['x'] + box['width'] / 2)
+            click_y = int(box['y'] + box['height'] / 2)
+            
+            logger.info(f"Found element with selector '{selector}' at ({click_x}, {click_y})")
+            
+            # Move cursor to element position
+            await self.controller.move(click_x, click_y)
+            await asyncio.sleep(0.2)
+            
+            # Show click animation
+            await self.page.evaluate(f"""
+                () => {{
+                    const clickIndicator = document.getElementById('__playwright_cursor_click');
+                    if (clickIndicator) {{
+                        clickIndicator.style.left = '{click_x}px';
+                        clickIndicator.style.top = '{click_y}px';
+                        clickIndicator.style.display = 'block';
+                        setTimeout(() => {{
+                            clickIndicator.style.display = 'none';
+                        }}, 300);
+                    }}
+                }}
+            """)
+            
+            # Perform actual click using mouse (consistent with other methods)
+            await self.page.mouse.click(click_x, click_y)
+            logger.info(f"Clicked on element with selector '{selector}' at ({click_x}, {click_y})")
+            return True
+        except Exception as e:
+            logger.error(f"Error clicking by selector: {e}")
+            return False
+    
+    async def click_by_role(self, role: str, index: int = 0) -> bool:
+        """
+        Click on element by ARIA role.
+        
+        Args:
+            role: ARIA role (e.g., 'button', 'link', 'menuitem')
+            index: Index if multiple matches (default: 0)
+            
+        Returns:
+            True if element was found and clicked, False otherwise
+        """
+        try:
+            # Ensure cursor is initialized and visible
+            if not self.controller.is_active:
+                await self.controller.start()
+            await self.controller.show()
+            
+            # Find elements by role
+            elements = await self.page.query_selector_all(f'[role="{role}"]')
+            if not elements or len(elements) <= index:
+                logger.warning(f"Element with role '{role}' (index {index}) not found")
+                return False
+            
+            element = elements[index]
+            
+            # Get element coordinates
+            box = await element.bounding_box()
+            if not box:
+                # If no bounding box, try to click directly
+                await element.click()
+                logger.info(f"Clicked on element with role '{role}' (index {index}, no bounding box)")
+                return True
+            
+            click_x = int(box['x'] + box['width'] / 2)
+            click_y = int(box['y'] + box['height'] / 2)
+            
+            logger.info(f"Found element with role '{role}' (index {index}) at ({click_x}, {click_y})")
+            
+            # Move cursor to element position
+            await self.controller.move(click_x, click_y)
+            await asyncio.sleep(0.2)
+            
+            # Show click animation
+            await self.page.evaluate(f"""
+                () => {{
+                    const clickIndicator = document.getElementById('__playwright_cursor_click');
+                    if (clickIndicator) {{
+                        clickIndicator.style.left = '{click_x}px';
+                        clickIndicator.style.top = '{click_y}px';
+                        clickIndicator.style.display = 'block';
+                        setTimeout(() => {{
+                            clickIndicator.style.display = 'none';
+                        }}, 300);
+                    }}
+                }}
+            """)
+            
+            # Perform actual click using mouse (consistent with other methods)
+            await self.page.mouse.click(click_x, click_y)
+            logger.info(f"Clicked on element with role '{role}' (index {index}) at ({click_x}, {click_y})")
+            return True
+        except Exception as e:
+            logger.error(f"Error clicking by role: {e}")
+            return False
+    
+    async def submit_form(self, button_text: Optional[str] = None) -> bool:
+        """
+        Submit a form by clicking the submit button.
+        
+        Args:
+            button_text: Optional text to identify specific submit button (e.g., "Entrar", "Login")
+            
+        Returns:
+            True if form was submitted successfully, False otherwise
+        """
+        # Use existing _click_by_submit method
+        return await self._click_by_submit(button_text or '')
     
     async def get_element_at(self, x: int, y: int) -> Optional[dict]:
         """Get element information at cursor position."""

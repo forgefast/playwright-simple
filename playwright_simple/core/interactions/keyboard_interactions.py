@@ -27,7 +27,7 @@ class KeyboardInteractionMixin(BaseInteractionMixin):
     
     async def type(self, text: str, selector: Optional[str] = None, description: str = "") -> 'KeyboardInteractionMixin':
         """
-        Type text into an element.
+        Type text into an element using CursorController.
         
         If no selector is provided, tries to find the focused field or first visible text input.
         
@@ -36,49 +36,88 @@ class KeyboardInteractionMixin(BaseInteractionMixin):
             selector: Optional selector for the element (if None, uses focused field)
             description: Optional description for logging
         """
-        if self._helpers is None:
-            raise RuntimeError("_helpers not initialized")
+        # Get CursorController from test base
+        cursor_controller = None
+        if hasattr(self, '_get_cursor_controller'):
+            cursor_controller = self._get_cursor_controller()
         
-        try:
-            if selector:
-                element, x, y = await self._helpers.prepare_element_interaction(selector, description)
-            else:
-                # Try to find focused field or first visible text input
-                try:
-                    # Check if there's a focused element
-                    focused_element = await self.page.evaluate("() => document.activeElement")
-                    if focused_element and focused_element.get('tagName', '').lower() in ['input', 'textarea']:
-                        element = self.page.locator(':focus')
+        if not cursor_controller:
+            # Fallback to old method if CursorController not available
+            if self._helpers is None:
+                raise RuntimeError("_helpers not initialized")
+            
+            try:
+                if selector:
+                    element, x, y = await self._helpers.prepare_element_interaction(selector, description)
+                else:
+                    # Try to find focused field or first visible text input
+                    try:
+                        # Check if there's a focused element
+                        focused_element = await self.page.evaluate("() => document.activeElement")
+                        if focused_element and focused_element.get('tagName', '').lower() in ['input', 'textarea']:
+                            element = self.page.locator(':focus')
+                            x, y = None, None
+                        else:
+                            # Find first visible text input
+                            element = self.page.locator('input[type="text"], input[type="email"], input[type="password"], textarea').first
+                            x, y = None, None
+                    except Exception:
+                        # Fallback: use first input
+                        element = self.page.locator('input, textarea').first
                         x, y = None, None
-                    else:
-                        # Find first visible text input
-                        element = self.page.locator('input[type="text"], input[type="email"], input[type="password"], textarea').first
-                        x, y = None, None
-                except Exception:
-                    # Fallback: use first input
-                    element = self.page.locator('input, textarea').first
-                    x, y = None, None
+                
+                structured_logger.info(
+                    f"Elemento encontrado para digitação: '{selector or 'auto'}'",
+                    element=selector or 'auto',
+                    action="type", selector=selector, description=description
+                )
+                
+                await element.fill('')  # Clear first
+                await element.type(text, delay=TYPE_CHAR_DELAY)
+                await asyncio.sleep(TYPE_DELAY)
+                
+                structured_logger.action(
+                    f"Texto digitado com sucesso: '{text[:50]}...'",
+                    action="type", selector=selector, description=description
+                )
+            except Exception as e:
+                structured_logger.error(
+                    f"Falha ao digitar texto: {e}",
+                    action="type", selector=selector, description=description, error=str(e)
+                )
+                raise
             
-            structured_logger.info(
-                f"Elemento encontrado para digitação: '{selector or 'auto'}'",
-                element=selector or 'auto',
-                action="type", selector=selector, description=description
-            )
-            
-            await element.fill('')  # Clear first
-            await element.type(text, delay=TYPE_CHAR_DELAY)
-            await asyncio.sleep(TYPE_DELAY)
-            
-            structured_logger.action(
-                f"Texto digitado com sucesso: '{text[:50]}...'",
-                action="type", selector=selector, description=description
-            )
-        except Exception as e:
+            return self
+        
+        # Use CursorController
+        if not cursor_controller.is_active:
+            await cursor_controller.start()
+        
+        # Determine field selector (use selector, description, or None for auto-detect)
+        field_selector = selector or description or None
+        
+        structured_logger.info(
+            f"Elemento encontrado para digitação: '{field_selector or 'auto'}'",
+            element=field_selector or 'auto',
+            action="type", selector=selector, description=description
+        )
+        
+        success = await cursor_controller.type_text(text, field_selector)
+        
+        if not success:
+            field = selector or description or 'field'
+            error_msg = f"Failed to type '{text}' into {field}"
             structured_logger.error(
-                f"Falha ao digitar texto: {e}",
-                action="type", selector=selector, description=description, error=str(e)
+                f"Falha ao digitar texto: {error_msg}",
+                action="type", selector=selector, description=description, error=error_msg
             )
-            raise
+            raise Exception(error_msg)
+        
+        structured_logger.action(
+            f"Texto digitado com sucesso: '{text[:50]}...'",
+            action="type", selector=selector, description=description
+        )
+        await asyncio.sleep(TYPE_DELAY)
         
         return self
     

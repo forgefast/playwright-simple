@@ -11,7 +11,7 @@ import logging
 from typing import Optional, Tuple, Dict, Any
 from playwright.async_api import Page, Locator
 
-from .cursor import CursorManager
+# CursorManager removed - using CursorController instead
 from .config import TestConfig
 from .constants import (
     CURSOR_HOVER_DELAY,
@@ -41,7 +41,6 @@ class TestBaseHelpers:
     def __init__(
         self,
         page: Page,
-        cursor_manager: CursorManager,
         config: TestConfig,
         selector_manager: 'SelectorManager'
     ) -> None:
@@ -50,12 +49,10 @@ class TestBaseHelpers:
         
         Args:
             page: Playwright page instance
-            cursor_manager: Cursor manager instance for visual effects
             config: Test configuration
             selector_manager: Selector manager instance for element finding
         """
         self.page = page
-        self.cursor_manager = cursor_manager
         self.config = config
         self.selector_manager = selector_manager
         self._cursor_injected = False
@@ -70,9 +67,10 @@ class TestBaseHelpers:
         Raises:
             Exception: If cursor injection fails
         """
-        if not self._cursor_injected:
-            await self.cursor_manager.inject()
-            self._cursor_injected = True
+        # CursorController is the single source of truth for cursor visualization
+        # This method is kept for backward compatibility but does nothing when CursorController is used
+        # The actual cursor injection is handled by CursorController when actions are executed
+        pass
     
     async def prepare_element_interaction(
         self, 
@@ -201,14 +199,15 @@ class TestBaseHelpers:
         Raises:
             Exception: If cursor movement or effect display fails
         """
-        # Move cursor to element
-        await self.cursor_manager.move_to(x, y)
+        # CursorController will handle cursor movement when actions are executed
+        # No need to use CursorManager
         
         # Hover effect is disabled - skip it completely
         # Show click effect(s) only
         if show_click_effect:
             for _ in range(click_count):
-                await self.cursor_manager.show_click_effect(x, y)
+                # CursorController will handle click effects when actions are executed
+                # No need to use CursorManager
                 await asyncio.sleep(CURSOR_CLICK_EFFECT_DELAY)
     
     async def navigate_with_cursor(
@@ -237,10 +236,6 @@ class TestBaseHelpers:
         await navigation_func(*args, **kwargs)
         await asyncio.sleep(0.05)  # NAVIGATION_DELAY
         
-        # Re-inject cursor after navigation
-        try:
-            await self.cursor_manager.inject(force=True)
-        except Exception as e:
-            logger.warning(f"Failed to inject cursor after navigation, ensuring cursor exists: {e}")
-            await self.cursor_manager._ensure_cursor_exists()
+        # CursorController will handle cursor restoration after navigation
+        # No need to use CursorManager
 

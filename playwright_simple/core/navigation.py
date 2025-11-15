@@ -11,7 +11,7 @@ import logging
 from typing import List, Optional, Any
 from playwright.async_api import Page, TimeoutError as PlaywrightTimeoutError
 
-from .cursor import CursorManager
+# CursorManager removed - using CursorController instead
 from .screenshot import ScreenshotManager
 from .selectors import SelectorManager
 from .config import TestConfig
@@ -75,15 +75,8 @@ class NavigationMixin:
             await navigation_func(*args, **kwargs)
             await asyncio.sleep(0.05)  # NAVIGATION_DELAY
             
-            # Re-inject cursor after navigation
-            try:
-                await self.cursor_manager.inject(force=True)
-            except Exception as e:
-                logger.warning(
-                    f"Failed to inject cursor after navigation, "
-                    f"ensuring cursor exists: {e}"
-                )
-                await self.cursor_manager._ensure_cursor_exists()
+            # CursorController will handle cursor restoration after navigation
+            # No need to use CursorManager
         except Exception as e:
             logger.error(f"Navigation failed: {e}")
             raise
@@ -161,16 +154,18 @@ class NavigationMixin:
                                 x = box['x'] + box['width'] / 2
                                 y = box['y'] + box['height'] / 2
                                 
-                                # Move cursor to link
-                                await self.cursor_manager.move_to(x, y)
+                                # CursorController will handle cursor movement when actions are executed
+                                # No need to use CursorManager
                                 
                                 # Show hover effect
                                 if self.config.cursor.hover_effect:
-                                    await self.cursor_manager.show_hover_effect(x, y, True)
+                                    # CursorController will handle hover effects when actions are executed
+                                    # No need to use CursorManager
                                     await asyncio.sleep(CURSOR_HOVER_DELAY)
                                 
                                 # Click with visual animation
-                                await self.cursor_manager.show_click_effect(x, y)
+                                # CursorController will handle click effects when actions are executed
+                                # No need to use CursorManager
                                 await asyncio.sleep(CURSOR_CLICK_EFFECT_DELAY)
                                 
                                 # Now click the link
@@ -213,14 +208,8 @@ class NavigationMixin:
         await asyncio.sleep(0.1)
         
         # After navigation, ensure cursor exists
-        try:
-            await self.cursor_manager._ensure_cursor_exists()
-        except Exception as e:
-            logger.warning(f"Failed to ensure cursor exists after navigation, trying injection: {e}")
-            try:
-                await self.cursor_manager.inject(force=True)
-            except Exception as e2:
-                logger.error(f"Failed to inject cursor after navigation: {e2}")
+        # CursorController will handle cursor restoration after navigation
+        # No need to use CursorManager
         
         if self.config.screenshots.auto:
             await self.screenshot_manager.capture_on_action("navigate", url)

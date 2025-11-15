@@ -43,7 +43,8 @@ class TestRunner:
         base_url: Optional[str] = None,
         videos_dir: Optional[str] = None,
         headless: Optional[bool] = None,
-        viewport: Optional[Dict[str, int]] = None
+        viewport: Optional[Dict[str, int]] = None,
+        mode: str = 'write'
     ):
         """
         Initialize test runner.
@@ -54,6 +55,7 @@ class TestRunner:
             videos_dir: Videos directory (overrides config if provided)
             headless: Headless mode (overrides config if provided)
             viewport: Viewport size (overrides config if provided)
+            mode: 'write' for recording (export), 'read' for playback (import)
         """
         # Create or update config
         if config is None:
@@ -69,6 +71,7 @@ class TestRunner:
             config.browser.viewport = viewport
         
         self.config = config
+        self.mode = mode  # Store mode for passing to Recorder
         self.video_manager = VideoManager(config.video)
         
         # Initialize service components

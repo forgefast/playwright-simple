@@ -34,7 +34,7 @@ except ImportError:
 class Recorder:
     """Main recorder class that coordinates event capture, conversion, and YAML writing."""
     
-    def __init__(self, output_path: Path, initial_url: str = None, headless: bool = False, debug: bool = False, fast_mode: bool = False):
+    def __init__(self, output_path: Path, initial_url: str = None, headless: bool = False, debug: bool = False, fast_mode: bool = False, mode: str = 'write'):
         """
         Initialize recorder.
         
@@ -43,17 +43,39 @@ class Recorder:
             initial_url: Initial URL to open (default: about:blank)
             headless: Run browser in headless mode
             debug: Enable debug mode (verbose logging)
+            fast_mode: Accelerate steps (reduce delays, instant animations)
+            mode: 'write' for recording (export), 'read' for playback (import)
         """
         self.output_path = Path(output_path)
         self.initial_url = initial_url or 'about:blank'
         self.headless = headless
         self.debug = debug
+        self.mode = mode  # 'write' or 'read'
         
         self.browser_manager = BrowserManager(headless=headless)
         self.event_capture: Optional[EventCapture] = None
         self.cursor_controller: Optional[CursorController] = None
         self.action_converter = ActionConverter()
-        self.yaml_writer = YAMLWriter(self.output_path)
+        
+        # In write mode: YAMLWriter, in read mode: load YAML steps
+        if mode == 'write':
+            self.yaml_writer = YAMLWriter(self.output_path)
+            self.yaml_steps = None
+        else:  # read mode
+            self.yaml_writer = None
+            # Load YAML file
+            if not self.output_path.exists():
+                raise FileNotFoundError(f"YAML file not found: {self.output_path}")
+            import yaml
+            with open(self.output_path, 'r', encoding='utf-8') as f:
+                yaml_data = yaml.safe_load(f)
+            self.yaml_steps = yaml_data.get('steps', [])
+            # Get initial_url from YAML if not provided
+            if not initial_url:
+                first_step = self.yaml_steps[0] if self.yaml_steps else {}
+                if first_step.get('action') == 'go_to':
+                    self.initial_url = first_step.get('url', 'about:blank')
+        
         self.console = ConsoleInterface()
         
         self.is_recording = False
@@ -129,11 +151,13 @@ class Recorder:
             page = await self.browser_manager.start()
             self.page = page  # Store page reference for command handlers
             
-            # Initialize event capture EARLY - before navigation if possible
-            # This allows script injection to happen as soon as page loads
-            # Pass event_handlers so event_capture can process events immediately
-            self.event_capture = EventCapture(page, debug=self.debug, event_handlers_instance=self.event_handlers)
-            self._setup_event_handlers()
+            # Initialize event capture only in write mode
+            if self.mode == 'write':
+                # Initialize event capture EARLY - before navigation if possible
+                # This allows script injection to happen as soon as page loads
+                # Pass event_handlers so event_capture can process events immediately
+                self.event_capture = EventCapture(page, debug=self.debug, event_handlers_instance=self.event_handlers)
+                self._setup_event_handlers()
             
             # Store initial URL for first step
             if self.initial_url and self.initial_url != 'about:blank':
@@ -172,12 +196,13 @@ class Recorder:
                     except:
                         pass  # Continue even if timeout
                 
-                # Add initial navigation as first step
-                self.yaml_writer.add_step({
-                    'action': 'go_to',
-                    'url': self.initial_url,
-                    'description': f"Navegar para {self.initial_url}"
-                })
+                # Add initial navigation as first step (only in write mode)
+                if self.mode == 'write':
+                    self.yaml_writer.add_step({
+                        'action': 'go_to',
+                        'url': self.initial_url,
+                        'description': f"Navegar para {self.initial_url}"
+                    })
             else:
                 logger.info("Starting at about:blank")
                 await page.goto('about:blank')
@@ -187,146 +212,66 @@ class Recorder:
                 self.cursor_controller = CursorController(page)
                 # Start cursor at center of screen (or last position if available)
                 await self.cursor_controller.start()
+                # Set up navigation listener (encapsulated method, same logic as before)
+                self.cursor_controller.setup_navigation_listener()
+            
+            if self.mode == 'write':
+                # Start console interface
+                loop = asyncio.get_event_loop()
+                await self.console.start(loop)
                 
-                # Set up navigation listener to preserve cursor position
-                async def on_navigation(frame):
-                    """Restore cursor position after navigation."""
-                    try:
-                        # Only handle main frame navigation
-                        if frame != page.main_frame:
-                            return
-                        
-                        if self.cursor_controller:
-                            # Wait for page to be ready using dynamic waits
-                            # First, wait for DOM to be ready (with reasonable timeout)
-                            try:
-                                await page.wait_for_load_state('domcontentloaded', timeout=10000)
-                            except Exception as e:
-                                logger.debug(f"DOM ready timeout, continuing: {e}")
-                                # Try to wait for at least document.readyState
-                                try:
-                                    await page.wait_for_function(
-                                        "document.readyState === 'interactive' || document.readyState === 'complete'",
-                                        timeout=5000
-                                    )
-                                except:
-                                    pass  # Continue even if timeout
-                            
-                            # Wait for body to exist (ensures DOM is usable)
-                            try:
-                                await page.wait_for_selector('body', timeout=5000, state='attached')
-                            except:
-                                pass  # Continue even if timeout
-                            
-                            # Get last position from storage (persists across navigations)
-                            # Try multiple times as storage might not be immediately available after navigation
-                            position = None
-                            for attempt in range(5):  # More attempts for reliability
-                                try:
-                                    position = await page.evaluate("""
-                                        () => {
-                                            // Try sessionStorage first (more reliable across navigations)
-                                            try {
-                                                const stored = sessionStorage.getItem('__playwright_cursor_last_position');
-                                                if (stored) {
-                                                    return JSON.parse(stored);
-                                                }
-                                            } catch (e) {
-                                                // sessionStorage might not be available
-                                            }
-                                            // Fallback to window property
-                                            return window.__playwright_cursor_last_position || null;
-                                        }
-                                    """)
-                                    if position and position.get('x') and position.get('y'):
-                                        break
-                                    # Wait for storage to be available using dynamic wait
-                                    try:
-                                        await page.wait_for_function(
-                                            "(() => { try { return sessionStorage.getItem('__playwright_cursor_last_position') !== null; } catch(e) { return window.__playwright_cursor_last_position !== undefined; } })()",
-                                            timeout=300
-                                        )
-                                    except:
-                                        pass  # Continue to next attempt
-                                except:
-                                    pass  # Continue to next attempt
-                            
-                            if position and position.get('x') and position.get('y'):
-                                x = int(position.get('x'))
-                                y = int(position.get('y'))
-                                # Always restore cursor (force=True to reinject even if "active")
-                                await self.cursor_controller.start(force=True, initial_x=x, initial_y=y)
-                                # Also update controller's current position
-                                self.cursor_controller.current_x = x
-                                self.cursor_controller.current_y = y
-                                logger.info(f"Cursor restored after navigation: ({x}, {y})")
-                            else:
-                                # No saved position, start at center
-                                await self.cursor_controller.start(force=True)
-                                logger.info("Cursor restored after navigation (center)")
-                    except Exception as e:
-                        logger.warning(f"Error restoring cursor after navigation: {e}")
-                        # Try to restore anyway, even if there was an error
-                        try:
-                            if self.cursor_controller:
-                                await self.cursor_controller.start(force=True)
-                        except:
-                            pass
+                # Start recording
+                logger.info("Starting event capture...")
+                await self.event_capture.start()
                 
-                # Listen for navigation events
-                page.on('framenavigated', on_navigation)
-            
-            # Start console interface
-            loop = asyncio.get_event_loop()
-            await self.console.start(loop)
-            
-            # Start recording
-            logger.info("Starting event capture...")
-            await self.event_capture.start()
-            
-            # Ensure script is fully ready before allowing interactions
-            # Wait a bit more to ensure all event listeners are attached and polling is active
-            await asyncio.sleep(0.3)  # Reduced from 0.5 since polling now starts immediately
-            
-            # Verify script is ready by checking if events array exists and polling is working
-            script_ready = await page.evaluate("""
-                () => {
-                    return !!(window.__playwright_recording_initialized && 
-                              window.__playwright_recording_events &&
-                              document.body);
-                }
-            """)
-            
-            if not script_ready:
-                logger.warning("Script may not be fully ready, but continuing...")
-            
-            # Do a test poll to ensure polling is working
-            # This helps catch any events that happened during initialization
-            try:
-                test_poll = await page.evaluate("""
+                # Ensure script is fully ready before allowing interactions
+                # Wait a bit more to ensure all event listeners are attached and polling is active
+                await asyncio.sleep(0.3)  # Reduced from 0.5 since polling now starts immediately
+                
+                # Verify script is ready by checking if events array exists and polling is working
+                script_ready = await page.evaluate("""
                     () => {
-                        const events = window.__playwright_recording_events || [];
-                        return events.length;
+                        return !!(window.__playwright_recording_initialized && 
+                                  window.__playwright_recording_events &&
+                                  document.body);
                     }
                 """)
-                if test_poll > 0:
-                    logger.info(f"Found {test_poll} event(s) in queue during initialization")
-            except:
-                pass  # Ignore errors in test poll
-            
-            self.is_recording = True
-            logger.info("✅ Recording started successfully - ready to capture interactions")
-            
-            # Start command server for external commands
-            self.command_server = CommandServer(self)
-            await self.command_server.start()
-            
-            print("✅ Recording started! Interact with the browser.")
-            print("   Type commands in the console (e.g., 'exit' to finish)")
-            print("   Or use CLI commands: playwright-simple find \"text\", playwright-simple click \"text\", etc.\n")
-            
-            await self._wait_for_exit()
-            logger.info("_wait_for_exit() returned, calling stop()...")
+                
+                if not script_ready:
+                    logger.warning("Script may not be fully ready, but continuing...")
+                
+                # Do a test poll to ensure polling is working
+                # This helps catch any events that happened during initialization
+                try:
+                    test_poll = await page.evaluate("""
+                        () => {
+                            const events = window.__playwright_recording_events || [];
+                            return events.length;
+                        }
+                    """)
+                    if test_poll > 0:
+                        logger.info(f"Found {test_poll} event(s) in queue during initialization")
+                except:
+                    pass  # Ignore errors in test poll
+                
+                self.is_recording = True
+                logger.info("✅ Recording started successfully - ready to capture interactions")
+                
+                # Start command server for external commands
+                self.command_server = CommandServer(self)
+                await self.command_server.start()
+                
+                print("✅ Recording started! Interact with the browser.")
+                print("   Type commands in the console (e.g., 'exit' to finish)")
+                print("   Or use CLI commands: playwright-simple find \"text\", playwright-simple click \"text\", etc.\n")
+                
+                await self._wait_for_exit()
+                logger.info("_wait_for_exit() returned, calling stop()...")
+            else:  # read mode
+                self.is_recording = True  # Set to True so handlers work
+                logger.info("✅ Playback mode initialized - executing YAML steps...")
+                await self._execute_yaml_steps()
+                logger.info("YAML steps execution completed")
             
         except Exception as e:
             logger.error(f"Error in recorder: {e}", exc_info=True)
@@ -353,8 +298,12 @@ class Recorder:
         logger.info(f"stop() method called (save={save})")
         
         # Check if we have steps to save (even if already stopped)
-        steps_count = self.yaml_writer.get_steps_count()
-        logger.info(f"Current state - is_recording: {self.is_recording}, steps_count: {steps_count}")
+        # In read mode, yaml_writer is None, so use yaml_steps length instead
+        if self.mode == 'read':
+            steps_count = len(self.yaml_steps) if hasattr(self, 'yaml_steps') and self.yaml_steps else 0
+        else:
+            steps_count = self.yaml_writer.get_steps_count() if self.yaml_writer else 0
+        logger.info(f"Current state - is_recording: {self.is_recording}, steps_count: {steps_count}, mode: {self.mode}")
         
         if not self.is_recording and steps_count == 0:
             logger.info("Not recording and no steps to save, exiting stop()")
@@ -365,7 +314,7 @@ class Recorder:
         self.is_recording = False
         logger.info(f"Set is_recording to False (was: {was_recording})")
         
-        # Stop event capture
+        # Stop event capture (only in write mode)
         if self.event_capture:
             try:
                 logger.info("Stopping event capture...")
@@ -380,22 +329,23 @@ class Recorder:
             except Exception as e:
                 logger.debug(f"Error stopping cursor controller: {e}")
         
-        # Stop command server
+        # Stop command server (only in write mode)
         if self.command_server:
             try:
                 await self.command_server.stop()
             except Exception as e:
                 logger.debug(f"Error stopping command server: {e}")
         
-        # Stop console
-        try:
-            logger.info("Stopping console interface...")
-            self.console.stop()
-        except Exception as e:
-            logger.debug(f"Error stopping console: {e}")
+        # Stop console (only in write mode)
+        if self.mode == 'write':
+            try:
+                logger.info("Stopping console interface...")
+                self.console.stop()
+            except Exception as e:
+                logger.debug(f"Error stopping console: {e}")
         
-        # Save YAML if requested
-        if save:
+        # Save YAML if requested (only in write mode)
+        if save and self.mode == 'write' and self.yaml_writer:
             logger.info(f"Stopping recording. Total steps captured: {steps_count}")
             
             if steps_count > 0:
@@ -454,6 +404,71 @@ class Recorder:
                 logger.error(f"Error waiting for exit: {e}", exc_info=True)
                 break
         logger.info("Exiting wait_for_exit loop (is_recording became False)")
+    
+    async def _execute_yaml_steps(self):
+        """Execute YAML steps using internal handler functions."""
+        if not self.yaml_steps:
+            logger.warning("No YAML steps to execute")
+            return
+        
+        logger.info(f"Executing {len(self.yaml_steps)} YAML steps...")
+        
+        for i, step in enumerate(self.yaml_steps, 1):
+            action = step.get('action')
+            description = step.get('description', '')
+            logger.info(f"[{i}/{len(self.yaml_steps)}] Executing: {action} - {description}")
+            
+            try:
+                if action == 'go_to':
+                    url = step.get('url')
+                    if url:
+                        await self.page.goto(url, wait_until='domcontentloaded')
+                        try:
+                            await self.page.wait_for_load_state('networkidle', timeout=10000)
+                        except:
+                            await self.page.wait_for_load_state('load', timeout=5000)
+                
+                elif action == 'click':
+                    text = step.get('text')
+                    selector = step.get('selector')
+                    
+                    # Wait for page to be ready before clicking (especially after navigation)
+                    try:
+                        await self.page.wait_for_load_state('domcontentloaded', timeout=5000)
+                        await self.page.wait_for_load_state('networkidle', timeout=10000)
+                    except:
+                        pass  # Continue even if timeout
+                    
+                    if text:
+                        await self.command_handlers.handle_pw_click(f'"{text}"')
+                    elif selector:
+                        await self.command_handlers.handle_pw_click(f'selector "{selector}"')
+                    else:
+                        logger.warning(f"Click step has no text or selector: {step}")
+                
+                elif action == 'type':
+                    text = step.get('text', '')
+                    selector = step.get('selector')
+                    field_text = step.get('field_text')
+                    if selector:
+                        await self.command_handlers.handle_pw_type(f'"{text}" selector "{selector}"')
+                    elif field_text:
+                        await self.command_handlers.handle_pw_type(f'"{text}" into "{field_text}"')
+                    else:
+                        await self.command_handlers.handle_pw_type(f'"{text}"')
+                
+                elif action == 'submit':
+                    button_text = step.get('button_text') or step.get('text')
+                    if button_text:
+                        await self.command_handlers.handle_pw_submit(f'"{button_text}"')
+                    else:
+                        await self.command_handlers.handle_pw_submit('')
+                
+            except Exception as e:
+                logger.error(f"Error executing step {i} ({action}): {e}", exc_info=True)
+                raise
+        
+        logger.info("✅ All YAML steps executed successfully")
     
     async def _handle_keydown(self, event_data: dict):
         """Handle keydown event."""

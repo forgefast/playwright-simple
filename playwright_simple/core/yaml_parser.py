@@ -237,8 +237,10 @@ class YAMLParser:
                     
                     while retry_count < max_retries and not step_success:
                         try:
+                            logger.info(f"[DEBUG] [PARSER] Executando passo {current_step_index}: {step.get('action', 'unknown')}")
                             # Tentar executar passo
                             current_state = await StepExecutor.execute_step(step, test, base_dir, context, current_state)
+                            logger.info(f"[DEBUG] [PARSER] ✓ Passo {current_step_index} executado com sucesso. URL atual: {test.page.url if hasattr(test, 'page') and test.page else 'N/A'}")
                             step_success = True
                         except Exception as e:
                             retry_count += 1
