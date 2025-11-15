@@ -209,19 +209,13 @@ async def test_forgeerp_workflows_initialization():
 
 def test_forgeerp_yaml_parser_class():
     """Test ForgeERPYAMLParser class structure."""
-    # Check that it inherits from YAMLParser
-    from playwright_simple.core.yaml_parser import YAMLParser
-    assert issubclass(ForgeERPYAMLParser, YAMLParser)
-    
-    # Check that inherited methods are available
+    # Check that it has the required methods (no longer inherits from YAMLParser)
     assert hasattr(ForgeERPYAMLParser, 'parse_file')
     assert hasattr(ForgeERPYAMLParser, 'to_python_function')
-    assert hasattr(ForgeERPYAMLParser, 'load_test')
-    assert hasattr(ForgeERPYAMLParser, 'load_tests')
-    
-    # Check ForgeERP-specific method
     assert hasattr(ForgeERPYAMLParser, 'parse_forgeerp_action')
     assert callable(ForgeERPYAMLParser.parse_forgeerp_action)
+    assert callable(ForgeERPYAMLParser.parse_file)
+    assert callable(ForgeERPYAMLParser.to_python_function)
 
 
 def test_forgeerp_yaml_parser_method_signature():

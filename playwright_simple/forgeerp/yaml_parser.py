@@ -195,11 +195,31 @@ class ForgeERPYAMLParser:
                 # Just call it without parameters
                 await test.assert_no_errors()
             
-            # Generic actions (fallback to core parser)
+            # Generic actions (fallback to core actions)
             # Check if it's a core action format (with 'action' key)
             elif "action" in action:
-                # Convert to core format and execute
-                await YAMLParser._execute_step(action, test)
+                # Execute core action directly using test methods
+                action_type = action["action"]
+                if action_type == "go_to":
+                    await test.go_to(action.get("url", ""))
+                elif action_type == "click":
+                    if "selector" in action:
+                        await test.click(action["selector"])
+                    elif "text" in action:
+                        await test.click_by_text(action["text"])
+                elif action_type == "type":
+                    text = action.get("text", "")
+                    if "selector" in action:
+                        await test.type(action["selector"], text)
+                    elif "label" in action:
+                        await test.type_by_label(action["label"], text)
+                elif action_type == "submit":
+                    if "selector" in action:
+                        await test.submit(action["selector"])
+                    else:
+                        await test.submit()
+                else:
+                    raise ValueError(f"Unknown core action: {action_type}")
             
             # Generic actions without 'action' key (user-friendly format)
             # Try common generic actions
