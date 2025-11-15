@@ -674,6 +674,11 @@ class Recorder:
                 raise
         
         logger.info("✅ All YAML steps executed successfully")
+        
+        # Wait a bit after all steps to ensure video captures everything
+        # This is especially important for the last action
+        await asyncio.sleep(0.5)
+        logger.info("Waiting after steps completion to ensure video captures final actions")
     
     async def _handle_keydown(self, event_data: dict):
         """Handle keydown event."""
