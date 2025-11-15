@@ -7,9 +7,7 @@ Permite interação via CLI durante a execução.
 import asyncio
 import logging
 from pathlib import Path
-from playwright_simple.core.yaml_parser import YAMLParser
-from playwright_simple.core.runner.test_runner import TestRunner
-from playwright_simple.core.config import TestConfig
+from playwright_simple.core.recorder.recorder import Recorder
 
 # Configurar logging em modo DEBUG
 logging.basicConfig(
@@ -18,39 +16,24 @@ logging.basicConfig(
     datefmt='%H:%M:%S'
 )
 
-# Habilitar logs debug para módulos específicos
-logging.getLogger('playwright_simple.core.yaml_executor').setLevel(logging.DEBUG)
-logging.getLogger('playwright_simple.core.yaml_actions').setLevel(logging.DEBUG)
-logging.getLogger('playwright_simple.core.runner').setLevel(logging.DEBUG)
-logging.getLogger('playwright_simple.core.base').setLevel(logging.DEBUG)
-
 logger = logging.getLogger(__name__)
 
 async def replay_yaml_background(yaml_path: Path):
-    """Reproduzir um teste YAML em background, mantendo o processo rodando."""
+    """Reproduzir um teste YAML usando Recorder diretamente em background."""
     logger.debug(f"Iniciando replay do YAML: {yaml_path}")
     print(f"📄 Carregando YAML: {yaml_path}")
     
-    # Carregar teste do YAML
-    logger.debug("Carregando teste do YAML...")
-    test_name, test_func = YAMLParser.load_test(yaml_path)
-    logger.debug(f"Teste carregado: {test_name}, função: {test_func}")
-    print(f"✅ Teste carregado: {test_name}")
-    
-    # Criar configuração
-    logger.debug("Criando configuração...")
-    config = TestConfig(
-        base_url="http://localhost:18069"
+    # Criar Recorder em modo read (mesmo padrão que test_odoo_interactive.py)
+    logger.debug("Criando Recorder em modo read...")
+    recorder = Recorder(
+        output_path=yaml_path,  # Input YAML file
+        initial_url=None,  # Will be read from YAML
+        headless=False,
+        debug=False,
+        fast_mode=True,  # Usar fast mode na reprodução
+        mode='read'  # Read mode: import YAML instead of export
     )
-    # Configurar opções
-    config.browser.headless = False
-    config.step.fast_mode = True  # Usar fast mode na reprodução também
-    logger.debug(f"Config criada: headless={config.browser.headless}, fast_mode={config.step.fast_mode}")
-    
-    # Criar runner
-    logger.debug("Criando TestRunner...")
-    runner = TestRunner(config=config, headless=False)
-    logger.debug("TestRunner criado")
+    logger.debug("Recorder criado")
     
     # Executar teste (browser será criado automaticamente se não fornecido)
     print(f"▶️  Executando teste em background...")
@@ -60,8 +43,8 @@ async def replay_yaml_background(yaml_path: Path):
     
     try:
         # Executar teste em background
-        result = await runner.run_test(test_name, test_func)
-        logger.debug(f"Teste executado com sucesso. Resultado: {result}")
+        await recorder.start()
+        logger.debug("Teste executado com sucesso")
         print(f"✅ Teste concluído!")
         
         # Manter processo rodando para permitir interação
@@ -71,7 +54,7 @@ async def replay_yaml_background(yaml_path: Path):
         except KeyboardInterrupt:
             print("\n🛑 Parando...")
         
-        return result
+        return {'success': True}
     except Exception as e:
         logger.error(f"Erro ao executar teste: {e}", exc_info=True)
         print(f"❌ Erro ao executar teste: {e}")
