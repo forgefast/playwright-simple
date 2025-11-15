@@ -65,6 +65,7 @@ class Recorder:
         self.debug = debug
         self.mode = mode  # 'write' or 'read'
         
+        # Initialize browser manager - will be configured with video options if needed
         self.browser_manager = BrowserManager(headless=headless)
         self.event_capture: Optional[EventCapture] = None
         self.cursor_controller: Optional[CursorController] = None
@@ -194,7 +195,7 @@ class Recorder:
             except Exception as e:
                 logger.warning(f"Error during cleanup (continuing anyway): {e}")
             
-            # If video is enabled in read mode, we need to create context with video options
+            # Configure browser manager with video options if needed
             if self.mode == 'read' and self.video_manager and self.video_config and self.video_config.enabled:
                 # Get test name from YAML
                 test_name = self.yaml_data.get('name', 'playback') if self.yaml_data else 'playback'
@@ -203,46 +204,30 @@ class Recorder:
                 viewport = {'width': 1920, 'height': 1080}
                 if self.yaml_data and 'config' in self.yaml_data and 'browser' in self.yaml_data['config']:
                     browser_config = self.yaml_data['config']['browser']
-                    # Viewport not typically in browser config, but check anyway
                     if 'viewport' in browser_config:
                         viewport = browser_config['viewport']
                 
                 # Get video options from VideoManager
                 video_options = self.video_manager.get_context_options(test_name, viewport=viewport)
                 
-                # Start browser and create context with video options
-                from playwright.async_api import async_playwright
-                playwright = await async_playwright().start()
-                browser = await playwright.chromium.launch(
-                    headless=self.headless,
-                    slow_mo=100
-                )
+                # Configure browser manager to use video
+                self.browser_manager.record_video = True
+                self.browser_manager.video_dir = str(self.video_manager.video_dir)
+                self.browser_manager.viewport = viewport
                 
-                # Capture context creation time - this is when video recording actually begins
+                # Capture video start time
                 self.video_start_time = datetime.now()
                 
-                # Create context with video options
-                context = await browser.new_context(
-                    viewport=viewport,
-                    **video_options
-                )
-                
-                # Set longer timeouts for video recording to ensure all actions are captured
-                # Default Playwright timeout is 30s, but we set it higher for video
-                context.set_default_timeout(60000)  # 60 seconds
-                context.set_default_navigation_timeout(60000)  # 60 seconds
+                # Start browser using browser_manager (will create context with video)
+                page = await self.browser_manager.start()
+                self.page = page  # Store page reference for command handlers
                 
                 # Register context for video management
-                self.video_manager.register_context(context, test_name)
-                
-                # Create page
-                page = await context.new_page()
-                
-                # Store references
-                self._playwright = playwright
-                self._browser = browser
-                self._context = context
-                self.page = page
+                if self.browser_manager.context:
+                    self.video_manager.register_context(self.browser_manager.context, test_name)
+                    # Set longer timeouts for video recording
+                    self.browser_manager.context.set_default_timeout(60000)  # 60 seconds
+                    self.browser_manager.context.set_default_navigation_timeout(60000)  # 60 seconds
                 
                 logger.info(f"Browser started with video recording enabled for test: {test_name}")
             else:
@@ -481,14 +466,13 @@ class Recorder:
                 
                 # Wait before closing context to ensure all actions are captured in video
                 # Playwright writes video asynchronously, so we need to wait for all frames
-                # The delay should be proportional to the test duration
-                # For now, use a fixed delay that should cover most cases
-                await asyncio.sleep(2.0)  # Increased from 1.0 to 2.0 seconds
+                await asyncio.sleep(2.0)
                 logger.info("Waiting before closing context to ensure video captures all actions")
                 
-                # Close context first (this finalizes video)
-                if hasattr(self, '_context') and self._context:
-                    await self._context.close()
+                # Close context via browser_manager (this finalizes video)
+                # The context is managed by browser_manager, so we close it through there
+                if self.browser_manager.context:
+                    await self.browser_manager.context.close()
                     logger.info("Context closed, video should be finalized")
                 
                 # Wait for video to be finalized - Playwright saves videos asynchronously
@@ -559,30 +543,16 @@ class Recorder:
                     logger.warning("No video files found in video directory after waiting")
                     print(f"⚠️  Vídeo não foi encontrado após {max_wait_time}s de espera")
                 
-                # Close browser and playwright
-                if hasattr(self, '_browser') and self._browser:
-                    await self._browser.close()
-                if hasattr(self, '_playwright') and self._playwright:
-                    await self._playwright.stop()
+                # Browser and playwright are managed by browser_manager
+                # They will be closed when browser_manager.stop() is called below
                     
             except Exception as e:
                 logger.error(f"Error handling video recording: {e}", exc_info=True)
-                # Still try to close browser
-                try:
-                    if hasattr(self, '_browser') and self._browser:
-                        await self._browser.close()
-                    if hasattr(self, '_playwright') and self._playwright:
-                        await self._playwright.stop()
-                except:
-                    pass
         
         # Close browser (always, even if save=False)
+        # browser_manager handles all browser/context cleanup
         try:
-            if hasattr(self, '_browser') and self._browser:
-                # Already closed above if video was enabled
-                pass
-            else:
-                await self.browser_manager.stop()
+            await self.browser_manager.stop()
             logger.info("Browser closed successfully")
         except Exception as e:
             logger.error(f"Error closing browser: {e}", exc_info=True)
