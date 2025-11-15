@@ -572,12 +572,19 @@ class DebugExtension(Extension):
     async def _rollback_step(self, page: Page, target_state) -> None:
         """Faz rollback para um estado anterior."""
         try:
-            if not hasattr(self, '_test') or not self._test:
-                print("  ❌ Test instance não disponível")
+            if not target_state:
+                print("  ❌ Estado alvo não disponível")
                 return
             
-            from playwright_simple.core.yaml_executor import StepExecutor
-            await StepExecutor._rollback_state(self._test, target_state)
+            # Restore URL if different
+            if hasattr(target_state, 'url') and target_state.url and page.url != target_state.url:
+                print(f"  🌐 Restaurando URL: {target_state.url}")
+                await page.goto(target_state.url, wait_until='domcontentloaded', timeout=10000)
+            
+            # Restore scroll position
+            if hasattr(target_state, 'scroll_x') and hasattr(target_state, 'scroll_y'):
+                await page.evaluate(f"window.scrollTo({target_state.scroll_x}, {target_state.scroll_y})")
+            
             print(f"  ✅ Rollback executado - estado restaurado")
             
         except Exception as e:

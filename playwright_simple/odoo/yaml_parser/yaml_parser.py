@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from playwright.async_api import Page
 
-from ...core.yaml_parser import YAMLParser
+from ...core.yaml_resolver import parse_yaml_file
 from ...core.step import TestStep
 from ...core.cursor_transition import CursorTransitionManager
 from .action_parser import ActionParser
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from ..base import OdooTestBase
 
 
-class OdooYAMLParser(YAMLParser):
+class OdooYAMLParser:
     """YAML parser with Odoo-specific actions - User-friendly syntax."""
     
     def __init__(self):
@@ -391,6 +391,13 @@ class OdooYAMLParser(YAMLParser):
         
         return test_function
 
-# Inherit parse_file to get inheritance/composition support
-OdooYAMLParser.parse_file = staticmethod(YAMLParser.parse_file)
+    @staticmethod
+    def parse_file(yaml_path: Path) -> Dict[str, Any]:
+        """
+        Parse YAML test file with support for inheritance and composition.
+        
+        This method uses the core YAMLResolver to parse files, replacing
+        the old YAMLParser dependency.
+        """
+        return parse_yaml_file(yaml_path)
 

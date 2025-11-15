@@ -9,6 +9,7 @@ Handles:
 - compose resolution
 - YAML path resolution
 - Action YAML lookup
+- YAML file parsing (replaces YAMLParser.parse_file)
 """
 
 import logging
@@ -22,6 +23,36 @@ except ImportError:
     YAML_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
+
+
+def parse_yaml_file(yaml_path: Path) -> Dict[str, Any]:
+    """
+    Parse YAML test file with support for inheritance and composition.
+    
+    This function replaces YAMLParser.parse_file() and can be used by extensions
+    that need to parse YAML files without depending on the full YAMLParser class.
+    
+    Args:
+        yaml_path: Path to YAML file
+        
+    Returns:
+        Dictionary with test definition (with resolved inheritance/composition)
+    """
+    if not YAML_AVAILABLE:
+        raise ImportError("PyYAML is required for YAML support. Install with: pip install pyyaml")
+    
+    yaml_path = Path(yaml_path)
+    base_dir = yaml_path.parent
+    
+    with open(yaml_path, 'r', encoding='utf-8') as f:
+        data = yaml.safe_load(f)
+    
+    # Resolve inheritance and composition
+    data = YAMLResolver.resolve_inheritance(data, base_dir)
+    data = YAMLResolver.resolve_includes(data, base_dir)
+    data = YAMLResolver.resolve_compose(data, base_dir)
+    
+    return data
 
 
 class YAMLResolver:

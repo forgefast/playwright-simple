@@ -6,16 +6,17 @@ YAML parser for ForgeERP tests - User-friendly version.
 Supports simple, intuitive YAML syntax for QAs without programming experience.
 """
 
+from pathlib import Path
 from typing import Dict, Any, Callable, TYPE_CHECKING, Optional
 from playwright.async_api import Page
 
-from ..core.yaml_parser import YAMLParser
+from ..core.yaml_resolver import parse_yaml_file
 
 if TYPE_CHECKING:
     from .base import ForgeERPTestBase
 
 
-class ForgeERPYAMLParser(YAMLParser):
+class ForgeERPYAMLParser:
     """YAML parser with ForgeERP-specific actions - User-friendly syntax."""
     
     @staticmethod
@@ -360,6 +361,13 @@ class ForgeERPYAMLParser(YAMLParser):
         
         return test_function
 
-# Inherit parse_file to get inheritance/composition support
-ForgeERPYAMLParser.parse_file = staticmethod(YAMLParser.parse_file)
+    @staticmethod
+    def parse_file(yaml_path: Path) -> Dict[str, Any]:
+        """
+        Parse YAML test file with support for inheritance and composition.
+        
+        This method uses the core YAMLResolver to parse files, replacing
+        the old YAMLParser dependency.
+        """
+        return parse_yaml_file(yaml_path)
 

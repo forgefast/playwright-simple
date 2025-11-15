@@ -13,7 +13,7 @@ from .logging_config import FrameworkLogger, log_action, log_mouse_action, log_k
 from .cursor import CursorManager
 from .screenshot import ScreenshotManager
 from .selectors import SelectorManager
-from .yaml_parser import YAMLParser
+# YAMLParser removed - use Recorder for playback or parse_yaml_file from yaml_resolver for parsing
 # VideoManager and TTSManager moved to extensions
 from .exceptions import (
     PlaywrightSimpleError,
@@ -33,7 +33,6 @@ try:
         "CursorManager",
         "ScreenshotManager",
         "SelectorManager",
-        "YAMLParser",
         "HTMXHelper",
         "PlaywrightSimpleError",
         "ElementNotFoundError",
@@ -48,7 +47,6 @@ except ImportError:
         "CursorManager",
         "ScreenshotManager",
         "SelectorManager",
-        "YAMLParser",
         "PlaywrightSimpleError",
         "ElementNotFoundError",
         "NavigationError",

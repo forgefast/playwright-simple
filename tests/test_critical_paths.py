@@ -134,11 +134,12 @@ async def test_critical_full_login_flow(browser_page: Page):
 def test_imports_work():
     """CRITICAL: Validate that critical imports work."""
     from playwright_simple.core.playwright_commands.element_interactions import ElementInteractions
-    from playwright_simple.core import yaml_actions
+    # yaml_actions removed - use Recorder instead
+    from playwright_simple.core.recorder.recorder import Recorder
     from playwright_simple.core.recorder import event_capture
     
     assert ElementInteractions is not None, "CRITICAL: ElementInteractions must import"
-    assert yaml_actions is not None, "CRITICAL: yaml_actions module must import"
+    assert Recorder is not None, "CRITICAL: Recorder must import (replaces yaml_actions)"
     assert event_capture is not None, "CRITICAL: event_capture module must import"
 
 

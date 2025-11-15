@@ -26,8 +26,8 @@ from .core import (
     CursorManager,
     ScreenshotManager,
     SelectorManager,
-    YAMLParser,
 )
+# YAMLParser removed - use Recorder for playback or parse_yaml_file from yaml_resolver for parsing
 # VideoManager moved to extensions/video
 
 # Optional extensions (import only if available)
@@ -40,7 +40,6 @@ try:
         "CursorManager",
         "ScreenshotManager",
         "SelectorManager",
-        "YAMLParser",
         "ForgeERPTestBase",
         "__version__",
     ]
@@ -52,7 +51,6 @@ except ImportError:
         "CursorManager",
         "ScreenshotManager",
         "SelectorManager",
-        "YAMLParser",
         "__version__",
     ]
 
