@@ -18,6 +18,11 @@ import re
 from pathlib import Path
 from typing import List, Dict, Any
 
+# Add local site-packages to path (for edge-tts and other dependencies)
+_local_site_packages = Path(__file__).parent / 'lib' / 'python3.11' / 'site-packages'
+if _local_site_packages.exists():
+    sys.path.insert(0, str(_local_site_packages))
+
 # Adicionar o diretório do projeto ao path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
@@ -217,8 +222,12 @@ async def run_generation():
             return False, False
         print("   ✅ Clique executado")
         
-        # Adicionar legenda ao step
+        # Aguardar um pouco para garantir que o step foi criado pelo EventCapture
+        await asyncio.sleep(0.2)
+        
+        # Adicionar legenda e áudio ao step
         await handlers.handle_subtitle("Clicando no botão Entrar")
+        await handlers.handle_audio_step("Clicando no botão Entrar")
         
         # Aguardar página de login
         if page:
@@ -249,8 +258,12 @@ async def run_generation():
             return False, False
         print("   ✅ Email digitado")
         
-        # Adicionar legenda ao step
+        # Aguardar um pouco para garantir que o step foi criado pelo EventCapture
+        await asyncio.sleep(0.2)
+        
+        # Adicionar legenda e áudio ao step
         await handlers.handle_subtitle("Digitando email do administrador")
+        await handlers.handle_audio_step("Digitando email do administrador")
         
         # 3. Digitar senha
         print("3️⃣  Digitando senha...")
@@ -271,8 +284,12 @@ async def run_generation():
             return False, False
         print("   ✅ Senha digitada")
         
-        # Adicionar legenda ao step
+        # Aguardar um pouco para garantir que o step foi criado pelo EventCapture
+        await asyncio.sleep(0.2)
+        
+        # Adicionar legenda e áudio ao step
         await handlers.handle_subtitle("Digitando senha do administrador")
+        await handlers.handle_audio_step("Digitando senha do administrador")
         
         # 4. Submeter formulário
         print("4️⃣  Submetendo formulário...")
@@ -287,8 +304,12 @@ async def run_generation():
             return False, False
         print("   ✅ Formulário submetido")
         
-        # Adicionar legenda ao step
+        # Aguardar um pouco para garantir que o step foi criado pelo EventCapture
+        await asyncio.sleep(0.2)
+        
+        # Adicionar legenda e áudio ao step
         await handlers.handle_subtitle("Submetendo formulário de login")
+        await handlers.handle_audio_step("Submetendo formulário de login")
         
         # Aguardar navegação
         if page and recorder.fast_mode:
@@ -388,16 +409,28 @@ def add_video_config_to_yaml(yaml_path: Path):
                 'codec': 'mp4',  # Usar mp4 ao invés de webm
                 'dir': 'videos',
                 'subtitles': True,  # Habilitar legendas
-                'hard_subtitles': True  # Queimar legendas no vídeo
+                'hard_subtitles': True,  # Queimar legendas no vídeo
+                'audio': True,  # Habilitar áudio autogerado
+                'audio_engine': 'edge-tts',  # Usar edge-tts (vozes não robóticas)
+                'audio_lang': 'pt-BR',
+                'audio_voice': 'pt-BR-MacerioMultilingualNeural'  # Voz masculina brasileira neural (Macerio)
             }
         else:
-            # Atualizar configuração existente para incluir legendas e mp4
+            # Atualizar configuração existente para incluir legendas, mp4 e áudio
             video_config = yaml_content['config']['video']
             video_config['codec'] = 'mp4'  # Forçar mp4
             if 'subtitles' not in video_config:
                 video_config['subtitles'] = True
             if 'hard_subtitles' not in video_config:
                 video_config['hard_subtitles'] = True
+            if 'audio' not in video_config:
+                video_config['audio'] = True
+            if 'audio_engine' not in video_config:
+                video_config['audio_engine'] = 'edge-tts'
+            if 'audio_lang' not in video_config:
+                video_config['audio_lang'] = 'pt-BR'
+            if 'audio_voice' not in video_config:
+                video_config['audio_voice'] = 'pt-BR-MacerioMultilingualNeural'
         
         # Salvar YAML atualizado
         with open(yaml_path, 'w', encoding='utf-8') as f:

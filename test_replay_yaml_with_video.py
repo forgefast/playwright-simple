@@ -8,6 +8,12 @@ import asyncio
 import logging
 import sys
 from pathlib import Path
+
+# Add local site-packages to path (for edge-tts and other dependencies)
+_local_site_packages = Path(__file__).parent / 'lib' / 'python3.11' / 'site-packages'
+if _local_site_packages.exists():
+    sys.path.insert(0, str(_local_site_packages))
+
 from playwright_simple.core.recorder.recorder import Recorder
 
 # Configurar logging

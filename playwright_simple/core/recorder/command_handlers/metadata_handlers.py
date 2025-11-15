@@ -34,6 +34,17 @@ class MetadataHandlers:
         else:
             print(f"📝 Subtitle cleared from last step")
     
+    async def handle_audio_step(self, args: str) -> None:
+        """Handle audio command - adds audio to last step (for narration)."""
+        # Empty string is valid (clears audio)
+        text = args if args is not None else ""
+        
+        self.yaml_writer.add_audio_to_last_step(text)
+        if text:
+            print(f"🔊 Audio added to last step: {text}")
+        else:
+            print(f"🔊 Audio cleared from last step")
+    
     async def handle_audio(self, args: str) -> None:
         """Handle audio command."""
         if not args:

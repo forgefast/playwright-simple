@@ -80,6 +80,27 @@ class YAMLWriter:
         # Add subtitle to last step
         self.steps[-1]['subtitle'] = text
         logger.info(f"Added subtitle to last step: {text}")
+        logger.debug(f"Last step now has subtitle: {self.steps[-1].get('subtitle')}")
+    
+    def add_audio_to_last_step(self, text: str):
+        """
+        Add audio to the last step (for video narration).
+        
+        This adds the 'audio' field to the most recently added step,
+        which will be used for video audio generation.
+        
+        Args:
+            text: Audio text (empty string to clear)
+        """
+        if not self.steps:
+            logger.warning("No steps to add audio to")
+            return
+        
+        # Add audio to last step
+        self.steps[-1]['audio'] = text
+        logger.info(f"Added audio to last step: {text}")
+        logger.debug(f"Last step now has audio: {self.steps[-1].get('audio')}")
+        logger.debug(f"Last step details: action={self.steps[-1].get('action')}, description={self.steps[-1].get('description', '')[:50]}")
     
     def add_audio(self, text: str):
         """

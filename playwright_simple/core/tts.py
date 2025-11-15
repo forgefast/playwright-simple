@@ -327,6 +327,7 @@ class TTSManager:
             
             # Generate audio for each step
             # Track current audio text for inheritance (similar to subtitles)
+            # IMPORTANT: Include ALL steps to maintain video sync - steps without audio get silence
             current_audio_text = None
             for i, step in enumerate(test_steps, 1):
                 # Handle both TestStep objects and dicts
@@ -338,53 +339,87 @@ class TTSManager:
                     step_text = current_audio_text or step.subtitle or step.description or f'Passo {i}'
                     # Get start time from step (TestStep objects have start_time_seconds property)
                     step_start_time = getattr(step, 'start_time_seconds', None) or 0.0
+                    step_duration = getattr(step, 'duration_seconds', None) or 0.0
                 elif isinstance(step, dict):
                     # Check for audio field first, then inherit from previous if not specified
                     step_audio = step.get('audio') or step.get('speech')
-                    if step_audio:
-                        current_audio_text = step_audio
-                    step_text = current_audio_text or step.get('text') or step.get('description') or f'Passo {i}'
-                    # Get start time from dict
+                    if step_audio is not None:
+                        # Explicit audio field: update current_audio_text
+                        if step_audio == '':
+                            # Empty string means clear audio
+                            current_audio_text = None
+                        else:
+                            current_audio_text = step_audio
+                    # If no audio field, current_audio_text continues from previous step
+                    # Do NOT fall back to subtitle or description - audio must be explicitly set
+                    # Only use current_audio_text if it exists (continuity)
+                    step_text = current_audio_text if current_audio_text else None
+                    # Get start time and duration from dict
                     step_start_time = step.get('start_time', 0.0)
+                    step_duration = step.get('duration', 0.0)
+                    # If duration not provided, try to calculate from end_time
+                    if step_duration == 0.0 and 'end_time' in step:
+                        step_duration = step.get('end_time', step_start_time) - step_start_time
                 else:
-                    step_text = current_audio_text or f'Passo {i}'
+                    # For other types, only use current_audio_text if it exists
+                    step_text = current_audio_text if current_audio_text else None
                     step_start_time = 0.0
+                    step_duration = 0.0
                 
-                # Only generate audio if step has audio text
-                if not step_text or not step_text.strip():
-                    continue
-                
-                audio_file = temp_dir / f"step_{i}.mp3"
-                
-                logger.info(f"Generating narration for step {i} (starts at {step_start_time:.2f}s): {step_text[:50]}...")
-                try:
-                    success = await self.generate_audio(step_text, audio_file)
+                # Generate audio or silence for this step
+                if step_text and step_text.strip():
+                    # Step has audio text - generate TTS
+                    audio_file = temp_dir / f"step_{i}.mp3"
                     
-                    if success and audio_file.exists():
-                        audio_files.append(audio_file)
+                    logger.info(f"Generating narration for step {i} (starts at {step_start_time:.2f}s, duration {step_duration:.2f}s): {step_text[:50]}...")
+                    try:
+                        success = await self.generate_audio(step_text, audio_file)
+                        
+                        if success and audio_file.exists():
+                            audio_duration = self._get_audio_duration(audio_file)
+                            
+                            if return_timed_audio:
+                                # Store with timestamp and duration for synchronized playback
+                                timed_audio_list.append((audio_file, step_start_time, audio_duration, step_duration))
+                            else:
+                                audio_files.append(audio_file)
+                        else:
+                            logger.warning(f"Failed to generate audio for step {i}")
+                            # Create silence file for this step to maintain sync
+                            if return_timed_audio:
+                                silence_file = temp_dir / f"silence_{i}.mp3"
+                                if self._create_silence_file(silence_file, step_duration):
+                                    timed_audio_list.append((silence_file, step_start_time, step_duration, step_duration))
+                    except TTSGenerationError as e:
+                        logger.error(f"TTS generation error for step {i}: {e}")
+                        # Create silence file for this step to maintain sync
                         if return_timed_audio:
-                            # Get audio duration using ffprobe (synchronous call)
-                            duration = self._get_audio_duration(audio_file)
-                            # Store with timestamp and duration for synchronized playback
-                            timed_audio_list.append((audio_file, step_start_time, duration))
-                    else:
-                        logger.warning(f"Failed to generate audio for step {i}")
-                except TTSGenerationError as e:
-                    logger.error(f"TTS generation error for step {i}: {e}")
-                    continue
-            
-            if not audio_files:
-                logger.warning("No audio files were generated")
-                return None
+                            silence_file = temp_dir / f"silence_{i}.mp3"
+                            if self._create_silence_file(silence_file, step_duration):
+                                timed_audio_list.append((silence_file, step_start_time, step_duration, step_duration))
+                else:
+                    # Step has no audio - create silence file to maintain video sync
+                    if return_timed_audio and step_duration > 0:
+                        silence_file = temp_dir / f"silence_{i}.mp3"
+                        logger.debug(f"Creating silence for step {i} (duration {step_duration:.2f}s)")
+                        if self._create_silence_file(silence_file, step_duration):
+                            timed_audio_list.append((silence_file, step_start_time, step_duration, step_duration))
             
             # Final audio file path
             final_audio = output_dir / f"{test_name}_narration.mp3"
             
             if return_timed_audio:
                 # Concatenate with silence between steps based on start times
+                # timed_audio_list includes both audio and silence files
+                if not timed_audio_list:
+                    logger.warning("No audio or silence files were generated")
+                    return None
                 await self._concatenate_timed_audio(timed_audio_list, final_audio, temp_dir)
             else:
-                # Concatenate all audio files (legacy behavior - no silence)
+                # Legacy mode: concatenate all audio files (no silence)
+                if not audio_files:
+                    logger.warning("No audio files were generated")
+                    return None
                 await self._concatenate_audio(audio_files, final_audio)
             
             # Cleanup temp files
@@ -419,6 +454,56 @@ class TTSManager:
                     pass
             return None
     
+    def _create_silence_file(self, output_path: Path, duration: float) -> bool:
+        """
+        Create a silence audio file of specified duration.
+        
+        Args:
+            output_path: Path to save silence file
+            duration: Duration in seconds
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if duration <= 0:
+            return False
+        
+        try:
+            import subprocess
+            # Check if ffmpeg is available
+            subprocess.run(['ffmpeg', '-version'], capture_output=True, check=True, timeout=5)
+        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+            logger.warning("ffmpeg not found, cannot create silence file")
+            return False
+        
+        try:
+            # Generate silence using anullsrc
+            cmd = [
+                'ffmpeg',
+                '-f', 'lavfi',
+                '-i', f'anullsrc=channel_layout=mono:sample_rate=24000',
+                '-t', str(duration),
+                '-y',
+                str(output_path)
+            ]
+            
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode == 0 and output_path.exists():
+                logger.debug(f"Created silence file: {output_path.name} ({duration:.2f}s)")
+                return True
+            else:
+                logger.warning(f"Failed to create silence file: {result.stderr[:200]}")
+                return False
+        except Exception as e:
+            logger.warning(f"Error creating silence file: {e}")
+            return False
+    
     def _get_audio_duration(self, audio_path: Path) -> float:
         """
         Get duration of audio file in seconds using ffprobe.
@@ -445,15 +530,15 @@ class TTSManager:
     
     async def _concatenate_timed_audio(
         self,
-        timed_audio_list: List[Tuple[Path, float, float]],  # (audio_path, start_time, duration)
+        timed_audio_list: List[Tuple[Path, float, float, float]],  # (audio_path, start_time, audio_duration, step_duration)
         output_path: Path,
         temp_dir: Path
     ) -> bool:
         """
-        Concatenate audio files with silence between them based on start times.
+        Concatenate audio files with silence to fill step durations and maintain video sync.
         
         Args:
-            timed_audio_list: List of (audio_path, start_time_seconds, duration_seconds) tuples
+            timed_audio_list: List of (audio_path, start_time_seconds, audio_duration_seconds, step_duration_seconds) tuples
             output_path: Path to save concatenated audio
             temp_dir: Temporary directory for silence files
             
@@ -473,44 +558,44 @@ class TTSManager:
         # Sort by start time
         sorted_audio = sorted(timed_audio_list, key=lambda x: x[1])
         
-        # Build list of files to concatenate (silence + audio pairs)
+        # Build list of files to concatenate
+        # Each entry is (audio_path, start_time, audio_duration, step_duration)
+        # We need to:
+        # 1. Add silence before first audio if needed
+        # 2. For each audio, pad it with silence to match step_duration
+        # 3. Add silence between steps if there's a gap
         concat_files = []
         silence_files = []
         
         previous_end_time = 0.0
         
-        for i, (audio_path, start_time, duration) in enumerate(sorted_audio):
-            # Calculate silence needed before this audio
-            silence_duration = start_time - previous_end_time
+        for i, (audio_path, start_time, audio_duration, step_duration) in enumerate(sorted_audio):
+            # Calculate silence needed before this step
+            silence_before = start_time - previous_end_time
             
-            # Add silence if needed (and not negative - avoid overlaps)
-            if silence_duration > 0.01:  # At least 10ms of silence
-                silence_file = temp_dir / f"silence_{i}.mp3"
-                # Generate silence using anullsrc
-                silence_cmd = [
-                    'ffmpeg', '-f', 'lavfi', '-i', 
-                    f'anullsrc=channel_layout=mono:sample_rate=24000',
-                    '-t', str(silence_duration),
-                    '-y', str(silence_file)
-                ]
-                result = subprocess.run(
-                    silence_cmd,
-                    capture_output=True,
-                    text=True,
-                    timeout=30
-                )
-                if result.returncode == 0 and silence_file.exists():
+            # Add silence before step if needed
+            if silence_before > 0.01:  # At least 10ms
+                silence_file = temp_dir / f"silence_before_{i}.mp3"
+                if self._create_silence_file(silence_file, silence_before):
                     concat_files.append(silence_file)
                     silence_files.append(silence_file)
-                    logger.debug(f"Created {silence_duration:.2f}s silence before step {i+1}")
-                else:
-                    logger.warning(f"Failed to create silence file: {result.stderr[:200]}")
+                    logger.debug(f"Created {silence_before:.2f}s silence before step {i+1}")
             
             # Add audio file
             concat_files.append(audio_path)
             
-            # Update previous end time
-            previous_end_time = start_time + duration
+            # Calculate silence needed after audio to fill step duration
+            # If audio_duration < step_duration, pad with silence
+            silence_after = step_duration - audio_duration
+            if silence_after > 0.01:  # At least 10ms
+                silence_file = temp_dir / f"silence_after_{i}.mp3"
+                if self._create_silence_file(silence_file, silence_after):
+                    concat_files.append(silence_file)
+                    silence_files.append(silence_file)
+                    logger.debug(f"Created {silence_after:.2f}s silence after step {i+1} audio (to fill step duration)")
+            
+            # Update previous end time (end of step, not end of audio)
+            previous_end_time = start_time + step_duration
         
         if not concat_files:
             logger.warning("No files to concatenate")

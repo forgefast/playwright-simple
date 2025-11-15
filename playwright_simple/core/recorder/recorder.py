@@ -187,6 +187,7 @@ class Recorder:
         self.console.register_command('caption', self.command_handlers.handle_caption)
         self.console.register_command('subtitle', self.command_handlers.handle_subtitle)
         self.console.register_command('audio', self.command_handlers.handle_audio)
+        self.console.register_command('audio-step', self.command_handlers.handle_audio_step)
         self.console.register_command('screenshot', self.command_handlers.handle_screenshot)
         
         # Playwright direct commands (useful for AI assistants and manual testing)
@@ -629,15 +630,80 @@ class Recorder:
                         logger.info(f"Video already has correct name: {expected_path_final.name}")
                         print(f"📹 Vídeo salvo: {expected_path_final.name}")
                     
-                    # Generate and add subtitles if enabled
+                    # Process video in sequence: subtitles first, then audio
+                    # This ensures audio is added to video that already has subtitles embedded
+                    current_video_path = expected_path_final
+                    
+                    # Step 1: Generate and add subtitles if enabled
                     if self.video_config.subtitles and hasattr(self, 'step_timestamps') and self.step_timestamps:
                         logger.info("🎬 Generating subtitles for video...")
+                        logger.info(f"🎬 DEBUG: step_timestamps count: {len(self.step_timestamps)}")
                         print(f"📝 Gerando legendas para o vídeo...")
+                        print(f"📝 DEBUG: {len(self.step_timestamps)} steps com timestamps")
                         try:
-                            await self._generate_and_add_subtitles(expected_path_final)
+                            result_video = await self._generate_and_add_subtitles(current_video_path)
+                            if result_video and result_video.exists():
+                                current_video_path = result_video
+                                logger.info(f"Video with subtitles ready: {current_video_path.name}")
+                                print(f"✅ Vídeo com legendas pronto: {current_video_path.name}")
+                                print(f"✅ DEBUG: Vídeo final: {current_video_path.resolve()}")
+                            else:
+                                logger.warning(f"⚠️  DEBUG: result_video is None or doesn't exist: {result_video}")
+                                print(f"⚠️  DEBUG: Vídeo com legendas não foi gerado corretamente")
                         except Exception as e:
                             logger.warning(f"Error generating subtitles: {e}", exc_info=True)
                             print(f"⚠️  Erro ao gerar legendas: {e}")
+                            import traceback
+                            print(f"⚠️  DEBUG: Traceback: {traceback.format_exc()}")
+                    
+                    # Step 2: Generate and add audio narration if enabled
+                    # Use current_video_path (which may already have subtitles embedded)
+                    if (self.video_config.audio or self.video_config.narration) and hasattr(self, 'step_timestamps') and self.step_timestamps:
+                        logger.info("🎤 Generating audio narration for video...")
+                        logger.info(f"🎤 DEBUG: step_timestamps count: {len(self.step_timestamps)}")
+                        logger.info(f"🎤 DEBUG: video_config.audio={self.video_config.audio}, video_config.narration={self.video_config.narration}")
+                        print(f"🔊 Gerando narração de áudio para o vídeo...")
+                        print(f"🔊 DEBUG: {len(self.step_timestamps)} steps com timestamps")
+                        print(f"🔊 DEBUG: audio={self.video_config.audio}, narration={self.video_config.narration}")
+                        try:
+                            # Extract test name from YAML or use default
+                            test_name = self.yaml_data.get('name', 'test') if hasattr(self, 'yaml_data') and self.yaml_data else 'test'
+                            logger.info(f"🎤 DEBUG: Using test_name: {test_name}")
+                            print(f"🔊 DEBUG: Nome do teste: {test_name}")
+                            result_video = await self._generate_and_add_audio(current_video_path, test_name)
+                            if result_video and result_video.exists():
+                                current_video_path = result_video
+                                logger.info(f"Video with audio ready: {current_video_path.name}")
+                                print(f"✅ Vídeo com áudio pronto: {current_video_path.name}")
+                                print(f"✅ DEBUG: Vídeo final: {current_video_path.resolve()}")
+                            else:
+                                logger.warning(f"⚠️  DEBUG: result_video is None or doesn't exist: {result_video}")
+                                print(f"⚠️  DEBUG: Vídeo com áudio não foi gerado corretamente")
+                        except Exception as e:
+                            logger.warning(f"Error generating audio: {e}", exc_info=True)
+                            print(f"⚠️  Erro ao gerar áudio: {e}")
+                            import traceback
+                            print(f"⚠️  DEBUG: Traceback: {traceback.format_exc()}")
+                    
+                    # Ensure final video has correct name
+                    if current_video_path != expected_path_final:
+                        final_name = self.yaml_data.get('name', 'test') if hasattr(self, 'yaml_data') and self.yaml_data else 'test'
+                        final_expected = self.video_manager.video_dir / f"{final_name}.mp4"
+                        if current_video_path != final_expected:
+                            if final_expected.exists():
+                                final_expected.unlink()
+                            current_video_path.rename(final_expected)
+                            expected_path_final = final_expected
+                        else:
+                            expected_path_final = current_video_path
+                    
+                    # Clean up temporary files (SRT, MP3, intermediate videos)
+                    # TEMPORARIAMENTE DESABILITADO PARA DEBUG - não remover arquivos temporários
+                    # Extract test name for cleanup
+                    test_name = self.yaml_data.get('name', 'test') if hasattr(self, 'yaml_data') and self.yaml_data else 'test'
+                    # await self._cleanup_temp_files(self.video_manager.video_dir, test_name)
+                    logger.info(f"🧹 DEBUG: Limpeza de arquivos temporários DESABILITADA para debug")
+                    print(f"🧹 DEBUG: Arquivos temporários (SRT, MP3) NÃO foram removidos para verificação")
                     
                     # Clean up old videos with hash-based names (after renaming)
                     # Re-scan to get updated list
@@ -708,8 +774,20 @@ class Recorder:
         Returns:
             Path to SRT file, or None if generation failed
         """
+        logger.info(f"🎬 DEBUG: _generate_srt_file called")
+        logger.info(f"🎬 DEBUG: hasattr step_timestamps: {hasattr(self, 'step_timestamps')}")
+        if hasattr(self, 'step_timestamps'):
+            logger.info(f"🎬 DEBUG: step_timestamps is not None: {self.step_timestamps is not None}")
+            if self.step_timestamps:
+                logger.info(f"🎬 DEBUG: step_timestamps length: {len(self.step_timestamps)}")
+            else:
+                logger.warning(f"🎬 DEBUG: step_timestamps is EMPTY list!")
+        else:
+            logger.warning(f"🎬 DEBUG: step_timestamps attribute does NOT exist!")
+        
         if not hasattr(self, 'step_timestamps') or not self.step_timestamps:
             logger.warning("No step timestamps available for subtitle generation")
+            print(f"⚠️  DEBUG: Não há step_timestamps para gerar SRT")
             return None
         
         srt_path = video_path.parent / f"{video_path.stem}.srt"
@@ -722,6 +800,10 @@ class Recorder:
                 
                 # Process steps and eliminate overlaps
                 processed_steps = []
+                logger.info(f"🎬 DEBUG: Processing {len(self.step_timestamps)} step_timestamps for SRT")
+                steps_with_subtitle = 0
+                steps_without_subtitle = 0
+                
                 for step_data in self.step_timestamps:
                     step_start = step_data.get('start_time', 0)
                     step_end = step_data.get('end_time', step_start + 1.0)
@@ -731,7 +813,12 @@ class Recorder:
                     step_text = step_data.get('subtitle')
                     if not step_text:
                         # If no subtitle, skip this step (for continuity, we only show steps with subtitles)
+                        steps_without_subtitle += 1
+                        logger.debug(f"🎬 DEBUG: Skipping step without subtitle: action={step_data.get('action')}, start={step_start:.2f}s")
                         continue
+                    
+                    steps_with_subtitle += 1
+                    logger.debug(f"🎬 DEBUG: Processing step with subtitle: '{step_text}', start={step_start:.2f}s, end={step_end:.2f}s")
                     
                     # Ensure minimum duration
                     if step_duration < min_duration:
@@ -779,7 +866,11 @@ class Recorder:
                             current['duration'] = new_end - current['start']
                             break
                 
+                logger.info(f"🎬 DEBUG: Steps with subtitle: {steps_with_subtitle}, without subtitle: {steps_without_subtitle}")
+                logger.info(f"🎬 DEBUG: Processed {len(processed_steps)} steps for SRT file")
+                
                 # Write SRT entries
+                srt_entries_written = 0
                 for step in processed_steps:
                     if step['end'] > step['start'] and step['text']:
                         start_str = self._format_srt_time(step['start'])
@@ -788,8 +879,18 @@ class Recorder:
                         f.write(f"{start_str} --> {end_str}\n")
                         f.write(f"{step['text']}\n\n")
                         subtitle_index += 1
+                        srt_entries_written += 1
+                
+                logger.info(f"🎬 DEBUG: Wrote {srt_entries_written} SRT entries to file")
             
-            logger.info(f"SRT file generated: {srt_path}")
+            if srt_path.exists():
+                srt_size = srt_path.stat().st_size
+                logger.info(f"SRT file generated: {srt_path} ({srt_size} bytes)")
+                print(f"✅ DEBUG: Arquivo SRT gerado: {srt_path.name} ({srt_size} bytes)")
+            else:
+                logger.warning(f"⚠️  DEBUG: SRT file was NOT created: {srt_path}")
+                print(f"⚠️  DEBUG: Arquivo SRT NÃO foi criado: {srt_path}")
+            
             return srt_path
         except Exception as e:
             logger.error(f"Error generating SRT file: {e}", exc_info=True)
@@ -827,7 +928,14 @@ class Recorder:
             return video_path
         
         # Process video with ffmpeg to embed subtitles
-        output_path = video_path.parent / f"{video_path.stem}_with_subtitles{video_path.suffix}"
+        # Always output as MP4 to ensure compatibility
+        output_path = video_path.parent / f"{video_path.stem}.mp4"
+        if output_path == video_path and video_path.suffix == '.mp4':
+            # If same path, use _with_subtitles suffix temporarily
+            output_path = video_path.parent / f"{video_path.stem}_with_subtitles.mp4"
+        
+        # Ensure output_path is absolute
+        output_path = output_path.resolve()
         
         try:
             import subprocess
@@ -844,44 +952,139 @@ class Recorder:
                 video_codec = 'libvpx-vp9'
                 audio_codec = 'copy'
             
-            cmd = [
-                'ffmpeg',
-                '-i', str(video_path),
-                '-vf', f"subtitles='{srt_escaped}':force_style='FontSize=24,PrimaryColour=&Hffffff,OutlineColour=&H000000,Outline=2,Alignment=2,MarginV=20'",
-                '-c:v', video_codec,
-                '-c:a', audio_codec,
+            # Build ffmpeg command to burn subtitles into video
+            # Strategy: Use a simple filename approach to avoid path escaping issues
+            # Copy SRT to a simple name in the same directory as video
+            video_absolute = str(video_path.resolve())
+            srt_absolute = str(srt_path.resolve())
+            
+            # Create a temporary SRT with a simple name (no spaces, no special chars)
+            import shutil
+            simple_srt_name = "subtitles_temp.srt"
+            simple_srt_path = video_path.parent / simple_srt_name
+            srt_escaped_absolute = None  # Initialize to avoid UnboundLocalError
+            
+            try:
+                # Copy SRT to simple filename
+                shutil.copy2(srt_path, simple_srt_path)
+                logger.info(f"🎬 DEBUG: SRT copiado para nome simples: {simple_srt_name}")
+                
+                # Use simple filename in filter (relative to video directory)
+                # This avoids all path escaping issues
+                filter_expr = f"subtitles={simple_srt_name}:force_style='FontSize=24,PrimaryColour=&Hffffff,OutlineColour=&H000000,Outline=2,Alignment=2,MarginV=20'"
+                
+                cmd = [
+                    'ffmpeg',
+                    '-i', video_absolute,  # Use absolute path for video input
+                    '-vf', filter_expr,
+                ]
+            except Exception as e:
+                logger.warning(f"⚠️  Erro ao copiar SRT: {e}")
+                # Fallback: try with absolute path (may fail with special chars)
+                srt_for_filter = srt_absolute.replace('\\', '/')
+                srt_escaped_absolute = srt_for_filter.replace(' ', '\\ ').replace(':', '\\:').replace('[', '\\[').replace(']', '\\]').replace("'", "\\'")
+                filter_expr = f"subtitles='{srt_escaped_absolute}':force_style='FontSize=24,PrimaryColour=&Hffffff,OutlineColour=&H000000,Outline=2,Alignment=2,MarginV=20'"
+                cmd = [
+                    'ffmpeg',
+                    '-i', video_absolute,
+                    '-vf', filter_expr,
+                ]
+                simple_srt_path = None  # Don't try to clean up
+            
+            # Always use MP4 codecs for output
+            if output_ext == '.mp4' or self.video_config.codec == 'mp4':
+                cmd.extend([
+                    '-c:v', 'libx264',
+                    '-c:a', 'aac',
+                    '-movflags', '+faststart',
+                ])
+            else:
+                cmd.extend([
+                    '-c:v', video_codec,
+                    '-c:a', audio_codec,
+                ])
+            
+            cmd.extend([
                 '-y',
                 str(output_path)
-            ]
-            
-            # If converting to MP4, ensure proper format
-            if output_ext == '.mp4' or self.video_config.codec == 'mp4':
-                # Add MP4-specific options
-                cmd.insert(-2, '-movflags')  # Insert before output path
-                cmd.insert(-2, '+faststart')  # Fast start for web playback
+            ])
             
             logger.info(f"Processing video with subtitles: {srt_path.name}")
-            print(f"🎬 Processando vídeo com legendas...")
+            logger.info(f"🎬 DEBUG: SRT path (absolute): {srt_absolute}")
+            if srt_escaped_absolute:
+                logger.info(f"🎬 DEBUG: SRT path (escaped): {srt_escaped_absolute}")
+            else:
+                logger.info(f"🎬 DEBUG: SRT path (using simple filename): {simple_srt_name}")
+            logger.info(f"🎬 DEBUG: Video input (absolute): {video_absolute}")
+            logger.info(f"🎬 DEBUG: Video output: {output_path}")
+            logger.info(f"🎬 DEBUG: FFmpeg command: {' '.join(cmd)}")
+            print(f"🎬 Processando vídeo com legendas (burn)...")
+            print(f"🎬 DEBUG: Queimando legendas do arquivo: {srt_path.name}")
+            print(f"🎬 DEBUG: Vídeo de entrada: {video_path.name}")
+            print(f"🎬 DEBUG: Vídeo de saída: {output_path.name}")
+            
+            # Use absolute path for output in command
+            cmd_absolute = cmd[:-1] + [str(output_path)]  # Replace last element (output path) with absolute path
             
             result = subprocess.run(
-                cmd,
-                cwd=str(video_path.parent),  # Run from video directory so SRT path is relative
+                cmd_absolute,
+                cwd=str(video_path.parent),  # Run from video directory (so simple_srt_name works)
                 capture_output=True,
                 text=True,
                 timeout=300
             )
             
+            # Clean up temporary SRT file (if we created one)
+            if simple_srt_path and simple_srt_path.exists():
+                try:
+                    simple_srt_path.unlink()
+                    logger.debug(f"🎬 DEBUG: Arquivo SRT temporário removido: {simple_srt_name}")
+                except Exception as e:
+                    logger.warning(f"⚠️  Não foi possível remover SRT temporário: {e}")
+            
+            # Log ffmpeg output for debugging
+            if result.returncode != 0:
+                # Get full error message (stderr usually contains the actual error)
+                error_output = result.stderr if result.stderr else result.stdout
+                logger.warning(f"🎬 DEBUG: FFmpeg return code: {result.returncode}")
+                logger.warning(f"🎬 DEBUG: FFmpeg stderr (full): {error_output}")
+                logger.warning(f"🎬 DEBUG: FFmpeg stdout: {result.stdout}")
+                print(f"⚠️  DEBUG: FFmpeg retornou código {result.returncode}")
+                if error_output:
+                    # Try to extract the actual error message (usually after version info)
+                    error_lines = error_output.split('\n')
+                    # Skip version info and find actual error
+                    actual_error = '\n'.join([line for line in error_lines if line and not line.startswith('ffmpeg version') and not line.startswith('built with') and not line.startswith('configuration:')])
+                    if actual_error:
+                        print(f"⚠️  DEBUG: Erro FFmpeg: {actual_error[:500]}")
+                    else:
+                        print(f"⚠️  DEBUG: Erro FFmpeg completo: {error_output[:500]}")
+                
+            
             if result.returncode == 0 and output_path.exists():
                 # Replace original video with subtitled version
-                video_path.unlink()
-                output_path.rename(video_path)
-                srt_path.unlink()  # Clean up SRT file
+                if video_path.exists() and video_path != output_path:
+                    video_path.unlink()
+                if output_path != video_path:
+                    output_path.rename(video_path)
+                # Clean up SRT file (subtitles are now embedded)
+                # TEMPORARIAMENTE DESABILITADO PARA DEBUG
+                if srt_path.exists():
+                    logger.info(f"🧹 DEBUG: SRT file mantido para debug: {srt_path.name}")
+                    print(f"🧹 DEBUG: Arquivo SRT mantido: {srt_path.name}")
+                    # try:
+                    #     srt_path.unlink()
+                    #     logger.debug(f"Cleaned up SRT file: {srt_path.name}")
+                    # except Exception as e:
+                    #     logger.warning(f"Could not remove SRT file: {e}")
                 logger.info(f"Video processed with subtitles: {video_path.name}")
-                print(f"✅ Vídeo processado com legendas: {video_path.name}")
+                print(f"✅ Vídeo processado com legendas embutidas: {video_path.name}")
                 return video_path
             else:
-                logger.warning(f"ffmpeg failed: {result.stderr[:200]}")
+                error_msg = result.stderr[:500] if result.stderr else result.stdout[:500]
+                logger.warning(f"ffmpeg failed to embed subtitles: {error_msg}")
                 print(f"⚠️  Erro ao processar vídeo com legendas")
+                print(f"   Detalhes: {error_msg[:200]}")
                 if output_path.exists():
                     output_path.unlink()
                 return video_path
@@ -891,6 +1094,441 @@ class Recorder:
             if output_path.exists():
                 output_path.unlink()
             return video_path
+    
+    async def _generate_and_add_audio(self, video_path: Path, test_name: str) -> Optional[Path]:
+        """
+        Generate audio narration from step timestamps and add to video.
+        
+        Args:
+            video_path: Path to video file
+            test_name: Name of test (for audio filename)
+            
+        Returns:
+            Path to video with audio, or original path if processing failed
+        """
+        logger.info(f"🎤 DEBUG: _generate_and_add_audio called")
+        logger.info(f"🎤 DEBUG: hasattr step_timestamps: {hasattr(self, 'step_timestamps')}")
+        if hasattr(self, 'step_timestamps'):
+            logger.info(f"🎤 DEBUG: step_timestamps is not None: {self.step_timestamps is not None}")
+            if self.step_timestamps:
+                logger.info(f"🎤 DEBUG: step_timestamps length: {len(self.step_timestamps)}")
+            else:
+                logger.warning(f"🎤 DEBUG: step_timestamps is EMPTY list!")
+        else:
+            logger.warning(f"🎤 DEBUG: step_timestamps attribute does NOT exist!")
+        
+        if not hasattr(self, 'step_timestamps') or not self.step_timestamps:
+            logger.warning("No step timestamps available for audio generation")
+            print(f"⚠️  DEBUG: Não há step_timestamps para gerar áudio")
+            return video_path
+        
+        # Check if TTS is available
+        try:
+            from ..tts import TTSManager
+        except ImportError:
+            logger.warning("TTSManager not available, skipping audio generation")
+            print(f"⚠️  TTSManager não disponível. Instale: pip install edge-tts")
+            return video_path
+        
+        # Determine which config to use (audio or narration)
+        use_audio_config = self.video_config.audio
+        if use_audio_config:
+            lang = self.video_config.audio_lang
+            engine = self.video_config.audio_engine
+            voice = getattr(self.video_config, 'audio_voice', None)
+            rate = getattr(self.video_config, 'audio_rate', None)
+            pitch = getattr(self.video_config, 'audio_pitch', None)
+            volume = getattr(self.video_config, 'audio_volume', None)
+        else:
+            lang = self.video_config.narration_lang
+            engine = self.video_config.narration_engine
+            voice = getattr(self.video_config, 'narration_voice', None)
+            rate = None
+            pitch = None
+            volume = None
+        
+        # Default to edge-tts if not specified (better voices)
+        if not engine or engine == 'gtts':
+            engine = 'edge-tts'
+            logger.info("Using edge-tts for better voice quality")
+        
+        try:
+            # Create TTSManager
+            # Check if edge-tts is available before creating TTSManager
+            # Try importing edge_tts directly first
+            try:
+                import edge_tts
+                # Test if it actually works
+                edge_tts_available = True
+                logger.info(f"🎤 DEBUG: edge_tts importado com sucesso")
+                logger.info(f"🎤 DEBUG: edge_tts module path: {edge_tts.__file__ if hasattr(edge_tts, '__file__') else 'unknown'}")
+            except ImportError as e:
+                edge_tts_available = False
+                logger.warning(f"edge-tts not available, cannot generate audio: {e}")
+                logger.warning(f"🎤 DEBUG: ImportError ao importar edge_tts: {e}")
+                logger.warning(f"🎤 DEBUG: Python path: {__import__('sys').path}")
+                print(f"⚠️  edge-tts não está disponível. Instale: pip install edge-tts")
+                print(f"⚠️  DEBUG: Erro de importação: {e}")
+                print(f"⚠️  DEBUG: Tente executar: python3 -m pip install edge-tts")
+                return video_path
+            except Exception as e:
+                edge_tts_available = False
+                logger.error(f"🎤 DEBUG: Erro inesperado ao importar edge_tts: {e}", exc_info=True)
+                print(f"⚠️  Erro ao importar edge-tts: {e}")
+                return video_path
+            
+            logger.info(f"🎤 DEBUG: Criando TTSManager com engine={engine}, lang={lang}, voice={voice}")
+            try:
+                tts_manager = TTSManager(
+                    lang=lang,
+                    engine=engine,
+                    slow=False,
+                    voice=voice,
+                    rate=rate,
+                    pitch=pitch,
+                    volume=volume
+                )
+                logger.info(f"🎤 DEBUG: TTSManager criado com sucesso")
+            except ImportError as e:
+                logger.error(f"🎤 DEBUG: ImportError ao criar TTSManager: {e}", exc_info=True)
+                print(f"⚠️  Erro ao criar TTSManager: {e}")
+                return video_path
+            except Exception as e:
+                logger.error(f"🎤 DEBUG: Erro inesperado ao criar TTSManager: {e}", exc_info=True)
+                print(f"⚠️  Erro inesperado ao criar TTSManager: {e}")
+                return video_path
+            
+            # Convert step_timestamps to format expected by TTSManager
+            # TTSManager expects steps with 'audio', 'subtitle', 'description', 'start_time'
+            # Implement continuity: audio continues until next step with different audio or empty string
+            # IMPORTANT: We need to include ALL steps (even without audio) to maintain video sync
+            # Steps without audio will be filled with silence
+            tts_steps = []
+            current_audio_text = None
+            
+            logger.info(f"🎤 DEBUG: Processing {len(self.step_timestamps)} step_timestamps for audio generation")
+            steps_with_audio = 0
+            steps_without_audio = 0
+            
+            for i, step_data in enumerate(self.step_timestamps, 1):
+                step = step_data.get('step', {})
+                step_start_time = step_data.get('start_time', 0.0)
+                step_end_time = step_data.get('end_time', step_start_time + step_data.get('duration', 0.0))
+                step_duration = step_end_time - step_start_time
+                
+                # Check for audio field in step
+                # IMPORTANT: audio is stored directly in step_data (from _execute_yaml_steps)
+                # It's also in step dict (from YAML), but step_data takes precedence
+                step_audio = step_data.get('audio')
+                if step_audio is None:
+                    # Fallback to step dict if not in step_data
+                    step_audio = step.get('audio')
+                
+                logger.debug(f"🎤 DEBUG: Step {i}: step_audio from step_data={step_data.get('audio')}, from step={step.get('audio')}, final={step_audio}")
+                
+                if step_audio is not None:
+                    # Explicit audio field: update current_audio_text
+                    if step_audio == '':
+                        # Empty string means clear audio
+                        current_audio_text = None
+                        logger.debug(f"🎤 DEBUG: Step {i}: Audio cleared (empty string)")
+                    else:
+                        # New audio text
+                        current_audio_text = step_audio
+                        steps_with_audio += 1
+                        logger.debug(f"🎤 DEBUG: Step {i}: Audio set to '{current_audio_text}'")
+                else:
+                    steps_without_audio += 1
+                    logger.debug(f"🎤 DEBUG: Step {i}: No audio field, continuing previous: '{current_audio_text}'")
+                # If no audio field, current_audio_text continues from previous step
+                
+                # Add step to tts_steps (even if no audio - will be filled with silence)
+                # This ensures video synchronization
+                tts_steps.append({
+                    'audio': current_audio_text,  # None if no audio, text if audio configured
+                    'start_time': step_start_time,
+                    'duration': step_duration,
+                    'end_time': step_end_time
+                })
+            
+            logger.info(f"🎤 DEBUG: Steps with audio: {steps_with_audio}, without audio: {steps_without_audio}")
+            logger.info(f"🎤 DEBUG: Total tts_steps prepared: {len(tts_steps)}")
+            
+            if not tts_steps:
+                logger.warning("No steps prepared for audio generation")
+                print(f"⚠️  Nenhum step preparado para geração de áudio")
+                return video_path
+            
+            # Check if we have any audio text at all
+            steps_with_audio_text = sum(1 for s in tts_steps if s.get('audio'))
+            if steps_with_audio_text == 0:
+                logger.warning("No steps with audio text found (all steps have None audio)")
+                print(f"⚠️  Nenhum step com texto de áudio encontrado (todos têm audio=None)")
+                print(f"⚠️  DEBUG: Verifique se os steps no YAML têm o campo 'audio' preenchido")
+                return video_path
+            
+            # Generate narration with timing (return_timed_audio=True)
+            # This generates a single MP3 file with all audio segments and silence, synchronized with video
+            logger.info(f"Generating audio narration for {len(tts_steps)} steps...")
+            logger.info(f"🎤 DEBUG: Steps with audio text: {steps_with_audio_text}/{len(tts_steps)}")
+            print(f"🔊 Gerando narração para {len(tts_steps)} steps...")
+            print(f"🔊 DEBUG: {steps_with_audio_text} steps têm texto de áudio")
+            
+            # Show sample of what we're sending to TTSManager
+            sample_steps = [s for s in tts_steps if s.get('audio')][:3]
+            for i, sample in enumerate(sample_steps, 1):
+                logger.info(f"🎤 DEBUG: Sample step {i}: audio='{sample.get('audio')}', start={sample.get('start_time'):.2f}s, duration={sample.get('duration'):.2f}s")
+            
+            try:
+                narration_audio = await tts_manager.generate_narration(
+                    tts_steps,
+                    video_path.parent,
+                    test_name,
+                    return_timed_audio=True  # Returns single file with all audio + silence, synchronized with video
+                )
+                
+                logger.info(f"🎤 DEBUG: generate_narration returned: {narration_audio}")
+                if narration_audio:
+                    logger.info(f"🎤 DEBUG: narration_audio path exists: {narration_audio.exists()}")
+                    if narration_audio.exists():
+                        logger.info(f"🎤 DEBUG: narration_audio size: {narration_audio.stat().st_size} bytes")
+                
+                if not narration_audio or not narration_audio.exists():
+                    logger.warning("Audio narration generation failed")
+                    logger.warning(f"🎤 DEBUG: narration_audio is None or doesn't exist: {narration_audio}")
+                    print(f"⚠️  Falha ao gerar narração de áudio")
+                    print(f"⚠️  DEBUG: TTSManager.generate_narration retornou: {narration_audio}")
+                    return video_path
+            except Exception as e:
+                logger.error(f"🎤 DEBUG: Exception during generate_narration: {e}", exc_info=True)
+                print(f"⚠️  Erro ao gerar narração: {e}")
+                import traceback
+                print(f"⚠️  DEBUG: Traceback: {traceback.format_exc()}")
+                return video_path
+            
+            logger.info(f"Audio narration generated: {narration_audio.name} ({narration_audio.stat().st_size / 1024:.1f} KB)")
+            print(f"✅ Narração de áudio gerada: {narration_audio.name}")
+            
+            # Verify audio file is valid
+            audio_duration = tts_manager._get_audio_duration(narration_audio)
+            logger.info(f"Audio duration: {audio_duration:.2f}s")
+            print(f"📊 Duração do áudio: {audio_duration:.2f}s")
+            
+            # Embed audio into video MP4
+            logger.info("Embedding audio into video MP4...")
+            print(f"🎬 Embutindo áudio no vídeo MP4...")
+            
+            try:
+                import subprocess
+                # Check if ffmpeg is available
+                subprocess.run(['ffmpeg', '-version'], capture_output=True, check=True, timeout=5)
+            except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+                logger.warning("ffmpeg not found, cannot embed audio")
+                print(f"⚠️  ffmpeg não encontrado. Áudio não será embutido no vídeo.")
+                return video_path
+            
+            # Output will be MP4 (even if input is webm, we convert)
+            # Use same name as input but ensure .mp4 extension
+            # If input is already MP4, use temporary suffix to avoid overwriting
+            if video_path.suffix == '.mp4':
+                output_path = video_path.parent / f"{video_path.stem}_with_audio.mp4"
+            else:
+                output_path = video_path.parent / f"{video_path.stem}.mp4"
+            
+            # Ensure output_path is absolute
+            output_path = output_path.resolve()
+            
+            # Build ffmpeg command to embed audio
+            # Video input may already have subtitles embedded, so we preserve them
+            # For MP4, we use AAC codec for audio
+            # IMPORTANT: Use absolute paths for all inputs
+            video_input_absolute = str(video_path.resolve())
+            audio_input_absolute = str(narration_audio.resolve())
+            
+            # Verify files exist before processing
+            if not video_path.exists():
+                logger.error(f"Video file does not exist: {video_path}")
+                print(f"❌ Erro: Arquivo de vídeo não encontrado: {video_path}")
+                return video_path
+            
+            if not narration_audio.exists():
+                logger.error(f"Audio file does not exist: {narration_audio}")
+                print(f"❌ Erro: Arquivo de áudio não encontrado: {narration_audio}")
+                return video_path
+            
+            logger.info(f"🎤 DEBUG: Video file exists: {video_path.exists()}, size: {video_path.stat().st_size} bytes")
+            logger.info(f"🎤 DEBUG: Audio file exists: {narration_audio.exists()}, size: {narration_audio.stat().st_size} bytes")
+            
+            cmd = [
+                'ffmpeg',
+                '-i', video_input_absolute,  # Video input (may already have subtitles) - absolute path
+                '-i', audio_input_absolute,  # Audio input (MP3 with all segments + silence) - absolute path
+                '-c:v', 'libx264',  # Re-encode video to ensure compatibility (preserves subtitles)
+                '-c:a', 'aac',  # AAC codec for MP4
+                '-b:a', '192k',  # Audio bitrate
+                '-map', '0:v:0',  # Use video from first input (with subtitles if embedded)
+                '-map', '1:a:0',  # Use audio from second input
+                '-shortest',  # End when shortest stream ends (sync with audio)
+                '-movflags', '+faststart',  # Fast start for web playback
+                '-y',  # Overwrite output
+                str(output_path)  # Output path is already absolute
+            ]
+            
+            logger.info(f"Running ffmpeg to embed audio: {' '.join(cmd)}")
+            logger.info(f"🎤 DEBUG: Video input (relative): {video_path}")
+            logger.info(f"🎤 DEBUG: Video input (absolute): {video_input_absolute}")
+            logger.info(f"🎤 DEBUG: Audio input (relative): {narration_audio}")
+            logger.info(f"🎤 DEBUG: Audio input (absolute): {audio_input_absolute}")
+            logger.info(f"🎤 DEBUG: Video output (absolute): {output_path}")
+            print(f"🔄 Processando vídeo com áudio...")
+            print(f"🎤 DEBUG: Embutindo áudio do arquivo: {narration_audio.name}")
+            print(f"🎤 DEBUG: Vídeo de entrada: {video_path.name}")
+            print(f"🎤 DEBUG: Vídeo de saída: {output_path.name}")
+            
+            result = subprocess.run(
+                cmd,
+                cwd=str(video_path.parent),
+                capture_output=True,
+                text=True,
+                timeout=600  # 10 minutes timeout (video processing can take time)
+            )
+            
+            # Log ffmpeg output for debugging
+            if result.returncode != 0:
+                # Get full error message
+                error_output = result.stderr if result.stderr else result.stdout
+                logger.warning(f"🎤 DEBUG: FFmpeg return code: {result.returncode}")
+                logger.warning(f"🎤 DEBUG: FFmpeg stderr (full): {error_output}")
+                logger.warning(f"🎤 DEBUG: FFmpeg stdout: {result.stdout}")
+                print(f"⚠️  DEBUG: FFmpeg retornou código {result.returncode}")
+                if error_output:
+                    # Try to extract the actual error message (usually after version info)
+                    error_lines = error_output.split('\n')
+                    # Skip version info and find actual error
+                    actual_error = '\n'.join([line for line in error_lines if line and not line.startswith('ffmpeg version') and not line.startswith('built with') and not line.startswith('configuration:')])
+                    if actual_error:
+                        print(f"⚠️  DEBUG: Erro FFmpeg: {actual_error[:500]}")
+                    else:
+                        print(f"⚠️  DEBUG: Erro FFmpeg completo: {error_output[:500]}")
+            
+            if result.returncode == 0 and output_path.exists():
+                # Verify output file
+                output_size = output_path.stat().st_size / (1024 * 1024)  # MB
+                logger.info(f"Video with audio created: {output_path.name} ({output_size:.1f} MB)")
+                print(f"✅ Vídeo com áudio criado: {output_path.name} ({output_size:.1f} MB)")
+                
+                # Replace original video with audio version
+                if video_path.exists() and video_path != output_path:
+                    video_path.unlink()
+                if output_path != video_path:
+                    output_path.rename(video_path)
+                
+                logger.info(f"Video processed with embedded audio: {video_path.name}")
+                print(f"✅ Vídeo processado com áudio embutido: {video_path.name}")
+                
+                # Clean up temporary audio file
+                # TEMPORARIAMENTE DESABILITADO PARA DEBUG
+                if narration_audio.exists():
+                    logger.info(f"🧹 DEBUG: Arquivo MP3 mantido para debug: {narration_audio.name}")
+                    print(f"🧹 DEBUG: Arquivo MP3 mantido: {narration_audio.name}")
+                    # try:
+                    #     narration_audio.unlink()
+                    #     logger.info(f"Cleaned up temporary audio file: {narration_audio.name}")
+                    # except Exception as e:
+                    #     logger.warning(f"Could not delete temporary audio file: {e}")
+                
+                return video_path
+            else:
+                error_msg = result.stderr[:500] if result.stderr else result.stdout[:500]
+                logger.warning(f"ffmpeg failed to embed audio: {error_msg}")
+                print(f"⚠️  Erro ao embutir áudio no vídeo")
+                print(f"   Detalhes: {error_msg[:200]}")
+                if output_path.exists():
+                    output_path.unlink()
+                return video_path
+                
+        except ImportError as e:
+            logger.warning(f"TTS library not available: {e}")
+            print(f"⚠️  Biblioteca TTS não disponível: {e}")
+            print(f"💡 Instale: pip install edge-tts")
+            return video_path
+        except Exception as e:
+            logger.error(f"Error generating audio: {e}", exc_info=True)
+            print(f"⚠️  Erro ao gerar áudio: {e}")
+            return video_path
+    
+    async def _cleanup_temp_files(self, video_dir: Path, test_name: str):
+        """
+        Clean up temporary files (SRT, MP3, intermediate videos) leaving only final MP4.
+        
+        Args:
+            video_dir: Directory containing video files
+            test_name: Name of test (to identify final video)
+        """
+        try:
+            # Find final video (should be MP4 with test name)
+            final_video = video_dir / f"{test_name}.mp4"
+            if not final_video.exists():
+                # Try to find any MP4 file as final
+                mp4_files = list(video_dir.glob("*.mp4"))
+                if mp4_files:
+                    final_video = max(mp4_files, key=lambda p: p.stat().st_mtime)
+                    logger.info(f"Using most recent MP4 as final video: {final_video.name}")
+            
+            # Clean up temporary files
+            cleaned = []
+            
+            # Remove SRT files
+            for srt_file in video_dir.glob("*.srt"):
+                try:
+                    srt_file.unlink()
+                    cleaned.append(srt_file.name)
+                    logger.debug(f"Removed SRT: {srt_file.name}")
+                except Exception as e:
+                    logger.warning(f"Could not remove SRT {srt_file.name}: {e}")
+            
+            # Remove MP3 files (narration audio)
+            for mp3_file in video_dir.glob("*.mp3"):
+                try:
+                    mp3_file.unlink()
+                    cleaned.append(mp3_file.name)
+                    logger.debug(f"Removed MP3: {mp3_file.name}")
+                except Exception as e:
+                    logger.warning(f"Could not remove MP3 {mp3_file.name}: {e}")
+            
+            # Remove intermediate video files (webm, _with_subtitles, _with_audio, etc.)
+            for video_file in video_dir.glob("*"):
+                if video_file.is_file():
+                    # Skip final video
+                    if video_file == final_video:
+                        continue
+                    
+                    # Remove webm files (intermediate)
+                    if video_file.suffix == '.webm':
+                        try:
+                            video_file.unlink()
+                            cleaned.append(video_file.name)
+                            logger.debug(f"Removed intermediate video: {video_file.name}")
+                        except Exception as e:
+                            logger.warning(f"Could not remove video {video_file.name}: {e}")
+                    
+                    # Remove files with temporary suffixes
+                    if any(suffix in video_file.stem for suffix in ['_with_subtitles', '_with_audio', '_tts_temp']):
+                        try:
+                            video_file.unlink()
+                            cleaned.append(video_file.name)
+                            logger.debug(f"Removed temporary file: {video_file.name}")
+                        except Exception as e:
+                            logger.warning(f"Could not remove temporary file {video_file.name}: {e}")
+            
+            if cleaned:
+                logger.info(f"Cleaned up {len(cleaned)} temporary files")
+                print(f"🧹 Limpeza: {len(cleaned)} arquivos temporários removidos")
+            else:
+                logger.debug("No temporary files to clean up")
+                
+        except Exception as e:
+            logger.warning(f"Error during cleanup: {e}", exc_info=True)
     
     async def _wait_for_page_stable(self, timeout: float = 10.0) -> None:
         """
@@ -990,19 +1628,22 @@ class Recorder:
         logger.info(f"🎬 VIDEO DEBUG: Starting YAML steps execution at {video_start_timestamp:.2f}")
         logger.info(f"Executing {len(self.yaml_steps)} YAML steps on page={id(self.page)}, {context_info}, url={page_url}")
         
-        # Track current subtitle for continuity
+        # Track current subtitle and audio for continuity
         current_subtitle = None
+        current_audio = None
         
         for i, step in enumerate(self.yaml_steps, 1):
             action = step.get('action')
             description = step.get('description', '')
             subtitle = step.get('subtitle')  # Use subtitle field, not description
+            audio = step.get('audio')  # Use audio field
             
             # Calculate step start time relative to video start
             step_start_datetime = datetime.now()
             step_start_elapsed = (step_start_datetime - video_start_datetime).total_seconds()
             
             logger.info(f"🎬 VIDEO DEBUG: Step {i}/{len(self.yaml_steps)} starting at {step_start_elapsed:.2f}s - {action} - {description}")
+            logger.debug(f"🎬 DEBUG: Step {i} YAML fields: subtitle={subtitle}, audio={audio}")
             logger.info(f"[{i}/{len(self.yaml_steps)}] Executing: {action} - {description}")
             
             # Handle subtitle continuity
@@ -1011,18 +1652,38 @@ class Recorder:
                 if subtitle == '':
                     # Empty string means clear subtitle
                     current_subtitle = None
+                    logger.debug(f"🎬 DEBUG: Step {i}: Subtitle cleared (empty string)")
                 else:
                     current_subtitle = subtitle
+                    logger.debug(f"🎬 DEBUG: Step {i}: Subtitle set to '{current_subtitle}'")
             # If no subtitle field and current_subtitle exists, continue it
+            elif current_subtitle:
+                logger.debug(f"🎬 DEBUG: Step {i}: Subtitle continues from previous: '{current_subtitle}'")
             
-            # Store step start time for subtitle generation
+            # Handle audio continuity (similar to subtitles)
+            if audio is not None:
+                if audio == '':
+                    # Empty string means clear audio
+                    current_audio = None
+                    logger.debug(f"🎬 DEBUG: Step {i}: Audio cleared (empty string)")
+                else:
+                    current_audio = audio
+                    logger.debug(f"🎬 DEBUG: Step {i}: Audio set to '{current_audio}'")
+            # If no audio field and current_audio exists, continue it
+            elif current_audio:
+                logger.debug(f"🎬 DEBUG: Step {i}: Audio continues from previous: '{current_audio}'")
+            
+            # Store step start time for subtitle and audio generation
             step_data = {
                 'step': step,
                 'start_time': step_start_elapsed,  # Relative to video start (datetime-based)
                 'action': action,
                 'description': description,
-                'subtitle': current_subtitle  # Store current subtitle (may be from previous step)
+                'subtitle': current_subtitle,  # Store current subtitle (may be from previous step)
+                'audio': current_audio  # Store current audio (may be from previous step)
             }
+            
+            logger.debug(f"🎬 DEBUG: Step {i} step_data: subtitle='{current_subtitle}', audio='{current_audio}'")
             
             try:
                 if action == 'go_to':
@@ -1097,10 +1758,27 @@ class Recorder:
             step_data['end_time'] = step_end_elapsed
             step_data['duration'] = step_duration
             self.step_timestamps.append(step_data)
+            
+            # Debug: log step data being stored
+            logger.debug(f"🎬 DEBUG: Step {i} data stored: subtitle='{current_subtitle}', audio='{current_audio}', start={step_start_elapsed:.2f}s, end={step_end_elapsed:.2f}s, duration={step_duration:.2f}s")
         
         steps_end_datetime = datetime.now()
         total_elapsed = (steps_end_datetime - video_start_datetime).total_seconds()
         logger.info(f"🎬 VIDEO DEBUG: All steps completed at {total_elapsed:.2f}s")
+        logger.info(f"🎬 DEBUG: Total step_timestamps collected: {len(self.step_timestamps)}")
+        
+        # Debug: show what's in step_timestamps
+        if self.step_timestamps:
+            logger.info(f"🎬 DEBUG: First step_timestamp: subtitle='{self.step_timestamps[0].get('subtitle')}', audio='{self.step_timestamps[0].get('audio')}'")
+            logger.info(f"🎬 DEBUG: Last step_timestamp: subtitle='{self.step_timestamps[-1].get('subtitle')}', audio='{self.step_timestamps[-1].get('audio')}'")
+            # Count steps with subtitle and audio
+            steps_with_subtitle = sum(1 for s in self.step_timestamps if s.get('subtitle'))
+            steps_with_audio = sum(1 for s in self.step_timestamps if s.get('audio'))
+            logger.info(f"🎬 DEBUG: Steps with subtitle: {steps_with_subtitle}/{len(self.step_timestamps)}")
+            logger.info(f"🎬 DEBUG: Steps with audio: {steps_with_audio}/{len(self.step_timestamps)}")
+        else:
+            logger.warning(f"🎬 DEBUG: step_timestamps is EMPTY! No timestamps collected!")
+        
         logger.info("✅ All YAML steps executed successfully")
 
         # Wait a bit after all steps to ensure video captures everything

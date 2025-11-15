@@ -44,7 +44,7 @@ def main():
     command_commands = [
         'find', 'click', 'type', 'submit', 'wait', 'info', 'html',
         'save', 'exit', 'pause', 'resume', 'start',
-        'caption', 'subtitle', 'audio', 'screenshot',
+        'caption', 'subtitle', 'audio', 'audio-step', 'screenshot',
         'video-enable', 'video-disable', 'video-quality', 'video-codec',
         'video-dir', 'video-speed', 'video-subtitles', 'video-audio'
     ]

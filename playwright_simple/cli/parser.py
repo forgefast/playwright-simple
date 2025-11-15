@@ -152,8 +152,11 @@ def _add_command_parsers(subparsers):
     subtitle_parser = subparsers.add_parser('subtitle', help='Adicionar legenda ao último step (para vídeo)')
     subtitle_parser.add_argument('text', type=str, nargs='?', default='', help='Texto da legenda (vazio para limpar)')
     
-    audio_parser = subparsers.add_parser('audio', help='Adicionar narração de áudio')
+    audio_parser = subparsers.add_parser('audio', help='Adicionar narração de áudio (cria step separado)')
     audio_parser.add_argument('text', type=str, help='Texto para narração')
+    
+    audio_step_parser = subparsers.add_parser('audio-step', help='Adicionar áudio ao último step (para vídeo)')
+    audio_step_parser.add_argument('text', type=str, nargs='?', default='', help='Texto do áudio (vazio para limpar)')
     
     screenshot_parser = subparsers.add_parser('screenshot', help='Tirar screenshot')
     screenshot_parser.add_argument('--name', type=str, help='Nome do screenshot (opcional)')

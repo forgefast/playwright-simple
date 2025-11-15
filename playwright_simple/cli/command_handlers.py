@@ -43,6 +43,8 @@ def handle_command_commands(args) -> None:
         _handle_subtitle(args)
     elif args.command == 'audio':
         _handle_audio(args)
+    elif args.command == 'audio-step':
+        _handle_audio_step(args)
     elif args.command == 'screenshot':
         _handle_screenshot(args)
     elif args.command == 'video-enable':
@@ -297,7 +299,7 @@ def _handle_subtitle(args):
 
 
 def _handle_audio(args):
-    """Handle audio command."""
+    """Handle audio command (creates separate step)."""
     if not hasattr(args, 'text') or not args.text:
         print("❌ Texto para narração é obrigatório")
         sys.exit(1)
@@ -305,6 +307,19 @@ def _handle_audio(args):
     result = send_command('audio', args.text)
     if result.get('success'):
         message = result.get('result', {}).get('message', 'Audio added')
+        print(f"✅ {message}")
+    else:
+        print(f"❌ Erro: {result.get('error', 'Unknown error')}")
+        sys.exit(1)
+
+
+def _handle_audio_step(args):
+    """Handle audio-step command - adds audio to last step (for video narration)."""
+    text = getattr(args, 'text', '') or ""
+    
+    result = send_command('audio-step', text)
+    if result.get('success'):
+        message = result.get('result', {}).get('message', 'Audio added to last step')
         print(f"✅ {message}")
     else:
         print(f"❌ Erro: {result.get('error', 'Unknown error')}")

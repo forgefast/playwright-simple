@@ -94,8 +94,12 @@ class CommandHandlers:
         await self._metadata.handle_subtitle(args)
     
     async def handle_audio(self, args: str) -> None:
-        """Handle audio command."""
+        """Handle audio command (creates separate step)."""
         await self._metadata.handle_audio(args)
+    
+    async def handle_audio_step(self, args: str) -> None:
+        """Handle audio-step command - adds audio to last step (for narration)."""
+        await self._metadata.handle_audio_step(args)
     
     async def handle_screenshot(self, args: str) -> None:
         """Handle screenshot command."""
