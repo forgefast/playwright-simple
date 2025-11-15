@@ -28,6 +28,9 @@ VIDEOS_DIR = project_root / "videos"
 # Script para gerar YAML (similar ao test_odoo_interactive.py)
 GENERATION_SCRIPT = project_root / "test_odoo_interactive.py"
 
+# Configuração: executar em modo headless
+HEADLESS = True  # Mude para False para ver o browser
+
 
 def print_section(title: str):
     """Print a formatted section header."""
@@ -119,27 +122,200 @@ async def run_generation():
     """Executa a geração do YAML via recorder e adiciona configuração básica de vídeo."""
     print_step(1, "GERANDO YAML VIA RECORDER")
     
+    if HEADLESS:
+        print(f"🔇 Modo headless: browser não será visível")
+    else:
+        print(f"👁️  Modo visível: browser será exibido")
+    
     # Limpar YAML anterior se existir
     if YAML_PATH.exists():
         print(f"🗑️  Removendo YAML anterior: {YAML_PATH}")
         YAML_PATH.unlink()
     
-    # Executar script de geração
-    print(f"▶️  Executando: python3 test_odoo_interactive.py")
+    # Executar gravação diretamente (automatizada como test_odoo_interactive.py)
+    print(f"▶️  Iniciando gravação automatizada...")
     try:
-        result = subprocess.run(
-            ["python3", "test_odoo_interactive.py"],
-            cwd=project_root,
-            capture_output=True,
-            text=True,
-            timeout=120
+        # Importar e executar diretamente
+        from playwright_simple.core.recorder.recorder import Recorder
+        from pathlib import Path
+        
+        generated_yaml = project_root / "test_odoo_login_real.yaml"
+        
+        # Limpar YAML anterior se existir
+        if generated_yaml.exists():
+            generated_yaml.unlink()
+        
+        # Criar recorder com headless
+        recorder = Recorder(
+            output_path=generated_yaml,
+            initial_url='http://localhost:18069',
+            headless=HEADLESS,
+            fast_mode=True
         )
         
-        # Mostrar saída
-        if result.stdout:
-            print(result.stdout)
-        if result.stderr:
-            print(result.stderr, file=sys.stderr)
+        # Executar recorder em background (como test_odoo_interactive.py)
+        async def run_recorder():
+            await recorder.start()
+        
+        recorder_task = asyncio.create_task(run_recorder())
+        
+        # Aguardar recorder iniciar
+        print("⏳ Aguardando recorder estar pronto...")
+        page = None
+        max_attempts = 30
+        for attempt in range(max_attempts):
+            try:
+                if hasattr(recorder, 'page') and recorder.page:
+                    page = recorder.page
+                    try:
+                        await asyncio.wait_for(
+                            page.wait_for_load_state('domcontentloaded', timeout=2000),
+                            timeout=2.5
+                        )
+                        if hasattr(recorder, 'is_recording') and recorder.is_recording:
+                            print("✅ Recorder iniciado e pronto!")
+                            break
+                    except:
+                        pass
+            except:
+                pass
+            await asyncio.sleep(0.2)
+        
+        if not (page and hasattr(recorder, 'is_recording') and recorder.is_recording):
+            print("⚠️  Recorder pode não estar totalmente pronto, continuando...")
+            if page:
+                try:
+                    await asyncio.wait_for(
+                        page.wait_for_load_state('networkidle', timeout=5000),
+                        timeout=6.0
+                    )
+                except:
+                    pass
+        
+        # Executar passos automatizados (como test_odoo_interactive.py)
+        handlers = recorder.command_handlers
+        
+        async def run_with_timeout(coro, timeout_seconds, step_name):
+            try:
+                await asyncio.wait_for(coro, timeout=timeout_seconds)
+                return True, None
+            except asyncio.TimeoutError:
+                return False, f"Timeout após {timeout_seconds}s"
+            except Exception as e:
+                return False, str(e)
+        
+        # 1. Encontrar e clicar em "Entrar"
+        print("1️⃣  Procurando e clicando em 'Entrar'...")
+        success, error = await run_with_timeout(
+            handlers.handle_pw_click('Entrar'),
+            timeout_seconds=10.0,
+            step_name="click Entrar"
+        )
+        if not success:
+            print(f"   ❌ Erro: {error}")
+            await recorder.stop(save=False)
+            return False, False
+        print("   ✅ Clique executado")
+        
+        # Aguardar página de login
+        if page:
+            try:
+                await asyncio.wait_for(
+                    page.wait_for_selector('input[type="text"], input[type="email"], input[name*="login"], input[type="password"]', timeout=10000, state='visible'),
+                    timeout=12.0
+                )
+            except:
+                pass
+        
+        # 2. Digitar email
+        print("2️⃣  Digitando email...")
+        success, error = await run_with_timeout(
+            handlers.handle_pw_type('admin into "E-mail"'),
+            timeout_seconds=10.0,
+            step_name="type email"
+        )
+        if not success:
+            success, error = await run_with_timeout(
+                handlers.handle_pw_type('admin into "login"'),
+                timeout_seconds=10.0,
+                step_name="type email (fallback)"
+            )
+        if not success:
+            print(f"   ❌ Erro: {error}")
+            await recorder.stop(save=False)
+            return False, False
+        print("   ✅ Email digitado")
+        
+        # 3. Digitar senha
+        print("3️⃣  Digitando senha...")
+        success, error = await run_with_timeout(
+            handlers.handle_pw_type('admin into "Senha"'),
+            timeout_seconds=10.0,
+            step_name="type password"
+        )
+        if not success:
+            success, error = await run_with_timeout(
+                handlers.handle_pw_type('admin into "Password"'),
+                timeout_seconds=10.0,
+                step_name="type password (fallback)"
+            )
+        if not success:
+            print(f"   ❌ Erro: {error}")
+            await recorder.stop(save=False)
+            return False, False
+        print("   ✅ Senha digitada")
+        
+        # 4. Submeter formulário
+        print("4️⃣  Submetendo formulário...")
+        success, error = await run_with_timeout(
+            handlers.handle_pw_submit('Entrar'),
+            timeout_seconds=10.0,
+            step_name="submit"
+        )
+        if not success:
+            print(f"   ❌ Erro: {error}")
+            await recorder.stop(save=False)
+            return False, False
+        print("   ✅ Formulário submetido")
+        
+        # Aguardar navegação
+        if page and recorder.fast_mode:
+            try:
+                initial_url = page.url
+                await asyncio.wait_for(
+                    page.wait_for_function(
+                        f"window.location.href !== '{initial_url}'",
+                        timeout=3000
+                    ),
+                    timeout=1.0
+                )
+            except:
+                pass
+            await asyncio.sleep(0.5)
+        
+        # 5. Salvar e parar
+        print("5️⃣  Salvando YAML...")
+        success, error = await run_with_timeout(
+            handlers.handle_save(''),
+            timeout_seconds=3.0,
+            step_name="save"
+        )
+        if success:
+            print("   ✅ YAML salvo")
+        else:
+            print(f"   ⚠️  Erro ao salvar: {error}")
+        
+        # Parar recorder
+        recorder.is_recording = False
+        try:
+            await asyncio.wait_for(recorder.stop(save=False), timeout=3.0)
+        except:
+            pass
+        recorder_task.cancel()
+        try:
+            await asyncio.wait_for(recorder_task, timeout=0.5)
+        except:
+            pass
         
         # Verificar se YAML foi gerado
         generated_yaml = project_root / "test_odoo_login_real.yaml"
@@ -173,8 +349,8 @@ async def run_generation():
             print(f"\n❌ YAML não foi gerado!")
             return False, False
             
-    except subprocess.TimeoutExpired:
-        print(f"\n⏱️  Timeout ao gerar YAML (120s)")
+    except asyncio.TimeoutError:
+        print(f"\n⏱️  Timeout ao gerar YAML")
         return False, False
     except Exception as e:
         print(f"\n❌ Erro ao gerar YAML: {e}")
@@ -242,11 +418,12 @@ async def run_reproduction():
                 pass
     
     # Executar script de reprodução
-    print(f"▶️  Executando: python3 test_replay_yaml_with_video.py {YAML_PATH}")
+    headless_flag = "--headless" if HEADLESS else "--no-headless"
+    print(f"▶️  Executando: python3 test_replay_yaml_with_video.py {YAML_PATH} {headless_flag}")
     print(f"📹 Vídeo será gravado em: {VIDEOS_DIR}")
     try:
         result = subprocess.run(
-            ["python3", "test_replay_yaml_with_video.py", str(YAML_PATH)],
+            ["python3", "test_replay_yaml_with_video.py", str(YAML_PATH), headless_flag],
             cwd=project_root,
             capture_output=True,
             text=True,
@@ -272,6 +449,7 @@ async def run_reproduction():
             print(f"\n✅ Vídeo gerado com sucesso!")
             print(f"   Arquivo: {video_path}")
             print(f"   Tamanho: {video_size_mb:.2f} MB")
+            print(f"\n💡 Valide o teste assistindo ao vídeo gerado")
         else:
             print(f"\n⚠️  Vídeo não foi encontrado em: {VIDEOS_DIR}")
             print(f"   Verifique se a configuração de vídeo está correta no YAML")
@@ -336,7 +514,9 @@ async def main():
     
     video_exists, video_path = validate_video_file(test_name)
     if video_exists:
-        print(f"📹 Vídeo: ✅ Gerado em {video_path}")
+        video_size = video_path.stat().st_size / (1024 * 1024)
+        print(f"📹 Vídeo: ✅ Gerado em {video_path} ({video_size:.2f} MB)")
+        print(f"\n💡 Valide o teste assistindo ao vídeo gerado")
     else:
         print(f"📹 Vídeo: ❌ Não foi gerado")
     
@@ -344,6 +524,7 @@ async def main():
         print(f"\n🎉 CICLO COMPLETO COM VÍDEO EXECUTADO COM SUCESSO!")
         print(f"   YAML: {YAML_PATH}")
         print(f"   Vídeo: {video_path}")
+        print(f"\n💡 Valide o teste assistindo ao vídeo gerado")
         return 0
     else:
         print(f"\n⚠️  CICLO COMPLETO COM PROBLEMAS")

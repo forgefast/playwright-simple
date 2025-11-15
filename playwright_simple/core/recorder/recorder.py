@@ -227,6 +227,11 @@ class Recorder:
                     **video_options
                 )
                 
+                # Set longer timeouts for video recording to ensure all actions are captured
+                # Default Playwright timeout is 30s, but we set it higher for video
+                context.set_default_timeout(60000)  # 60 seconds
+                context.set_default_navigation_timeout(60000)  # 60 seconds
+                
                 # Register context for video management
                 self.video_manager.register_context(context, test_name)
                 
@@ -474,29 +479,49 @@ class Recorder:
             try:
                 test_name = self.yaml_data.get('name', 'playback') if self.yaml_data else 'playback'
                 
+                # Wait a bit before closing context to ensure all actions are captured
+                # This is important for video recording - gives time for final actions to complete
+                await asyncio.sleep(1.0)
+                logger.info("Waiting before closing context to ensure video captures all actions")
+                
                 # Close context first (this finalizes video)
                 if hasattr(self, '_context') and self._context:
                     await self._context.close()
                     logger.info("Context closed, video should be finalized")
                 
-                # Wait for video to be finalized
-                await asyncio.sleep(VIDEO_FINALIZATION_DELAY)
-                
-                # Find the most recently created video file in video_dir
+                # Wait for video to be finalized - Playwright saves videos asynchronously
+                # We need to wait and check periodically
                 import re
+                import time
                 video_extensions = ['.webm', '.mp4']
-                all_videos = []
-                for ext in video_extensions:
-                    all_videos.extend(list(self.video_manager.video_dir.glob(f"*{ext}")))
+                expected_name = f"{test_name}.webm" if self.video_config.codec == "webm" else f"{test_name}.mp4"
+                expected_path = self.video_manager.video_dir / expected_name
                 
-                if all_videos:
-                    # Get the most recent video (should be from this test)
-                    found_video = max(all_videos, key=lambda p: p.stat().st_mtime)
+                # Wait up to 10 seconds for video to be created
+                max_wait_time = 10.0
+                wait_interval = 0.5
+                waited = 0.0
+                found_video = None
+                
+                while waited < max_wait_time:
+                    # Check for video files
+                    all_videos = []
+                    for ext in video_extensions:
+                        all_videos.extend(list(self.video_manager.video_dir.glob(f"*{ext}")))
                     
-                    # Expected name based on test name and codec
-                    expected_name = f"{test_name}.webm" if self.video_config.codec == "webm" else f"{test_name}.mp4"
-                    expected_path = self.video_manager.video_dir / expected_name
+                    if all_videos:
+                        # Get the most recent video (should be from this test)
+                        found_video = max(all_videos, key=lambda p: p.stat().st_mtime)
+                        # Check if video was created recently (within last 15 seconds)
+                        video_age = time.time() - found_video.stat().st_mtime
+                        if video_age < 15:
+                            # Video found and recent, break
+                            break
                     
+                    await asyncio.sleep(wait_interval)
+                    waited += wait_interval
+                
+                if found_video:
                     # Rename video to test name
                     if found_video != expected_path:
                         if expected_path.exists():
@@ -508,8 +533,13 @@ class Recorder:
                         logger.info(f"Video already has correct name: {expected_path.name}")
                         print(f"📹 Vídeo salvo: {expected_path.name}")
                     
-                    # Clean up old videos with hash-based names
-                    for video_file in all_videos:
+                    # Clean up old videos with hash-based names (after renaming)
+                    # Re-scan to get updated list
+                    all_videos_after = []
+                    for ext in video_extensions:
+                        all_videos_after.extend(list(self.video_manager.video_dir.glob(f"*{ext}")))
+                    
+                    for video_file in all_videos_after:
                         if video_file == expected_path:
                             continue
                         
@@ -524,7 +554,8 @@ class Recorder:
                             except Exception as e:
                                 logger.warning(f"Error deleting old video {video_file.name}: {e}")
                 else:
-                    logger.warning("No video files found in video directory")
+                    logger.warning("No video files found in video directory after waiting")
+                    print(f"⚠️  Vídeo não foi encontrado após {max_wait_time}s de espera")
                 
                 # Close browser and playwright
                 if hasattr(self, '_browser') and self._browser:

@@ -79,6 +79,13 @@ class CommandServer:
         self.register_handler('caption', self._handle_caption)
         self.register_handler('audio', self._handle_audio)
         self.register_handler('screenshot', self._handle_screenshot)
+        
+        # Video config commands (simple implementation)
+        self.register_handler('video-enable', self._handle_video_enable)
+        self.register_handler('video-disable', self._handle_video_disable)
+        self.register_handler('video-quality', self._handle_video_quality)
+        self.register_handler('video-codec', self._handle_video_codec)
+        self.register_handler('video-dir', self._handle_video_dir)
     
     def register_handler(self, command: str, handler: Callable):
         """Register a command handler."""
@@ -510,6 +517,59 @@ class CommandServer:
         name = args.strip().strip('"\'') if args.strip() else None
         await self.recorder.command_handlers.handle_screenshot(name or '')
         return {'success': True, 'message': f'Screenshot added: {name or "auto"}'}
+    
+    def _get_yaml_writer(self):
+        """Get YAML writer from recorder."""
+        if hasattr(self.recorder, 'yaml_writer') and self.recorder.yaml_writer:
+            return self.recorder.yaml_writer
+        return None
+    
+    async def _handle_video_enable(self, args: str) -> Dict[str, Any]:
+        """Handle video-enable command."""
+        yaml_writer = self._get_yaml_writer()
+        if not yaml_writer:
+            return {'error': 'YAML writer not available (not in write mode)'}
+        yaml_writer.set_config('video', 'enabled', True)
+        return {'success': True, 'message': 'Video recording enabled in YAML'}
+    
+    async def _handle_video_disable(self, args: str) -> Dict[str, Any]:
+        """Handle video-disable command."""
+        yaml_writer = self._get_yaml_writer()
+        if not yaml_writer:
+            return {'error': 'YAML writer not available (not in write mode)'}
+        yaml_writer.set_config('video', 'enabled', False)
+        return {'success': True, 'message': 'Video recording disabled in YAML'}
+    
+    async def _handle_video_quality(self, args: str) -> Dict[str, Any]:
+        """Handle video-quality command."""
+        yaml_writer = self._get_yaml_writer()
+        if not yaml_writer:
+            return {'error': 'YAML writer not available (not in write mode)'}
+        quality = args.strip().lower()
+        if quality not in ['low', 'medium', 'high']:
+            return {'error': f'Invalid quality: {quality}. Must be low, medium, or high'}
+        yaml_writer.set_config('video', 'quality', quality)
+        return {'success': True, 'message': f'Video quality set to: {quality}'}
+    
+    async def _handle_video_codec(self, args: str) -> Dict[str, Any]:
+        """Handle video-codec command."""
+        yaml_writer = self._get_yaml_writer()
+        if not yaml_writer:
+            return {'error': 'YAML writer not available (not in write mode)'}
+        codec = args.strip().lower()
+        if codec not in ['webm', 'mp4']:
+            return {'error': f'Invalid codec: {codec}. Must be webm or mp4'}
+        yaml_writer.set_config('video', 'codec', codec)
+        return {'success': True, 'message': f'Video codec set to: {codec}'}
+    
+    async def _handle_video_dir(self, args: str) -> Dict[str, Any]:
+        """Handle video-dir command."""
+        yaml_writer = self._get_yaml_writer()
+        if not yaml_writer:
+            return {'error': 'YAML writer not available (not in write mode)'}
+        video_dir = args.strip().strip('"\'')
+        yaml_writer.set_config('video', 'dir', video_dir)
+        return {'success': True, 'message': f'Video directory set to: {video_dir}'}
 
 
 def find_active_sessions() -> list:

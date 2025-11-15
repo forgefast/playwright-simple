@@ -20,17 +20,22 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-async def replay_yaml(yaml_path: Path):
+async def replay_yaml(yaml_path: Path, headless: bool = True):
     """Reproduzir um teste YAML usando Recorder diretamente com vídeo."""
     logger.info(f"Iniciando replay do YAML: {yaml_path}")
     print(f"📄 Carregando YAML: {yaml_path}")
+    
+    if headless:
+        print(f"🔇 Modo headless: browser não será visível")
+    else:
+        print(f"👁️  Modo visível: browser será exibido")
     
     # Criar Recorder em modo read (vai ler configuração de vídeo do YAML)
     logger.info("Criando Recorder em modo read...")
     recorder = Recorder(
         output_path=yaml_path,  # Input YAML file
         initial_url=None,  # Will be read from YAML
-        headless=False,
+        headless=headless,
         debug=False,
         fast_mode=True,  # Usar fast mode na reprodução
         mode='read'  # Read mode: import YAML instead of export
@@ -63,14 +68,24 @@ async def replay_yaml(yaml_path: Path):
 
 if __name__ == '__main__':
     # Aceitar YAML como argumento ou usar padrão
-    if len(sys.argv) > 1:
-        yaml_path = Path(sys.argv[1])
-    else:
+    # Aceitar --headless ou --no-headless
+    headless = True  # Padrão: headless
+    yaml_path = None
+    
+    for i, arg in enumerate(sys.argv[1:], 1):
+        if arg == '--headless':
+            headless = True
+        elif arg == '--no-headless':
+            headless = False
+        elif not arg.startswith('--'):
+            yaml_path = Path(arg)
+    
+    if not yaml_path:
         yaml_path = Path('test_odoo_v18_with_video.yaml')
     
     if not yaml_path.exists():
         print(f"❌ YAML não encontrado: {yaml_path}")
-        print(f"   Uso: python3 {sys.argv[0]} [caminho_do_yaml]")
+        print(f"   Uso: python3 {sys.argv[0]} [caminho_do_yaml] [--headless|--no-headless]")
         exit(1)
     
     # Limpar processos órfãos antes de iniciar
@@ -84,7 +99,7 @@ if __name__ == '__main__':
     
     # Timeout aumentado para permitir gravação de vídeo (5 minutos)
     try:
-        asyncio.run(asyncio.wait_for(replay_yaml(yaml_path), timeout=300.0))
+        asyncio.run(asyncio.wait_for(replay_yaml(yaml_path, headless=headless), timeout=300.0))
     except asyncio.TimeoutError:
         print("❌ Timeout: O teste demorou mais de 5 minutos")
         # Limpar processos órfãos mesmo em caso de timeout
