@@ -54,8 +54,18 @@ class BrowserManager:
             video_path.mkdir(parents=True, exist_ok=True)
             context_options['record_video_dir'] = str(video_path)
             context_options['record_video_size'] = self.viewport
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"BrowserManager: Adding video recording to context: record_video_dir={context_options['record_video_dir']}, record_video_size={context_options['record_video_size']}")
         
         self.context = await self.browser.new_context(**context_options)
+        
+        # Log context creation for debugging
+        if self.record_video:
+            import logging
+            logger = logging.getLogger(__name__)
+            context_opts = getattr(self.context, '_options', {})
+            logger.info(f"BrowserManager: Context created with video: context={id(self.context)}, has record_video_dir={('record_video_dir' in context_opts) or ('recordVideo' in str(context_opts))}")
         self.page = await self.context.new_page()
         return self.page
     
