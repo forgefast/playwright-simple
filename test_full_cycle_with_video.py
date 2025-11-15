@@ -217,6 +217,9 @@ async def run_generation():
             return False, False
         print("   ✅ Clique executado")
         
+        # Adicionar legenda ao step
+        await handlers.handle_subtitle("Clicando no botão Entrar")
+        
         # Aguardar página de login
         if page:
             try:
@@ -246,6 +249,9 @@ async def run_generation():
             return False, False
         print("   ✅ Email digitado")
         
+        # Adicionar legenda ao step
+        await handlers.handle_subtitle("Digitando email do administrador")
+        
         # 3. Digitar senha
         print("3️⃣  Digitando senha...")
         success, error = await run_with_timeout(
@@ -265,6 +271,9 @@ async def run_generation():
             return False, False
         print("   ✅ Senha digitada")
         
+        # Adicionar legenda ao step
+        await handlers.handle_subtitle("Digitando senha do administrador")
+        
         # 4. Submeter formulário
         print("4️⃣  Submetendo formulário...")
         success, error = await run_with_timeout(
@@ -277,6 +286,9 @@ async def run_generation():
             await recorder.stop(save=False)
             return False, False
         print("   ✅ Formulário submetido")
+        
+        # Adicionar legenda ao step
+        await handlers.handle_subtitle("Submetendo formulário de login")
         
         # Aguardar navegação
         if page and recorder.fast_mode:
@@ -365,24 +377,33 @@ def add_video_config_to_yaml(yaml_path: Path):
         with open(yaml_path, 'r', encoding='utf-8') as f:
             yaml_content = yaml.safe_load(f)
         
-        if not yaml_content:
-            yaml_content = {}
-        
+        # Adicionar configuração de vídeo com legendas
         if 'config' not in yaml_content:
             yaml_content['config'] = {}
         
-        # Configuração básica de vídeo
-        yaml_content['config']['video'] = {
-            'enabled': True,
-            'quality': 'high',
-            'codec': 'webm',
-            'dir': 'videos'
-        }
+        if 'video' not in yaml_content['config']:
+            yaml_content['config']['video'] = {
+                'enabled': True,
+                'quality': 'high',
+                'codec': 'mp4',  # Usar mp4 ao invés de webm
+                'dir': 'videos',
+                'subtitles': True,  # Habilitar legendas
+                'hard_subtitles': True  # Queimar legendas no vídeo
+            }
+        else:
+            # Atualizar configuração existente para incluir legendas e mp4
+            video_config = yaml_content['config']['video']
+            video_config['codec'] = 'mp4'  # Forçar mp4
+            if 'subtitles' not in video_config:
+                video_config['subtitles'] = True
+            if 'hard_subtitles' not in video_config:
+                video_config['hard_subtitles'] = True
         
+        # Salvar YAML atualizado
         with open(yaml_path, 'w', encoding='utf-8') as f:
-            yaml.dump(yaml_content, f, default_flow_style=False, allow_unicode=True, sort_keys=False, width=120)
+            yaml.dump(yaml_content, f, allow_unicode=True, default_flow_style=False, sort_keys=False, width=120)
         
-        print(f"✅ Configuração básica de vídeo adicionada")
+        print(f"✅ Configuração de vídeo com legendas adicionada ao YAML")
     except Exception as e:
         print(f"⚠️  Erro ao adicionar configuração de vídeo: {e}")
 

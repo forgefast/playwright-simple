@@ -89,6 +89,10 @@ class CommandHandlers:
         """Handle caption command."""
         await self._metadata.handle_caption(args)
     
+    async def handle_subtitle(self, args: str) -> None:
+        """Handle subtitle command."""
+        await self._metadata.handle_subtitle(args)
+    
     async def handle_audio(self, args: str) -> None:
         """Handle audio command."""
         await self._metadata.handle_audio(args)

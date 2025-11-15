@@ -23,6 +23,17 @@ class MetadataHandlers:
         self.yaml_writer.add_caption(args)
         print(f"📝 Caption added: {args}")
     
+    async def handle_subtitle(self, args: str) -> None:
+        """Handle subtitle command - adds subtitle to last step."""
+        # Empty string is valid (clears subtitle)
+        text = args if args is not None else ""
+        
+        self.yaml_writer.add_subtitle_to_last_step(text)
+        if text:
+            print(f"📝 Subtitle added to last step: {text}")
+        else:
+            print(f"📝 Subtitle cleared from last step")
+    
     async def handle_audio(self, args: str) -> None:
         """Handle audio command."""
         if not args:

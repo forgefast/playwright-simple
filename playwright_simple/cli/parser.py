@@ -146,8 +146,11 @@ def _add_command_parsers(subparsers):
     start_parser = subparsers.add_parser('start', help='Iniciar gravação')
     
     # Metadata commands
-    caption_parser = subparsers.add_parser('caption', help='Adicionar legenda/subtítulo')
+    caption_parser = subparsers.add_parser('caption', help='Adicionar legenda/subtítulo (cria step separado)')
     caption_parser.add_argument('text', type=str, help='Texto da legenda')
+    
+    subtitle_parser = subparsers.add_parser('subtitle', help='Adicionar legenda ao último step (para vídeo)')
+    subtitle_parser.add_argument('text', type=str, nargs='?', default='', help='Texto da legenda (vazio para limpar)')
     
     audio_parser = subparsers.add_parser('audio', help='Adicionar narração de áudio')
     audio_parser.add_argument('text', type=str, help='Texto para narração')

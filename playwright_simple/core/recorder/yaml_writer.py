@@ -63,6 +63,24 @@ class YAMLWriter:
             'caption': text
         })
     
+    def add_subtitle_to_last_step(self, text: str):
+        """
+        Add subtitle to the last step (for video subtitles).
+        
+        This adds the 'subtitle' field to the most recently added step,
+        which will be used for video subtitle generation.
+        
+        Args:
+            text: Subtitle text (empty string to clear)
+        """
+        if not self.steps:
+            logger.warning("No steps to add subtitle to")
+            return
+        
+        # Add subtitle to last step
+        self.steps[-1]['subtitle'] = text
+        logger.info(f"Added subtitle to last step: {text}")
+    
     def add_audio(self, text: str):
         """
         Add audio/narration step.

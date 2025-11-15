@@ -185,6 +185,7 @@ class Recorder:
         self.console.register_command('pause', self.command_handlers.handle_pause)
         self.console.register_command('resume', self.command_handlers.handle_resume)
         self.console.register_command('caption', self.command_handlers.handle_caption)
+        self.console.register_command('subtitle', self.command_handlers.handle_subtitle)
         self.console.register_command('audio', self.command_handlers.handle_audio)
         self.console.register_command('screenshot', self.command_handlers.handle_screenshot)
         
@@ -557,8 +558,11 @@ class Recorder:
                 import re
                 import time
                 video_extensions = ['.webm', '.mp4']
-                expected_name = f"{test_name}.webm" if self.video_config.codec == "webm" else f"{test_name}.mp4"
-                expected_path = self.video_manager.video_dir / expected_name
+                # Playwright always saves as .webm initially, we'll convert if needed
+                expected_name_initial = f"{test_name}.webm"  # Playwright default
+                expected_name_final = f"{test_name}.mp4" if self.video_config.codec == "mp4" else f"{test_name}.webm"
+                expected_path_initial = self.video_manager.video_dir / expected_name_initial
+                expected_path_final = self.video_manager.video_dir / expected_name_final
                 
                 # Wait up to 10 seconds for video to be created
                 max_wait_time = 10.0
@@ -585,16 +589,55 @@ class Recorder:
                     waited += wait_interval
                 
                 if found_video:
-                    # Rename video to test name
-                    if found_video != expected_path:
-                        if expected_path.exists():
-                            expected_path.unlink()
-                        found_video.rename(expected_path)
-                        logger.info(f"Video renamed to: {expected_path.name}")
-                        print(f"📹 Vídeo renomeado para: {expected_path.name}")
+                    # Convert to MP4 if needed
+                    if self.video_config.codec == "mp4" and found_video.suffix == '.webm':
+                        logger.info(f"Converting video from webm to mp4...")
+                        print(f"🔄 Convertendo vídeo de webm para mp4...")
+                        try:
+                            import subprocess
+                            mp4_path = found_video.parent / f"{found_video.stem}.mp4"
+                            cmd = [
+                                'ffmpeg',
+                                '-i', str(found_video),
+                                '-c:v', 'libx264',
+                                '-c:a', 'aac',
+                                '-movflags', '+faststart',
+                                '-y',
+                                str(mp4_path)
+                            ]
+                            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+                            if result.returncode == 0 and mp4_path.exists():
+                                found_video.unlink()
+                                found_video = mp4_path
+                                logger.info(f"Video converted to mp4: {mp4_path.name}")
+                                print(f"✅ Vídeo convertido para mp4")
+                            else:
+                                logger.warning(f"Video conversion failed: {result.stderr[:200]}")
+                                print(f"⚠️  Erro ao converter vídeo, mantendo webm")
+                        except Exception as e:
+                            logger.warning(f"Error converting video: {e}", exc_info=True)
+                            print(f"⚠️  Erro ao converter vídeo: {e}")
+                    
+                    # Rename video to final expected name
+                    if found_video != expected_path_final:
+                        if expected_path_final.exists():
+                            expected_path_final.unlink()
+                        found_video.rename(expected_path_final)
+                        logger.info(f"Video renamed to: {expected_path_final.name}")
+                        print(f"📹 Vídeo renomeado para: {expected_path_final.name}")
                     else:
-                        logger.info(f"Video already has correct name: {expected_path.name}")
-                        print(f"📹 Vídeo salvo: {expected_path.name}")
+                        logger.info(f"Video already has correct name: {expected_path_final.name}")
+                        print(f"📹 Vídeo salvo: {expected_path_final.name}")
+                    
+                    # Generate and add subtitles if enabled
+                    if self.video_config.subtitles and hasattr(self, 'step_timestamps') and self.step_timestamps:
+                        logger.info("🎬 Generating subtitles for video...")
+                        print(f"📝 Gerando legendas para o vídeo...")
+                        try:
+                            await self._generate_and_add_subtitles(expected_path_final)
+                        except Exception as e:
+                            logger.warning(f"Error generating subtitles: {e}", exc_info=True)
+                            print(f"⚠️  Erro ao gerar legendas: {e}")
                     
                     # Clean up old videos with hash-based names (after renaming)
                     # Re-scan to get updated list
@@ -603,7 +646,7 @@ class Recorder:
                         all_videos_after.extend(list(self.video_manager.video_dir.glob(f"*{ext}")))
                     
                     for video_file in all_videos_after:
-                        if video_file == expected_path:
+                        if video_file == expected_path_final:
                             continue
                         
                         video_name = video_file.stem
@@ -646,6 +689,249 @@ class Recorder:
             logger.info("Browser closed successfully")
         except Exception as e:
             logger.error(f"Error closing browser: {e}", exc_info=True)
+    
+    def _format_srt_time(self, seconds: float) -> str:
+        """Format seconds to SRT time format (HH:MM:SS,mmm)."""
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        secs = int(seconds % 60)
+        millis = int((seconds % 1) * 1000)
+        return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
+    
+    async def _generate_srt_file(self, video_path: Path) -> Optional[Path]:
+        """
+        Generate SRT subtitle file from step timestamps.
+        
+        Args:
+            video_path: Path to video file
+            
+        Returns:
+            Path to SRT file, or None if generation failed
+        """
+        if not hasattr(self, 'step_timestamps') or not self.step_timestamps:
+            logger.warning("No step timestamps available for subtitle generation")
+            return None
+        
+        srt_path = video_path.parent / f"{video_path.stem}.srt"
+        min_duration = 0.5  # Minimum subtitle duration in seconds
+        gap = 0.1  # Gap between subtitles to prevent overlap
+        
+        try:
+            with open(srt_path, 'w', encoding='utf-8') as f:
+                subtitle_index = 1
+                
+                # Process steps and eliminate overlaps
+                processed_steps = []
+                for step_data in self.step_timestamps:
+                    step_start = step_data.get('start_time', 0)
+                    step_end = step_data.get('end_time', step_start + 1.0)
+                    step_duration = step_end - step_start
+                    
+                    # Get text from step (use subtitle field, not description)
+                    step_text = step_data.get('subtitle')
+                    if not step_text:
+                        # If no subtitle, skip this step (for continuity, we only show steps with subtitles)
+                        continue
+                    
+                    # Ensure minimum duration
+                    if step_duration < min_duration:
+                        step_end = step_start + min_duration
+                        step_duration = min_duration
+                    
+                    processed_steps.append({
+                        'start': step_start,
+                        'end': step_end,
+                        'text': step_text,
+                        'duration': step_duration
+                    })
+                
+                # Adjust end times for subtitle continuity
+                # If a step has a subtitle and the next step doesn't have one (or has same),
+                # extend current subtitle until next step with different subtitle
+                for i in range(len(processed_steps)):
+                    current = processed_steps[i]
+                    # Find next step with a different subtitle (or end of list)
+                    next_different_index = None
+                    for j in range(i + 1, len(processed_steps)):
+                        next_step = processed_steps[j]
+                        if next_step['text'] != current['text']:
+                            next_different_index = j
+                            break
+                    
+                    if next_different_index is not None:
+                        # Extend current subtitle until next different subtitle starts
+                        next_step = processed_steps[next_different_index]
+                        current['end'] = next_step['start'] - gap
+                        current['duration'] = current['end'] - current['start']
+                    # If no next different subtitle, keep original end time
+                
+                # Adjust end times to prevent overlaps (after continuity extension)
+                for i in range(len(processed_steps)):
+                    current = processed_steps[i]
+                    # Find next step that starts before this one ends
+                    for j in range(i + 1, len(processed_steps)):
+                        next_step = processed_steps[j]
+                        if next_step['start'] <= current['end']:
+                            # Adjust current end to be before next start
+                            new_end = next_step['start'] - gap
+                            new_end = max(current['start'] + 0.1, new_end)  # Minimum 0.1s visibility
+                            current['end'] = new_end
+                            current['duration'] = new_end - current['start']
+                            break
+                
+                # Write SRT entries
+                for step in processed_steps:
+                    if step['end'] > step['start'] and step['text']:
+                        start_str = self._format_srt_time(step['start'])
+                        end_str = self._format_srt_time(step['end'])
+                        f.write(f"{subtitle_index}\n")
+                        f.write(f"{start_str} --> {end_str}\n")
+                        f.write(f"{step['text']}\n\n")
+                        subtitle_index += 1
+            
+            logger.info(f"SRT file generated: {srt_path}")
+            return srt_path
+        except Exception as e:
+            logger.error(f"Error generating SRT file: {e}", exc_info=True)
+            return None
+    
+    async def _generate_and_add_subtitles(self, video_path: Path) -> Optional[Path]:
+        """
+        Generate SRT file and add subtitles to video.
+        
+        Args:
+            video_path: Path to video file
+            
+        Returns:
+            Path to video with subtitles, or original path if processing failed
+        """
+        # Generate SRT file
+        srt_path = await self._generate_srt_file(video_path)
+        if not srt_path or not srt_path.exists():
+            logger.warning("SRT file not generated, skipping subtitle processing")
+            return video_path
+        
+        # Check if hard_subtitles is enabled
+        if not self.video_config.hard_subtitles:
+            logger.info("Hard subtitles disabled, SRT file generated but not embedded")
+            print(f"📝 Arquivo SRT gerado: {srt_path.name} (não queimado no vídeo)")
+            return video_path
+        
+        # Check if ffmpeg is available
+        try:
+            import subprocess
+            subprocess.run(['ffmpeg', '-version'], capture_output=True, check=True, timeout=5)
+        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+            logger.warning("ffmpeg not found, cannot embed subtitles")
+            print(f"⚠️  ffmpeg não encontrado. Legendas não serão queimadas no vídeo.")
+            return video_path
+        
+        # Process video with ffmpeg to embed subtitles
+        output_path = video_path.parent / f"{video_path.stem}_with_subtitles{video_path.suffix}"
+        
+        try:
+            import subprocess
+            # Escape SRT filename for ffmpeg filter
+            srt_filename = srt_path.name
+            srt_escaped = srt_filename.replace(':', '\\:').replace('[', '\\[').replace(']', '\\]').replace("'", "\\'")
+            
+            # Determine codec based on output file extension or config
+            output_ext = output_path.suffix.lower()
+            if output_ext == '.mp4' or self.video_config.codec == 'mp4':
+                video_codec = 'libx264'
+                audio_codec = 'aac'  # MP4 requires AAC audio
+            else:
+                video_codec = 'libvpx-vp9'
+                audio_codec = 'copy'
+            
+            cmd = [
+                'ffmpeg',
+                '-i', str(video_path),
+                '-vf', f"subtitles='{srt_escaped}':force_style='FontSize=24,PrimaryColour=&Hffffff,OutlineColour=&H000000,Outline=2,Alignment=2,MarginV=20'",
+                '-c:v', video_codec,
+                '-c:a', audio_codec,
+                '-y',
+                str(output_path)
+            ]
+            
+            # If converting to MP4, ensure proper format
+            if output_ext == '.mp4' or self.video_config.codec == 'mp4':
+                # Add MP4-specific options
+                cmd.insert(-2, '-movflags')  # Insert before output path
+                cmd.insert(-2, '+faststart')  # Fast start for web playback
+            
+            logger.info(f"Processing video with subtitles: {srt_path.name}")
+            print(f"🎬 Processando vídeo com legendas...")
+            
+            result = subprocess.run(
+                cmd,
+                cwd=str(video_path.parent),  # Run from video directory so SRT path is relative
+                capture_output=True,
+                text=True,
+                timeout=300
+            )
+            
+            if result.returncode == 0 and output_path.exists():
+                # Replace original video with subtitled version
+                video_path.unlink()
+                output_path.rename(video_path)
+                srt_path.unlink()  # Clean up SRT file
+                logger.info(f"Video processed with subtitles: {video_path.name}")
+                print(f"✅ Vídeo processado com legendas: {video_path.name}")
+                return video_path
+            else:
+                logger.warning(f"ffmpeg failed: {result.stderr[:200]}")
+                print(f"⚠️  Erro ao processar vídeo com legendas")
+                if output_path.exists():
+                    output_path.unlink()
+                return video_path
+        except Exception as e:
+            logger.error(f"Error processing video with subtitles: {e}", exc_info=True)
+            print(f"⚠️  Erro ao processar vídeo: {e}")
+            if output_path.exists():
+                output_path.unlink()
+            return video_path
+    
+    async def _wait_for_page_stable(self, timeout: float = 10.0) -> None:
+        """
+        Wait for page to stabilize after an action.
+        
+        This implements dynamic wait that detects when page stops changing:
+        - Waits for network idle
+        - Waits for DOM to stabilize
+        - Waits for any loading indicators to disappear
+        
+        Args:
+            timeout: Maximum time to wait in seconds
+        """
+        try:
+            # First, wait for DOM to be ready
+            await self.page.wait_for_load_state('domcontentloaded', timeout=int(timeout * 1000))
+        except Exception:
+            pass
+        
+        try:
+            # Wait for network to be idle (no requests for 500ms)
+            await self.page.wait_for_load_state('networkidle', timeout=int(timeout * 1000))
+        except Exception:
+            # Fallback: wait for load state
+            try:
+                await self.page.wait_for_load_state('load', timeout=int(timeout * 1000))
+            except Exception:
+                pass
+        
+        # Additional wait for dynamic content (Odoo, HTMX, etc.)
+        # Check if page is still loading by monitoring DOM changes
+        try:
+            initial_html = await self.page.content()
+            await asyncio.sleep(0.5)  # Wait a bit
+            final_html = await self.page.content()
+            
+            # If HTML changed, wait a bit more
+            if initial_html != final_html:
+                await asyncio.sleep(0.5)
+        except Exception:
+            pass
     
     async def _wait_for_exit(self):
         """Wait for exit command."""
@@ -690,40 +976,71 @@ class Recorder:
                 video_enabled = 'record_video_dir' in str(self.browser_manager.context._options)
                 context_info += f', video={video_enabled}'
         
-        # Track video recording start time
+        # Track video recording start time and step timestamps for subtitles
         import time
-        video_start_time = time.time()
-        logger.info(f"🎬 VIDEO DEBUG: Starting YAML steps execution at {video_start_time:.2f}")
+        # Use video_start_time (datetime) to calculate correct timestamps
+        if hasattr(self, 'video_start_time') and self.video_start_time:
+            video_start_datetime = self.video_start_time
+        else:
+            # Fallback: use current time if video_start_time not set
+            video_start_datetime = datetime.now()
+        
+        video_start_timestamp = time.time()
+        self.step_timestamps = []  # Store timestamps for subtitle generation
+        logger.info(f"🎬 VIDEO DEBUG: Starting YAML steps execution at {video_start_timestamp:.2f}")
         logger.info(f"Executing {len(self.yaml_steps)} YAML steps on page={id(self.page)}, {context_info}, url={page_url}")
+        
+        # Track current subtitle for continuity
+        current_subtitle = None
         
         for i, step in enumerate(self.yaml_steps, 1):
             action = step.get('action')
             description = step.get('description', '')
-            step_start_time = time.time()
-            elapsed = step_start_time - video_start_time
-            logger.info(f"🎬 VIDEO DEBUG: Step {i}/{len(self.yaml_steps)} starting at {elapsed:.2f}s - {action} - {description}")
+            subtitle = step.get('subtitle')  # Use subtitle field, not description
+            
+            # Calculate step start time relative to video start
+            step_start_datetime = datetime.now()
+            step_start_elapsed = (step_start_datetime - video_start_datetime).total_seconds()
+            
+            logger.info(f"🎬 VIDEO DEBUG: Step {i}/{len(self.yaml_steps)} starting at {step_start_elapsed:.2f}s - {action} - {description}")
             logger.info(f"[{i}/{len(self.yaml_steps)}] Executing: {action} - {description}")
+            
+            # Handle subtitle continuity
+            # If step has subtitle, use it; if not, continue previous subtitle
+            if subtitle is not None:
+                if subtitle == '':
+                    # Empty string means clear subtitle
+                    current_subtitle = None
+                else:
+                    current_subtitle = subtitle
+            # If no subtitle field and current_subtitle exists, continue it
+            
+            # Store step start time for subtitle generation
+            step_data = {
+                'step': step,
+                'start_time': step_start_elapsed,  # Relative to video start (datetime-based)
+                'action': action,
+                'description': description,
+                'subtitle': current_subtitle  # Store current subtitle (may be from previous step)
+            }
             
             try:
                 if action == 'go_to':
                     url = step.get('url')
                     if url:
                         await self.page.goto(url, wait_until='domcontentloaded')
-                        try:
-                            await self.page.wait_for_load_state('networkidle', timeout=10000)
-                        except:
-                            await self.page.wait_for_load_state('load', timeout=5000)
+                        # Use dynamic wait to detect when page stops changing
+                        await self._wait_for_page_stable(timeout=10.0)
                 
                 elif action == 'click':
                     text = step.get('text')
                     selector = step.get('selector')
                     
-                    # Wait for page to be ready before clicking (especially after navigation)
+                    # Wait for page to be ready before clicking
                     try:
                         await self.page.wait_for_load_state('domcontentloaded', timeout=5000)
-                        await self.page.wait_for_load_state('networkidle', timeout=10000)
                     except:
-                        pass  # Continue even if timeout
+                        pass
                     
                     if text:
                         await self.command_handlers.handle_pw_click(f'"{text}"')
@@ -731,6 +1048,9 @@ class Recorder:
                         await self.command_handlers.handle_pw_click(f'selector "{selector}"')
                     else:
                         logger.warning(f"Click step has no text or selector: {step}")
+                    
+                    # Use dynamic wait to detect when page stops changing after click
+                    await self._wait_for_page_stable(timeout=10.0)
                 
                 elif action == 'type':
                     text = step.get('text', '')
@@ -742,6 +1062,9 @@ class Recorder:
                         await self.command_handlers.handle_pw_type(f'"{text}" into "{field_text}"')
                     else:
                         await self.command_handlers.handle_pw_type(f'"{text}"')
+                    
+                    # Use dynamic wait to detect when page stops changing after type
+                    await self._wait_for_page_stable(timeout=5.0)
                 
                 elif action == 'submit':
                     button_text = step.get('button_text') or step.get('text')
@@ -749,20 +1072,34 @@ class Recorder:
                         await self.command_handlers.handle_pw_submit(f'"{button_text}"')
                     else:
                         await self.command_handlers.handle_pw_submit('')
+                    
+                    # Use dynamic wait to detect when page stops changing after submit
+                    await self._wait_for_page_stable(timeout=10.0)
                 
             except Exception as e:
-                step_error_time = time.time()
-                elapsed = step_error_time - video_start_time
-                logger.error(f"🎬 VIDEO DEBUG: Step {i} ERROR at {elapsed:.2f}s")
+                step_error_datetime = datetime.now()
+                step_error_elapsed = (step_error_datetime - video_start_datetime).total_seconds()
+                logger.error(f"🎬 VIDEO DEBUG: Step {i} ERROR at {step_error_elapsed:.2f}s")
                 logger.error(f"Error executing step {i} ({action}): {e}", exc_info=True)
+                # Store error time for subtitle
+                step_data['end_time'] = step_error_elapsed
+                step_data['duration'] = step_error_elapsed - step_data['start_time']
+                self.step_timestamps.append(step_data)
                 raise
             
-            step_end_time = time.time()
-            elapsed = step_end_time - video_start_time
-            logger.info(f"🎬 VIDEO DEBUG: Step {i}/{len(self.yaml_steps)} completed at {elapsed:.2f}s")
+            # Calculate step end time relative to video start
+            step_end_datetime = datetime.now()
+            step_end_elapsed = (step_end_datetime - video_start_datetime).total_seconds()
+            step_duration = step_end_elapsed - step_data['start_time']
+            logger.info(f"🎬 VIDEO DEBUG: Step {i}/{len(self.yaml_steps)} completed at {step_end_elapsed:.2f}s")
+            
+            # Store step end time for subtitle generation
+            step_data['end_time'] = step_end_elapsed
+            step_data['duration'] = step_duration
+            self.step_timestamps.append(step_data)
         
-        steps_end_time = time.time()
-        total_elapsed = steps_end_time - video_start_time
+        steps_end_datetime = datetime.now()
+        total_elapsed = (steps_end_datetime - video_start_datetime).total_seconds()
         logger.info(f"🎬 VIDEO DEBUG: All steps completed at {total_elapsed:.2f}s")
         logger.info("✅ All YAML steps executed successfully")
 
@@ -770,8 +1107,8 @@ class Recorder:
         # This is especially important for the last action
         # Playwright writes video frames asynchronously, so we need to wait for all frames
         await asyncio.sleep(2.0)
-        after_wait_time = time.time()
-        elapsed_after_wait = after_wait_time - video_start_time
+        after_wait_datetime = datetime.now()
+        elapsed_after_wait = (after_wait_datetime - video_start_datetime).total_seconds()
         logger.info(f"🎬 VIDEO DEBUG: After wait delay at {elapsed_after_wait:.2f}s")
         logger.info("Waiting after steps completion to ensure video captures final actions")
         

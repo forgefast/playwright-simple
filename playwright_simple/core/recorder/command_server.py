@@ -77,6 +77,7 @@ class CommandServer:
         
         # Metadata commands
         self.register_handler('caption', self._handle_caption)
+        self.register_handler('subtitle', self._handle_subtitle)
         self.register_handler('audio', self._handle_audio)
         self.register_handler('screenshot', self._handle_screenshot)
         
@@ -495,6 +496,16 @@ class CommandServer:
         
         await self.recorder.command_handlers.handle_caption(text)
         return {'success': True, 'message': f'Caption added: {text}'}
+    
+    async def _handle_subtitle(self, args: str) -> Dict[str, Any]:
+        """Handle subtitle command."""
+        if not hasattr(self.recorder, 'command_handlers'):
+            return {'error': 'Command handlers not available'}
+        
+        text = args.strip().strip('"\'') if args else ""
+        
+        await self.recorder.command_handlers.handle_subtitle(text)
+        return {'success': True, 'message': f'Subtitle added to last step: {text}' if text else 'Subtitle cleared from last step'}
     
     async def _handle_audio(self, args: str) -> Dict[str, Any]:
         """Handle audio command."""

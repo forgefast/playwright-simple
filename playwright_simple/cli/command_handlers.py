@@ -39,6 +39,8 @@ def handle_command_commands(args) -> None:
         _handle_start(args)
     elif args.command == 'caption':
         _handle_caption(args)
+    elif args.command == 'subtitle':
+        _handle_subtitle(args)
     elif args.command == 'audio':
         _handle_audio(args)
     elif args.command == 'screenshot':
@@ -275,6 +277,19 @@ def _handle_caption(args):
     result = send_command('caption', args.text)
     if result.get('success'):
         message = result.get('result', {}).get('message', 'Caption added')
+        print(f"✅ {message}")
+    else:
+        print(f"❌ Erro: {result.get('error', 'Unknown error')}")
+        sys.exit(1)
+
+
+def _handle_subtitle(args):
+    """Handle subtitle command."""
+    text = getattr(args, 'text', '') or ""
+    
+    result = send_command('subtitle', text)
+    if result.get('success'):
+        message = result.get('result', {}).get('message', 'Subtitle added to last step')
         print(f"✅ {message}")
     else:
         print(f"❌ Erro: {result.get('error', 'Unknown error')}")
