@@ -13,6 +13,20 @@
   - Valida YAML gerado para cliques duplicados
   - Valida saída da reprodução para problemas conhecidos
 
+#### test_full_cycle_with_video.py
+- **Função**: Orquestrador completo com gravação de vídeo
+- **Chama**:
+  - `Recorder` em modo 'write' (geração de YAML)
+  - `test_replay_yaml_with_video.py` (reprodução de YAML com vídeo)
+- **Funcionalidades**:
+  - Gera YAML via Recorder diretamente
+  - Adiciona configuração de vídeo ao YAML gerado
+  - Executa reprodução com gravação de vídeo
+  - Valida que vídeo foi gerado corretamente
+- **Configurações**:
+  - Suporta modo headless configurável
+  - Configura vídeo via YAML (enabled, quality, codec, dir)
+
 #### test_odoo_interactive.py
 - **Função**: Geração de YAML através de interação automatizada
 - **Usa**:
@@ -38,6 +52,22 @@
   2. Cria Recorder em modo 'read'
   3. Executa steps do YAML automaticamente
 
+#### test_replay_yaml_with_video.py
+- **Função**: Reprodução de YAML com gravação de vídeo
+- **Usa**:
+  - `Recorder` em modo 'read' com configuração de vídeo do YAML
+- **Funcionalidades**:
+  - Carrega configuração de vídeo do YAML (config.video)
+  - Cria Recorder que detecta e habilita vídeo automaticamente
+  - Grava vídeo no mesmo browser instance que executa os steps
+  - Suporta modo headless configurável via CLI
+- **Fluxo**:
+  1. Carrega YAML do arquivo
+  2. Cria Recorder em modo 'read' (detecta vídeo do YAML)
+  3. Recorder configura browser_manager com vídeo
+  4. Executa steps do YAML (vídeo gravado simultaneamente)
+  5. Finaliza e renomeia vídeo após execução
+
 #### playwright_simple/cli/run_handlers.py
 - **Função**: Handler CLI para comando `run`
 - **Usa**:
@@ -50,9 +80,9 @@
 - **Classe**: `Recorder`
 - **Modos**:
   - `'write'`: Grava interações do usuário
-  - `'read'`: Executa YAML steps
+  - `'read'`: Executa YAML steps (com suporte a vídeo)
 - **Componentes principais**:
-  - `BrowserManager`: Gerencia browser
+  - `BrowserManager`: Gerencia browser (com suporte a vídeo)
   - `EventCapture`: Captura eventos (modo write)
   - `ActionConverter`: Converte eventos em ações
   - `YAMLWriter`: Escreve YAML (modo write)
@@ -60,6 +90,15 @@
   - `EventHandlers`: Handlers de eventos
   - `CommandHandlers`: Handlers de comandos
   - `CommandServer`: Servidor de comandos externos
+  - `VideoManager`: Gerencia gravação de vídeo (modo read, opcional)
+  - `VideoConfig`: Configuração de vídeo (modo read, opcional)
+- **Funcionalidades de Vídeo (modo read)**:
+  - Carrega configuração de vídeo do YAML (`config.video`)
+  - Configura `BrowserManager` com `record_video=True`
+  - Usa mesmo browser instance para vídeo e execução de steps
+  - Finaliza vídeo corretamente após execução
+  - Renomeia vídeo para nome do teste
+  - Logs de debug detalhados para rastreamento
 
 ### Nível 2: Componentes do Recorder (Funcionando ✅)
 
@@ -148,9 +187,14 @@
 
 **utils/browser.py**
 - `BrowserManager`: Gerencia ciclo de vida do browser
-  - `start()`: Inicia browser
+  - `start()`: Inicia browser (com suporte a vídeo se configurado)
   - `stop()`: Para browser
-  - Suporta video recording (opcional)
+  - **Suporte a vídeo**:
+    - `record_video`: Flag para habilitar gravação
+    - `video_dir`: Diretório para salvar vídeos
+    - `viewport`: Tamanho do viewport (usado para vídeo)
+    - Cria context com `record_video_dir` e `record_video_size`
+    - Logs de debug para verificar configuração de vídeo
 
 **command_server.py**
 - Servidor de comandos externos
@@ -166,12 +210,29 @@
 
 **../video.py**
 - `VideoManager`: Gerencia gravação de vídeo
-- Suporta diferentes codecs
+  - `get_context_options()`: Retorna opções de context para Playwright
+  - `register_context()`: Registra context para gerenciamento
+  - `get_video_path()`: Encontra vídeo gerado por nome do teste
+  - `validate_video()`: Valida integridade do vídeo
+- Suporta diferentes codecs (webm, mp4)
 - Gera vídeos com subtítulos (opcional)
+- **Integração com Recorder**:
+  - Carregado automaticamente em modo 'read' se YAML tiver `config.video`
+  - Configura `BrowserManager` para gravar vídeo
+  - Gerencia ciclo de vida do vídeo (início, finalização, renomeação)
 
 **../extensions/video/config.py**
 - `VideoConfig`: Configuração de vídeo
-- Quality, codec, subtitles, etc.
+  - `enabled`: Habilita/desabilita vídeo
+  - `quality`: Qualidade (low, medium, high)
+  - `codec`: Codec (webm, mp4)
+  - `dir`: Diretório para salvar vídeos
+  - `speed`: Velocidade de reprodução
+  - `subtitles`: Habilita legendas
+  - `audio`: Habilita áudio
+- **Carregamento**:
+  - Lido do YAML em `config.video`
+  - Criado automaticamente pelo Recorder em modo 'read'
 
 ### Nível 3: Dependências Externas (Funcionando ✅)
 
@@ -203,12 +264,23 @@
 3. ✅ Navegação automática
 4. ✅ Suporte a fast_mode
 5. ✅ Limpeza de processos órfãos
+6. ✅ **Gravação de vídeo** (se configurado no YAML)
+   - Carrega configuração de vídeo do YAML (`config.video`)
+   - Configura browser com vídeo no mesmo context dos steps
+   - Grava vídeo durante execução completa dos steps
+   - Finaliza e renomeia vídeo corretamente
+   - Valida geração do vídeo
 
 ### Infraestrutura
 1. ✅ Gerenciamento de browser
 2. ✅ Sistema de logging estruturado
 3. ✅ Limpeza de processos órfãos
-4. ✅ Suporte a video (opcional)
+4. ✅ **Suporte a video (testado e funcional)**
+   - Gravação de vídeo no modo read
+   - Configuração via YAML
+   - Mesmo browser instance para vídeo e steps
+   - Finalização e renomeação automática
+   - Logs de debug detalhados
 5. ✅ Suporte a cursor visual (opcional)
 
 ## Padrões de Uso
@@ -238,6 +310,28 @@ recorder = Recorder(
 )
 await recorder.start()
 # Steps são executados automaticamente
+```
+
+### Reprodução com Vídeo
+```python
+# YAML deve ter config.video:
+# config:
+#   video:
+#     enabled: true
+#     quality: high
+#     codec: webm
+#     dir: videos
+
+recorder = Recorder(
+    output_path=Path('test.yaml'),  # YAML com config.video
+    initial_url=None,
+    headless=False,
+    fast_mode=True,
+    mode='read'  # Recorder detecta vídeo automaticamente
+)
+await recorder.start()
+# Steps executados + vídeo gravado simultaneamente
+# Vídeo finalizado e renomeado automaticamente
 ```
 
 ## Notas Importantes
