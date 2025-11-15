@@ -16,11 +16,8 @@ logging.basicConfig(
     datefmt='%H:%M:%S'
 )
 
-# Habilitar logs debug para módulos específicos
-logging.getLogger('playwright_simple.core.yaml_executor').setLevel(logging.DEBUG)
-logging.getLogger('playwright_simple.core.yaml_actions').setLevel(logging.DEBUG)
-logging.getLogger('playwright_simple.core.runner').setLevel(logging.DEBUG)
-logging.getLogger('playwright_simple.core.base').setLevel(logging.DEBUG)
+# Habilitar logs debug para módulos específicos (se necessário)
+# logging.getLogger('playwright_simple.core.recorder').setLevel(logging.DEBUG)
 
 logger = logging.getLogger(__name__)
 
