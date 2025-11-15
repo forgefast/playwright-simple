@@ -552,7 +552,15 @@ class Recorder:
         # Close browser (always, even if save=False)
         # browser_manager handles all browser/context cleanup
         try:
-            await self.browser_manager.stop()
+            # Don't close if we already closed context for video (to avoid double close)
+            if not (self.mode == 'read' and self.video_manager and self.video_config and self.video_config.enabled and self.browser_manager.context):
+                await self.browser_manager.stop()
+            elif self.browser_manager.browser:
+                # Context already closed, just close browser and playwright
+                if self.browser_manager.browser:
+                    await self.browser_manager.browser.close()
+                if self.browser_manager.playwright:
+                    await self.browser_manager.playwright.stop()
             logger.info("Browser closed successfully")
         except Exception as e:
             logger.error(f"Error closing browser: {e}", exc_info=True)
