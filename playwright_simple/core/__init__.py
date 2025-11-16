@@ -7,8 +7,15 @@ This package contains the core functionality of playwright-simple.
 """
 
 from .config import TestConfig
-from .base import SimpleTestBase
-from .runner import TestRunner
+# Lazy imports to avoid circular dependencies
+try:
+    from .base import SimpleTestBase
+except (ImportError, SyntaxError) as e:
+    SimpleTestBase = None  # type: ignore
+try:
+    from .runner import TestRunner
+except (ImportError, SyntaxError) as e:
+    TestRunner = None  # type: ignore
 from .logging_config import FrameworkLogger, log_action, log_mouse_action, log_keyboard_action, log_cursor_action, log_element_action, log_error
 from .cursor import CursorManager
 from .screenshot import ScreenshotManager

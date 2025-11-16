@@ -12,6 +12,7 @@ from pathlib import Path
 import argparse
 
 from playwright_simple.core.recorder.recorder import Recorder
+from playwright_simple.core.recorder.config import RecorderConfig, SpeedLevel
 from playwright_simple.core.logger import get_logger
 
 
@@ -28,15 +29,38 @@ async def run_test(yaml_file: str, config, args: argparse.Namespace) -> None:
     logger.info(f"Executando teste: {yaml_path}")
     print(f"🧪 Executando teste: {yaml_path}")
     
+    # Determine speed_level and fast_mode from config
+    speed_level = None
+    fast_mode = False
+    if hasattr(config, 'step'):
+        if hasattr(config.step, 'speed_level') and config.step.speed_level:
+            speed_level = config.step.speed_level
+        elif getattr(config.step, 'fast_mode', False):
+            fast_mode = True
+            speed_level = SpeedLevel.FAST
+    
     # Use Recorder in read mode (SAME class as recording, just different mode)
-    recorder = Recorder(
-        output_path=yaml_path,  # Input YAML file
-        initial_url=None,  # Will be read from YAML
-        headless=config.browser.headless if hasattr(config, 'browser') else False,
-        debug=args.debug if hasattr(args, 'debug') else False,
-        fast_mode=getattr(config.step, 'fast_mode', False) if hasattr(config, 'step') else False,
-        mode='read'  # Read mode: import YAML instead of export
-    )
+    # Use RecorderConfig if speed_level is available, otherwise use legacy parameters
+    if speed_level:
+        recorder_config = RecorderConfig.from_kwargs(
+            output_path=yaml_path,
+            initial_url=None,  # Will be read from YAML
+            headless=config.browser.headless if hasattr(config, 'browser') else False,
+            debug=args.debug if hasattr(args, 'debug') else False,
+            fast_mode=fast_mode,
+            speed_level=speed_level,
+            mode='read'
+        )
+        recorder = Recorder(config=recorder_config)
+    else:
+        recorder = Recorder(
+            output_path=yaml_path,  # Input YAML file
+            initial_url=None,  # Will be read from YAML
+            headless=config.browser.headless if hasattr(config, 'browser') else False,
+            debug=args.debug if hasattr(args, 'debug') else False,
+            fast_mode=fast_mode,
+            mode='read'  # Read mode: import YAML instead of export
+        )
     
     # Start recorder (SAME method as recording, but executes YAML steps)
     try:

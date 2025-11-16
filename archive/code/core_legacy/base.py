@@ -29,22 +29,12 @@ from .ui_helpers import UIHelpersMixin
 from .auth import AuthMixin
 
 # Try to import CursorController (for action execution)
-# Use lazy import to avoid circular dependencies
-CURSOR_CONTROLLER_AVAILABLE = False
-CursorController = None
-
-def _get_cursor_controller_class():
-    """Lazy import of CursorController to avoid circular dependencies."""
-    global CursorController, CURSOR_CONTROLLER_AVAILABLE
-    if CursorController is None:
-        try:
-            from .recorder.cursor_controller import CursorController as CC
-            CursorController = CC
-            CURSOR_CONTROLLER_AVAILABLE = True
-        except (ImportError, SyntaxError):
-            CursorController = None
-            CURSOR_CONTROLLER_AVAILABLE = False
-    return CursorController
+try:
+    from .recorder.cursor_controller import CursorController
+    CURSOR_CONTROLLER_AVAILABLE = True
+except ImportError:
+    CursorController = None
+    CURSOR_CONTROLLER_AVAILABLE = False
 from .exceptions import (
     ElementNotFoundError,
     NavigationError,
@@ -178,12 +168,11 @@ class SimpleTestBase(
         Returns:
             CursorController instance or None if not available
         """
-        CursorControllerClass = _get_cursor_controller_class()
-        if not CURSOR_CONTROLLER_AVAILABLE or CursorControllerClass is None:
+        if not CURSOR_CONTROLLER_AVAILABLE:
             return None
         
         if self._cursor_controller is None:
-            self._cursor_controller = CursorControllerClass(self.page)
+            self._cursor_controller = CursorController(self.page)
             # Start cursor controller (but don't show cursor by default in tests)
             # The cursor will be shown when actions are executed
             # IMPORTANT: CursorController will remove any existing cursor (from CursorManager)

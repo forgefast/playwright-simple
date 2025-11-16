@@ -116,13 +116,18 @@ class Recorder:
         )
         
         # Initialize browser manager - will be configured with video options if needed
-        self.browser_manager = BrowserManager(headless=self.config.headless)
+        # Configure slow_mo based on speed_level
+        # Ultra fast mode should not use slow_mo to maximize performance
+        # Normal/fast modes use slow_mo=100 for smooth video recording
+        from .config import SpeedLevel
+        slow_mo_value = None if self.config.speed_level == SpeedLevel.ULTRA_FAST else 100
+        self.browser_manager = BrowserManager(headless=self.config.headless, slow_mo=slow_mo_value)
         self.event_capture: Optional[EventCapture] = None
         self.cursor_controller: Optional[CursorController] = None
         self.action_converter = ActionConverter(recorder_logger=self.recorder_logger)
         
         # In write mode: YAMLWriter, in read mode: load YAML steps
-        if mode == 'write':
+        if self.mode == 'write':
             self.yaml_writer = YAMLWriter(self.output_path)
             self.yaml_steps = None
             self.yaml_data = None
@@ -139,7 +144,10 @@ class Recorder:
             with open(self.output_path, 'r', encoding='utf-8') as f:
                 yaml_data = yaml.safe_load(f)
             self.yaml_data = yaml_data
-            self.yaml_steps = yaml_data.get('steps', [])
+            self.yaml_steps = yaml_data.get('steps', []) if yaml_data else []
+            logger.info(f"🎬 DEBUG: Loaded YAML - steps count: {len(self.yaml_steps)}, steps type: {type(self.yaml_steps)}")
+            if self.yaml_steps:
+                logger.info(f"🎬 DEBUG: First step: {self.yaml_steps[0]}")
             # Get initial_url from YAML if not provided
             if not self.config.initial_url or self.config.initial_url == 'about:blank':
                 first_step = self.yaml_steps[0] if self.yaml_steps else {}
@@ -197,7 +205,8 @@ class Recorder:
         
         self.is_recording = False
         self.is_paused = False
-        self.fast_mode = self.config.fast_mode  # Accelerate steps (reduce delays, instant animations)
+        self.fast_mode = self.config.fast_mode  # Keep for backward compatibility
+        self.speed_level = self.config.speed_level  # Preferred: use speed_level
         
         # Initialize command server for external commands
         self.command_server: Optional[CommandServer] = None
@@ -467,7 +476,12 @@ class Recorder:
             
             # Initialize cursor controller if available
             if CURSOR_AVAILABLE:
-                self.cursor_controller = CursorController(page, fast_mode=self.fast_mode, recorder_logger=self.recorder_logger)
+                self.cursor_controller = CursorController(
+                    page, 
+                    fast_mode=self.fast_mode, 
+                    speed_level=self.speed_level,
+                    recorder_logger=self.recorder_logger
+                )
                 # Start cursor at center of screen (or last position if available)
                 await self.cursor_controller.start()
                 # Set up navigation listener (encapsulated method, same logic as before)
@@ -797,9 +811,11 @@ class Recorder:
                 
                 # Wait before closing context to ensure all actions are captured in video
                 # Playwright writes video asynchronously, so we need to wait for all frames
-                # Increase wait time to ensure all frames are written
+                # IMPORTANT: Don't reduce this wait for ultra fast - video needs time to finalize
+                # Even in ultra fast mode, we need to wait for video frames to be written
                 before_close_wait_time = time.time()
                 logger.info(f"🎬 VIDEO DEBUG: Starting wait before closing context at {before_close_wait_time:.2f}s")
+                # Always wait at least 3s to ensure video captures all frames, regardless of speed_level
                 await asyncio.sleep(3.0)
                 after_close_wait_time = time.time()
                 wait_elapsed = after_close_wait_time - before_close_wait_time
@@ -1803,6 +1819,31 @@ class Recorder:
         except Exception as e:
             logger.warning(f"Error during cleanup: {e}", exc_info=True)
     
+    def _estimate_audio_duration(self, text: str) -> float:
+        """
+        Estimate audio duration based on text length.
+        
+        Uses average speaking rate for Portuguese: ~150 words/min = 2.5 words/sec
+        For Portuguese, average word length is ~5 characters, so ~12.5 chars/sec
+        We use a conservative estimate of ~10 chars/sec to account for pauses.
+        
+        Args:
+            text: Text to estimate duration for
+            
+        Returns:
+            Estimated duration in seconds
+        """
+        if not text or not text.strip():
+            return 0.0
+        
+        # Average speaking rate: ~10 characters per second for Portuguese
+        # Add 0.5s buffer for natural pauses
+        char_count = len(text.strip())
+        estimated_seconds = (char_count / 10.0) + 0.5
+        
+        # Minimum duration: 0.5s
+        return max(0.5, estimated_seconds)
+    
     async def _wait_for_page_stable(self, timeout: float = 10.0) -> None:
         """
         Wait for page to stabilize after an action.
@@ -1813,8 +1854,30 @@ class Recorder:
         - Waits for any loading indicators to disappear
         
         Args:
-            timeout: Maximum time to wait in seconds
+            timeout: Maximum time to wait in seconds (will be reduced based on speed_level)
         """
+        # Adjust timeout based on speed_level
+        from .config import SpeedLevel
+        if hasattr(self, 'speed_level') and self.speed_level:
+            if self.speed_level == SpeedLevel.ULTRA_FAST:
+                timeout = 2.0  # Ultra fast: 2s timeout
+            elif self.speed_level == SpeedLevel.FAST:
+                timeout = 5.0  # Fast: 5s timeout
+            # NORMAL and SLOW keep original timeout (10.0s)
+        elif hasattr(self, 'fast_mode') and self.fast_mode:
+            timeout = 5.0  # Legacy fast_mode: 5s timeout
+        
+        # Get delay multiplier for sleep delays
+        sleep_delay = 0.5  # Default
+        if hasattr(self, 'speed_level') and self.speed_level:
+            if self.speed_level == SpeedLevel.ULTRA_FAST:
+                sleep_delay = 0.05  # Ultra fast: 50ms
+            elif self.speed_level == SpeedLevel.FAST:
+                sleep_delay = 0.1  # Fast: 100ms
+            # NORMAL and SLOW keep default (0.5s)
+        elif hasattr(self, 'fast_mode') and self.fast_mode:
+            sleep_delay = 0.1  # Legacy fast_mode: 100ms
+        
         # Log screen event: waiting for page stability
         if self.recorder_logger and self.recorder_logger.is_debug:
             try:
@@ -1854,7 +1917,11 @@ class Recorder:
         
         try:
             # Wait for network to be idle (no requests for 500ms)
-            await self.page.wait_for_load_state('networkidle', timeout=int(timeout * 1000))
+            # Reduce networkidle timeout for ultra fast
+            networkidle_timeout = timeout
+            if hasattr(self, 'speed_level') and self.speed_level == SpeedLevel.ULTRA_FAST:
+                networkidle_timeout = min(timeout, 2.0)  # Max 2s for ultra fast
+            await self.page.wait_for_load_state('networkidle', timeout=int(networkidle_timeout * 1000))
             
             # Log screen event: network idle
             if self.recorder_logger and self.recorder_logger.is_debug:
@@ -1897,12 +1964,12 @@ class Recorder:
         # Check if page is still loading by monitoring DOM changes
         try:
             initial_html = await self.page.content()
-            await asyncio.sleep(0.5)  # Wait a bit
+            await asyncio.sleep(sleep_delay)  # Use speed_level-based delay
             final_html = await self.page.content()
             
             # If HTML changed, wait a bit more
             if initial_html != final_html:
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(sleep_delay)  # Use speed_level-based delay
         except Exception:
             pass
     
@@ -1931,8 +1998,18 @@ class Recorder:
     
     async def _execute_yaml_steps(self):
         """Execute YAML steps using internal handler functions."""
+        # Debug: log yaml_steps state
+        logger.info(f"🎬 DEBUG: _execute_yaml_steps called - yaml_steps type: {type(self.yaml_steps)}, length: {len(self.yaml_steps) if self.yaml_steps else 0}")
+        if self.yaml_steps:
+            logger.info(f"🎬 DEBUG: First step: {self.yaml_steps[0] if len(self.yaml_steps) > 0 else 'N/A'}")
+        
         if not self.yaml_steps:
             logger.warning("No YAML steps to execute")
+            logger.warning(f"🎬 DEBUG: yaml_steps is empty or None. yaml_data exists: {hasattr(self, 'yaml_data') and self.yaml_data is not None}")
+            if hasattr(self, 'yaml_data') and self.yaml_data:
+                logger.warning(f"🎬 DEBUG: yaml_data keys: {list(self.yaml_data.keys()) if isinstance(self.yaml_data, dict) else 'N/A'}")
+                if isinstance(self.yaml_data, dict) and 'steps' in self.yaml_data:
+                    logger.warning(f"🎬 DEBUG: yaml_data['steps']: {self.yaml_data['steps']}")
             return
         
         # Verify we're using the correct page (same one that has video recording)
@@ -1992,8 +2069,11 @@ class Recorder:
         for i, step in enumerate(self.yaml_steps, 1):
             action = step.get('action')
             description = step.get('description', '')
-            subtitle = step.get('subtitle')  # Use subtitle field, not description
-            audio = step.get('audio')  # Use audio field
+            subtitle = step.get('subtitle')  # Use subtitle field if available
+            audio = step.get('audio')  # Use audio field if available
+            
+            # Only use subtitle/audio if explicitly set in YAML
+            # Do NOT fallback to description - subtitles/audio should be explicitly added
             
             # Calculate step start time relative to video start
             step_start_datetime = datetime.now()
@@ -2207,11 +2287,14 @@ class Recorder:
                     await self._wait_for_page_stable(timeout=10.0)
                 
                 elif action == 'wait':
-                    # Wait action - reduce time in fast_mode
+                    # Wait action - reduce time based on speed_level
                     seconds = step.get('seconds', 1.0)
-                    if self.fast_mode:
-                        # In fast mode, reduce wait time significantly (but keep minimum for video)
-                        seconds = max(seconds * 0.1, 0.1)  # 10% of original, minimum 0.1s
+                    if self.speed_level:
+                        # Get multiplier and min_delay from speed_level
+                        multiplier = self.speed_level.get_multiplier()
+                        min_delay = self.speed_level.get_min_delay()
+                        # Calculate reduced wait time
+                        seconds = max(seconds * multiplier, min_delay)
                     await asyncio.sleep(seconds)
                     
                     # Log wait step
@@ -2261,6 +2344,33 @@ class Recorder:
             step_end_elapsed = (step_end_datetime - video_start_datetime).total_seconds()
             step_duration = step_end_elapsed - step_data['start_time']
             
+            # IMPORTANT: If this step has audio, wait for the audio to finish before proceeding
+            # This ensures audio and video are synchronized
+            if current_audio and current_audio.strip():
+                # Estimate audio duration based on text length
+                # Average speaking rate: ~150 words/min = 2.5 words/sec = ~10 chars/sec for Portuguese
+                # Add some buffer for natural pauses
+                estimated_audio_duration = self._estimate_audio_duration(current_audio)
+                logger.debug(f"🎤 Step {i} has audio '{current_audio[:50]}...', estimated duration: {estimated_audio_duration:.2f}s")
+                
+                # Wait for audio to finish (but don't wait longer than necessary)
+                # The audio will play during the step execution, so we only need to wait
+                # for the remaining duration after the action completes
+                action_duration = step_duration
+                remaining_audio_time = max(0, estimated_audio_duration - action_duration)
+                
+                if remaining_audio_time > 0.1:  # Only wait if there's significant remaining time
+                    logger.debug(f"🎤 Waiting {remaining_audio_time:.2f}s for audio to finish...")
+                    await asyncio.sleep(remaining_audio_time)
+                    # Update step end time to account for audio wait
+                    step_end_datetime = datetime.now()
+                    step_end_elapsed = (step_end_datetime - video_start_datetime).total_seconds()
+                    step_duration = step_end_elapsed - step_data['start_time']
+                    logger.debug(f"🎤 Audio wait completed, step duration now: {step_duration:.2f}s")
+                else:
+                    # Action took longer than audio, no need to wait
+                    logger.debug(f"🎤 Action duration ({action_duration:.2f}s) >= audio duration ({estimated_audio_duration:.2f}s), no wait needed")
+            
             # Store step end time for subtitle generation
             step_data['end_time'] = step_end_elapsed
             step_data['duration'] = step_duration
@@ -2305,10 +2415,20 @@ class Recorder:
         # Wait a bit after all steps to ensure video captures everything
         # This is especially important for the last action
         # Playwright writes video frames asynchronously, so we need to wait for all frames
-        await asyncio.sleep(2.0)
+        # Use appropriate wait time based on speed level - faster modes need less wait
+        # but we still need to ensure video frames are written
+        from .config import SpeedLevel
+        speed_level = getattr(self.config, 'speed_level', SpeedLevel.NORMAL) if hasattr(self, 'config') else SpeedLevel.NORMAL
+        if speed_level == SpeedLevel.ULTRA_FAST:
+            wait_after_steps = 2.0  # Reduced wait for ultra fast, but still enough for video
+        else:
+            wait_after_steps = 2.0  # Standard wait for normal/fast modes
+        logger.info(f"🎬 VIDEO DEBUG: Waiting {wait_after_steps}s after steps completion for video to catch up...")
+        await asyncio.sleep(wait_after_steps)
         after_wait_datetime = datetime.now()
         elapsed_after_wait = (after_wait_datetime - video_start_datetime).total_seconds()
         logger.info(f"🎬 VIDEO DEBUG: After wait delay at {elapsed_after_wait:.2f}s")
+        logger.info(f"🎬 VIDEO DEBUG: Video recording duration so far: {elapsed_after_wait:.2f}s")
         logger.info("Waiting after steps completion to ensure video captures final actions")
         
         # Verify we're still using the same context that has video recording

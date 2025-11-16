@@ -11,7 +11,7 @@ import logging
 from typing import Dict, Optional
 from playwright.async_api import Page, TimeoutError as PlaywrightTimeoutError
 
-# CursorManager removed - using CursorController instead
+from .cursor import CursorManager
 from .screenshot import ScreenshotManager
 from .selectors import SelectorManager
 from .config import TestConfig
@@ -28,6 +28,7 @@ class FormsMixin:
     This mixin provides methods for filling forms, finding fields by labels,
     and form interactions. It assumes the base class has:
     - page: Playwright Page instance
+    - cursor_manager: CursorManager instance
     - screenshot_manager: ScreenshotManager instance
     - selector_manager: SelectorManager instance
     - config: TestConfig instance

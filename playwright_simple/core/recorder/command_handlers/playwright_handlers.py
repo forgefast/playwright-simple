@@ -37,8 +37,43 @@ class PlaywrightHandlers:
         self._get_page = page_getter
         self._get_cursor_controller = cursor_controller_getter
         self._playwright_commands = None
-        self._recorder = recorder  # Store recorder reference for fast_mode
+        self._recorder = recorder  # Store recorder reference for fast_mode and speed_level
         self.recorder_logger = recorder_logger
+    
+    def _get_delay_from_speed_level(self, normal_delay: float, fast_delay: float = None) -> float:
+        """
+        Get delay based on speed_level from recorder.
+        
+        Args:
+            normal_delay: Delay for NORMAL/SLOW mode
+            fast_delay: Optional delay for FAST mode (defaults to normal_delay * 0.1)
+        
+        Returns:
+            Delay adjusted for speed_level
+        """
+        if not self._recorder:
+            return normal_delay
+        
+        # Try to get speed_level first
+        speed_level = getattr(self._recorder, 'speed_level', None)
+        if speed_level:
+            try:
+                from ..config import SpeedLevel
+                if speed_level == SpeedLevel.ULTRA_FAST:
+                    return 0.0  # Ultra fast: no delay
+                elif speed_level == SpeedLevel.FAST:
+                    return fast_delay if fast_delay is not None else normal_delay * 0.1
+                # NORMAL and SLOW use normal_delay
+                return normal_delay
+            except ImportError:
+                pass
+        
+        # Fallback to fast_mode for backward compatibility
+        fast_mode = getattr(self._recorder, 'fast_mode', False)
+        if fast_mode:
+            return fast_delay if fast_delay is not None else normal_delay * 0.1
+        
+        return normal_delay
     
     def _get_playwright_commands(self):
         """Get or create PlaywrightCommands instance."""
@@ -272,9 +307,8 @@ class PlaywrightHandlers:
             else:
                 # Fallback: wait for load states
                 await page.wait_for_load_state('domcontentloaded', timeout=5000)
-                # Get fast_mode from recorder
-                fast_mode = getattr(self._recorder, 'fast_mode', False) if self._recorder else False
-                delay = 0.01 if fast_mode else 0.5
+                # Use speed_level-aware delay
+                delay = self._get_delay_from_speed_level(0.5, 0.01)
                 await asyncio.sleep(delay)
                 try:
                     await page.wait_for_load_state('networkidle', timeout=3000)
@@ -622,7 +656,7 @@ class PlaywrightHandlers:
         # This focuses the field and ensures it's ready for typing
         # NOTE: We only click if the field is not already focused
         # If there was a click action before this type action, the field might already be focused
-            field_clicked = False
+        field_clicked = False
         field_already_focused = False
         
         # Check if field is already focused
@@ -700,8 +734,8 @@ class PlaywrightHandlers:
             return result
         
         # Wait a bit for value to be set
-        fast_mode = getattr(self._recorder, 'fast_mode', False) if self._recorder else False
-        delay = 0.01 if fast_mode else 0.3
+        # Use speed_level-aware delay
+        delay = self._get_delay_from_speed_level(0.3, 0.01)
         await asyncio.sleep(delay)
         
         # Capture field value after

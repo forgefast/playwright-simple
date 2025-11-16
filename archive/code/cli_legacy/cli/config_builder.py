@@ -12,7 +12,6 @@ from typing import Optional
 
 from playwright_simple import TestConfig
 from playwright_simple.core.logger import get_logger, set_logger, StructuredLogger
-from playwright_simple.core.recorder.config import SpeedLevel
 from .parser import parse_viewport
 
 
@@ -55,22 +54,6 @@ def create_config_from_args(args: argparse.Namespace) -> TestConfig:
     if args.timeout is not None:
         config.browser.timeout = args.timeout
     
-    # Speed level / Fast mode
-    # Store speed_level as attribute on step config (will be used by run_handlers)
-    if args.speed_level:
-        # Map string to SpeedLevel enum
-        speed_level_map = {
-            'slow': SpeedLevel.SLOW,
-            'normal': SpeedLevel.NORMAL,
-            'fast': SpeedLevel.FAST,
-            'ultra_fast': SpeedLevel.ULTRA_FAST
-        }
-        # Store as attribute (StepConfig doesn't have speed_level field, but we can add it dynamically)
-        setattr(config.step, 'speed_level', speed_level_map.get(args.speed_level, SpeedLevel.NORMAL))
-    elif args.fast_mode:
-        setattr(config.step, 'speed_level', SpeedLevel.FAST)
-        config.step.fast_mode = True
-    
     # Video
     if args.video:
         config.video.enabled = True
@@ -103,9 +86,6 @@ def create_config_from_args(args: argparse.Namespace) -> TestConfig:
     
     if args.audio_engine:
         config.video.audio_engine = args.audio_engine
-    
-    if args.audio_voice:
-        config.video.audio_voice = args.audio_voice
     
     if args.audio_slow:
         config.video.audio_slow = True

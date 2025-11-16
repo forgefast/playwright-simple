@@ -17,23 +17,42 @@ from .interaction import CursorInteraction
 
 logger = logging.getLogger(__name__)
 
+# Import SpeedLevel for type hints
+try:
+    from ..config import SpeedLevel
+except ImportError:
+    # Fallback if not available
+    SpeedLevel = None
+
 
 class CursorController:
     """Controls a visual cursor overlay in the browser."""
     
-    def __init__(self, page: Page, fast_mode: bool = False, recorder_logger=None):
+    def __init__(self, page: Page, fast_mode: bool = False, speed_level=None, recorder_logger=None):
         """Initialize cursor controller.
         
         Args:
             page: Playwright Page instance
-            fast_mode: If True, reduce delays for faster execution
+            fast_mode: If True, reduce delays for faster execution (deprecated, use speed_level)
+            speed_level: SpeedLevel enum (preferred over fast_mode)
             recorder_logger: Optional RecorderLogger instance for logging
         """
         self.page = page
         self.is_active = False
         self.current_x = 0
         self.current_y = 0
-        self.fast_mode = fast_mode
+        self.fast_mode = fast_mode  # Keep for backward compatibility
+        # Determine speed_level: use provided, or map from fast_mode, or default to NORMAL
+        if speed_level is None:
+            if SpeedLevel is not None:
+                if fast_mode:
+                    self.speed_level = SpeedLevel.FAST
+                else:
+                    self.speed_level = SpeedLevel.NORMAL
+            else:
+                self.speed_level = None
+        else:
+            self.speed_level = speed_level
         self.recorder_logger = recorder_logger
         
         # Initialize modules

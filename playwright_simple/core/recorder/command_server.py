@@ -297,7 +297,13 @@ class CommandServer:
         return {'success': success}
     
     async def _handle_submit(self, args: str) -> Dict[str, Any]:
-        """Handle submit command using CursorController directly."""
+        """Handle submit command using PlaywrightHandlers to ensure step is added to YAML."""
+        # Use PlaywrightHandlers to handle submit, which will add step to YAML
+        if hasattr(self.recorder, 'command_handlers') and self.recorder.command_handlers:
+            result = await self.recorder.command_handlers.handle_pw_submit(args)
+            return {'success': result.get('success', False), 'error': result.get('error')}
+        
+        # Fallback: use CursorController directly (legacy)
         page = self._get_page()
         if not page:
             return {'error': 'Page not available'}

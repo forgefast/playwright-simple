@@ -14,7 +14,7 @@ class BrowserManager:
     """Manages browser lifecycle."""
     
     def __init__(self, headless: bool = False, viewport: Optional[Dict[str, int]] = None, 
-                 record_video: bool = False, video_dir: Optional[str] = None):
+                 record_video: bool = False, video_dir: Optional[str] = None, slow_mo: Optional[int] = 100):
         """
         Initialize browser manager.
         
@@ -23,11 +23,13 @@ class BrowserManager:
             viewport: Viewport size (default: 1280x720)
             record_video: Enable video recording
             video_dir: Directory to save videos (default: 'videos')
+            slow_mo: Slow motion delay in milliseconds (default: 100, None for ultra fast)
         """
         self.headless = headless
         self.viewport = viewport or {'width': 1280, 'height': 720}
         self.record_video = record_video
         self.video_dir = video_dir or 'videos'
+        self.slow_mo = slow_mo  # Store slow_mo for use in start()
         self.playwright = None
         self.browser: Optional[Browser] = None
         self.context: Optional[BrowserContext] = None
@@ -38,9 +40,10 @@ class BrowserManager:
         from pathlib import Path
         
         self.playwright = await async_playwright().start()
+        # Use slow_mo based on speed level - normal mode uses 100ms, ultra fast uses None
         self.browser = await self.playwright.chromium.launch(
             headless=self.headless,
-            slow_mo=100
+            slow_mo=self.slow_mo  # Use configured slow_mo (100 for normal, None for ultra fast)
         )
         
         # Prepare context options

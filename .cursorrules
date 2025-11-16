@@ -1,5 +1,21 @@
 # Cursor Rules - Playwright Simple
 
+## Leitura Obrigatória de Documentação
+
+ANTES de fazer qualquer alteração no código, SEMPRE leia a documentação de padrões:
+
+1. `../standards/README.md` - Visão geral e índice
+2. `../standards/coding_standards.md` - Padrões de código (OBRIGATÓRIO)
+3. `../standards/architecture_patterns.md` - Padrões arquiteturais (OBRIGATÓRIO)
+4. `../standards/logging_standards.md` - Padrões de logging (OBRIGATÓRIO)
+
+Se a pasta `standards/` não existir na raiz do workspace, crie-a seguindo a estrutura documentada.
+
+Estes documentos contêm TODAS as boas práticas e padrões que devem ser seguidos.
+NUNCA implemente algo sem seguir estes padrões.
+NUNCA use print() ou logger padrão - sempre use RecorderLogger.
+NUNCA crie código sem type hints e docstrings.
+
 ## Regras Universais (Aplicam-se a Todos os Projetos)
 
 ### Antes de Fazer Mudanças

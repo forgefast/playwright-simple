@@ -239,16 +239,6 @@ def _add_browser_options(run_parser):
         type=int,
         help='Timeout padrão em milissegundos'
     )
-    browser_group.add_argument(
-        '--fast-mode',
-        action='store_true',
-        help='Acelerar execução (reduz delays) - equivalente a speed-level=fast'
-    )
-    browser_group.add_argument(
-        '--speed-level',
-        choices=['slow', 'normal', 'fast', 'ultra_fast'],
-        help='Nível de velocidade: slow (1.0x), normal (1.0x), fast (0.1x), ultra_fast (0.05x)'
-    )
 
 
 def _add_video_options(run_parser):
@@ -308,13 +298,8 @@ def _add_audio_options(run_parser):
     )
     audio_group.add_argument(
         '--audio-engine',
-        choices=['gtts', 'pyttsx3', 'edge-tts'],
-        help='Engine de TTS (gtts, pyttsx3, ou edge-tts)'
-    )
-    audio_group.add_argument(
-        '--audio-voice',
-        type=str,
-        help='Voz específica para TTS (ex: pt-BR-MacerioMultilingualNeural para edge-tts)'
+        choices=['gtts', 'pyttsx3'],
+        help='Engine de TTS'
     )
     audio_group.add_argument(
         '--audio-slow',

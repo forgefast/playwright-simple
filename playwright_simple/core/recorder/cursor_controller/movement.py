@@ -12,6 +12,12 @@ from playwright.async_api import Page
 
 logger = logging.getLogger(__name__)
 
+# Import SpeedLevel for type hints
+try:
+    from ..config import SpeedLevel
+except ImportError:
+    SpeedLevel = None
+
 
 class CursorMovement:
     """Handles cursor movement."""
@@ -53,15 +59,32 @@ class CursorMovement:
             await self.controller.show()
             
             if smooth:
-                # Check if fast_mode is enabled
-                fast_mode = getattr(self.controller, 'fast_mode', False)
+                # Get speed_level from controller
+                speed_level = getattr(self.controller, 'speed_level', None)
                 
-                if fast_mode:
-                    # Fast mode: shorter animation, but still wait for it
-                    animation_duration = 0.15  # 150ms instead of 300ms
-                    timeout = 200  # 200ms timeout
+                # Fallback to fast_mode for backward compatibility
+                if speed_level is None:
+                    fast_mode = getattr(self.controller, 'fast_mode', False)
+                    if fast_mode:
+                        speed_level = SpeedLevel.FAST if SpeedLevel else None
+                    else:
+                        speed_level = SpeedLevel.NORMAL if SpeedLevel else None
+                
+                # Determine animation duration based on speed level
+                if speed_level == SpeedLevel.ULTRA_FAST if (SpeedLevel and speed_level) else False:
+                    # Ultra fast: minimal animation (50ms) to keep cursor visible
+                    animation_duration = 0.05  # 50ms - minimal but visible
+                    timeout = 100  # 100ms timeout
+                elif speed_level == SpeedLevel.FAST if (SpeedLevel and speed_level) else False:
+                    # Fast: shorter animation (50ms)
+                    animation_duration = 0.05  # 50ms
+                    timeout = 100  # 100ms timeout
+                elif speed_level == SpeedLevel.SLOW if (SpeedLevel and speed_level) else False:
+                    # Slow: normal animation (for demonstration videos)
+                    animation_duration = 0.3  # 300ms
+                    timeout = 350  # 350ms timeout
                 else:
-                    # Normal mode: full animation
+                    # Normal mode: standard animation
                     animation_duration = 0.3  # 300ms
                     timeout = 350  # 350ms timeout
                 

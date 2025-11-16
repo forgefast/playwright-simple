@@ -13,26 +13,60 @@ from playwright.async_api import Page
 
 logger = logging.getLogger(__name__)
 
+# Import SpeedLevel for type hints
+try:
+    from ..config import SpeedLevel
+except ImportError:
+    SpeedLevel = None
+
 
 def _get_delay(controller, normal_delay: float, min_delay: float = None) -> float:
-    """Get delay based on fast_mode.
+    """Get delay based on speed_level.
     
     Args:
         controller: CursorController instance
         normal_delay: Normal delay in seconds
-        min_delay: Minimum delay (overrides fast_mode reduction if provided)
+        min_delay: Minimum delay (overrides speed_level reduction if provided)
         
     Returns:
-        Reduced delay if fast_mode, otherwise normal delay
+        Reduced delay based on speed_level, otherwise normal delay
     """
-    fast_mode = getattr(controller, 'fast_mode', False)
-    if fast_mode:
-        # In fast mode, reduce delays significantly (but not zero to avoid issues)
-        # But respect min_delay if provided (for critical delays like cursor movement)
-        if min_delay is not None:
-            return max(normal_delay * 0.1, min_delay)
-        return min(normal_delay * 0.1, 0.01)  # 10% of normal, minimum 10ms
-    return normal_delay
+    # Try to get speed_level from controller
+    speed_level = getattr(controller, 'speed_level', None)
+    
+    # Fallback to fast_mode for backward compatibility
+    if speed_level is None:
+        fast_mode = getattr(controller, 'fast_mode', False)
+        if fast_mode:
+            # Map fast_mode to FAST speed level behavior
+            multiplier = 0.1
+            min_delay_for_level = 0.01
+        else:
+            # Normal mode
+            multiplier = 1.0
+            min_delay_for_level = 0.1
+    else:
+        # Use speed_level
+        if SpeedLevel is not None and isinstance(speed_level, SpeedLevel):
+            multiplier = speed_level.get_multiplier()
+            min_delay_for_level = speed_level.get_min_delay()
+        else:
+            # Fallback if SpeedLevel not available
+            multiplier = 1.0
+            min_delay_for_level = 0.1
+    
+    # Calculate delay
+    calculated_delay = normal_delay * multiplier
+    
+    # Apply minimum delay: use provided min_delay if given, otherwise use level's min_delay
+    if min_delay is not None:
+        return max(calculated_delay, min_delay)
+    
+    # For ULTRA_FAST, don't enforce minimum unless explicitly provided
+    if speed_level == SpeedLevel.ULTRA_FAST if (SpeedLevel and speed_level) else False:
+        return calculated_delay
+    
+    return max(calculated_delay, min_delay_for_level)
 
 
 class CursorInteraction:
@@ -57,8 +91,13 @@ class CursorInteraction:
                 # Always use smooth=True to ensure cursor moves visibly
                 await self.controller.move(click_x, click_y, smooth=True)
                 # Small delay so user can see cursor at destination before clicking
-                # Use minimum 50ms even in fast_mode to ensure cursor is visible at destination
-                await asyncio.sleep(_get_delay(self.controller, 0.15, min_delay=0.05))
+                # Use minimum delay based on speed_level, but ensure cursor is visible
+                speed_level = getattr(self.controller, 'speed_level', None)
+                if speed_level and SpeedLevel and speed_level == SpeedLevel.ULTRA_FAST:
+                    # Ultra fast: minimal delay but still visible
+                    await asyncio.sleep(0.05)  # 50ms minimum for visibility
+                else:
+                    await asyncio.sleep(_get_delay(self.controller, 0.15, min_delay=0.05))
             
             # Show click animation
             await self.page.evaluate(f"""
@@ -872,13 +911,21 @@ class CursorInteraction:
                     await asyncio.sleep(_get_delay(self.controller, 0.1))
                     
                     # Type character by character for visual effect
-                    # Use fast_mode to reduce delays
-                    fast_mode = getattr(self.controller, 'fast_mode', False)
-                    if fast_mode:
-                        # Fast mode: type quickly with minimal delay
-                        await self.page.keyboard.type(text, delay=10)  # Minimal delay
+                    # Use speed_level to determine typing delay
+                    speed_level = getattr(self.controller, 'speed_level', None)
+                    if speed_level is None:
+                        # Fallback to fast_mode for backward compatibility
+                        fast_mode = getattr(self.controller, 'fast_mode', False)
+                        speed_level = SpeedLevel.FAST if (SpeedLevel and fast_mode) else SpeedLevel.NORMAL if SpeedLevel else None
+                    
+                    if speed_level == SpeedLevel.ULTRA_FAST if (SpeedLevel and speed_level) else False:
+                        # Ultra fast: instant typing (delay=0)
+                        await self.page.keyboard.type(text, delay=0)
+                    elif speed_level == SpeedLevel.FAST if (SpeedLevel and speed_level) else False:
+                        # Fast: type quickly with minimal delay (delay=5)
+                        await self.page.keyboard.type(text, delay=5)
                     else:
-                        # Normal mode: type character by character for visual effect
+                        # Normal/Slow mode: type character by character for visual effect
                         for char in text:
                             await self.page.keyboard.type(char, delay=50)  # Small delay between chars
                             await asyncio.sleep(_get_delay(self.controller, 0.03))  # Small delay for visual effect
@@ -948,16 +995,24 @@ class CursorInteraction:
                     await asyncio.sleep(_get_delay(self.controller, 0.1))
                 
                 # Type character by character for visual effect
-                # Use fast_mode to reduce delays
-                fast_mode = getattr(self.controller, 'fast_mode', False)
-                if fast_mode:
-                    # Fast mode: type quickly with minimal delay
-                    await self.page.keyboard.type(text, delay=10)  # Minimal delay
+                # Use speed_level to determine typing delay
+                speed_level = getattr(self.controller, 'speed_level', None)
+                if speed_level is None:
+                    # Fallback to fast_mode for backward compatibility
+                    fast_mode = getattr(self.controller, 'fast_mode', False)
+                    speed_level = SpeedLevel.FAST if (SpeedLevel and fast_mode) else SpeedLevel.NORMAL if SpeedLevel else None
+                
+                if speed_level == SpeedLevel.ULTRA_FAST if (SpeedLevel and speed_level) else False:
+                    # Ultra fast: instant typing (delay=0)
+                    await self.page.keyboard.type(text, delay=0)
+                elif speed_level == SpeedLevel.FAST if (SpeedLevel and speed_level) else False:
+                    # Fast: type quickly with minimal delay (delay=5)
+                    await self.page.keyboard.type(text, delay=5)
                 else:
-                    # Normal mode: type character by character for visual effect
+                    # Normal/Slow mode: type character by character for visual effect
                     for char in text:
                         await self.page.keyboard.type(char, delay=50)  # Small delay between chars
-                        await asyncio.sleep(0.03)  # Small delay for visual effect
+                        await asyncio.sleep(_get_delay(self.controller, 0.03))  # Small delay for visual effect
                 
                 logger.info(f"Typed '{text}' into focused field")
                 return True
