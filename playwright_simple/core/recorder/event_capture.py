@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class EventCapture:
     """Captures browser events for recording."""
     
-    def __init__(self, page: Page, debug: bool = False, event_handlers_instance=None, recorder_logger=None):
+    def __init__(self, page: Page, debug: bool = False, event_handlers_instance=None, recorder_logger=None, speed_level=None):
         """Initialize event capture."""
         self.page = page
         self.debug = debug
@@ -33,6 +33,8 @@ class EventCapture:
         self._event_handlers_instance = event_handlers_instance
         # Store reference to recorder logger
         self.recorder_logger = recorder_logger
+        # Store speed_level for adaptive polling delays
+        self.speed_level = speed_level
     
     def on_event(self, event_type: str, handler: Callable):
         """Register event handler."""
@@ -818,11 +820,30 @@ class EventCapture:
                 
                 # Use shorter delay for first few polls to catch initial clicks faster
                 # CRITICAL: Use even shorter delay if we detected a link click (navigation may be imminent)
+                # Also adjust delay based on speed_level for ULTRA_FAST mode
                 if has_link_click:
                     delay = 0.01  # Very short delay for link clicks
                     logger.debug("Using minimal delay after link click detection")
                 else:
-                    delay = 0.05 if poll_count <= 10 else 0.1
+                    # Adjust delay based on speed_level
+                    if self.speed_level:
+                        try:
+                            from .config import SpeedLevel
+                            if self.speed_level == SpeedLevel.ULTRA_FAST:
+                                # Ultra fast: very short delays to catch events quickly
+                                delay = 0.01 if poll_count <= 20 else 0.02
+                            elif self.speed_level == SpeedLevel.FAST:
+                                # Fast: shorter delays
+                                delay = 0.02 if poll_count <= 15 else 0.05
+                            else:
+                                # Normal/Slow: standard delays
+                                delay = 0.05 if poll_count <= 10 else 0.1
+                        except ImportError:
+                            # Fallback if SpeedLevel not available
+                            delay = 0.05 if poll_count <= 10 else 0.1
+                    else:
+                        # Default delays if speed_level not set
+                        delay = 0.05 if poll_count <= 10 else 0.1
                 await asyncio.sleep(delay)
             except Exception as e:
                 # Ignore context destroyed errors (happens during navigation)

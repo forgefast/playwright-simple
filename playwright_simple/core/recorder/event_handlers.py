@@ -150,8 +150,8 @@ class EventHandlers:
                     error=str(e),
                     element_info=structured_element
                 )
-        else:
-            logger.error(f"Error handling click event: {e}", exc_info=True)
+            else:
+                logger.error(f"Error handling click event: {e}", exc_info=True)
     
     def handle_input(self, event_data: dict) -> None:
         """Handle input event - accumulates, doesn't save yet."""
@@ -209,6 +209,7 @@ class EventHandlers:
         element_id = element_info.get('id', '')
         element_name = element_info.get('name', '')
         element_type = element_info.get('type', '')
+        # Use same key format as convert_input (from action_converter.py line 259)
         element_key = f"{element_id}:{element_name}:{element_type}"
         value = event_data.get('value', '')
         
@@ -218,6 +219,28 @@ class EventHandlers:
             'type': element_type,
             'label': element_info.get('label', '')
         }
+        
+        # Check if pending input exists before trying to finalize
+        if element_key not in self.action_converter.pending_inputs:
+            # Try to find by partial match (in case of slight differences)
+            matching_keys = [k for k in self.action_converter.pending_inputs.keys() 
+                           if k.startswith(f"{element_id}:{element_name}:")]
+            if matching_keys:
+                element_key = matching_keys[0]
+                logger.debug(f"Using matching key for blur: {element_key}")
+            else:
+                # No pending input found - this can happen if input was already finalized
+                # or if blur happened before input was processed
+                logger.debug(f"No pending input found for {element_key}, available keys: {list(self.action_converter.pending_inputs.keys())}")
+                if self.recorder_logger:
+                    self.recorder_logger.log_user_action(
+                        action_type='type',
+                        element_info=structured_element,
+                        success=False,
+                        error=f"No pending input found for {element_key}",
+                        warnings=[f"Pending inputs: {list(self.action_converter.pending_inputs.keys())}"]
+                    )
+                return
         
         action = self.action_converter.finalize_input(element_key)
         if action:

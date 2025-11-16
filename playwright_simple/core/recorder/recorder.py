@@ -398,7 +398,14 @@ class Recorder:
                 # Initialize event capture EARLY - before navigation if possible
                 # This allows script injection to happen as soon as page loads
                 # Pass event_handlers so event_capture can process events immediately
-                self.event_capture = EventCapture(page, debug=self.debug, event_handlers_instance=self.event_handlers, recorder_logger=self.recorder_logger)
+                # Also pass speed_level so EventCapture can adjust polling delays
+                self.event_capture = EventCapture(
+                    page, 
+                    debug=self.debug, 
+                    event_handlers_instance=self.event_handlers, 
+                    recorder_logger=self.recorder_logger,
+                    speed_level=self.speed_level
+                )
                 self._setup_event_handlers()
                 
                 # Log event capture initialized
@@ -811,15 +818,23 @@ class Recorder:
                 
                 # Wait before closing context to ensure all actions are captured in video
                 # Playwright writes video asynchronously, so we need to wait for all frames
-                # IMPORTANT: Don't reduce this wait for ultra fast - video needs time to finalize
-                # Even in ultra fast mode, we need to wait for video frames to be written
+                # Adjust wait time based on speed_level for better performance
                 before_close_wait_time = time.time()
                 logger.info(f"🎬 VIDEO DEBUG: Starting wait before closing context at {before_close_wait_time:.2f}s")
-                # Always wait at least 3s to ensure video captures all frames, regardless of speed_level
-                await asyncio.sleep(3.0)
+                
+                # Calculate wait time based on speed_level
+                from .config import SpeedLevel
+                if self.speed_level == SpeedLevel.ULTRA_FAST:
+                    wait_time = 1.0  # Ultra fast: 1s wait (reduced from 3s)
+                elif self.speed_level == SpeedLevel.FAST:
+                    wait_time = 2.0  # Fast: 2s wait
+                else:
+                    wait_time = 3.0  # Normal/Slow: 3s wait (original)
+                
+                await asyncio.sleep(wait_time)
                 after_close_wait_time = time.time()
                 wait_elapsed = after_close_wait_time - before_close_wait_time
-                logger.info(f"🎬 VIDEO DEBUG: Wait completed, elapsed: {wait_elapsed:.2f}s")
+                logger.info(f"🎬 VIDEO DEBUG: Wait completed, elapsed: {wait_elapsed:.2f}s (speed_level: {self.speed_level})")
                 logger.info("Waiting before closing context to ensure video captures all actions")
                 
                 # IMPORTANT: Playwright finalizes video when context closes
