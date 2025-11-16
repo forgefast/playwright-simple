@@ -239,22 +239,85 @@ class AudioEmbedder:
             logger.info(f"🎤 DEBUG: Video file exists: {video_path.exists()}, size: {video_path.stat().st_size} bytes")
             logger.info(f"🎤 DEBUG: Audio file exists: {narration_audio.exists()}, size: {narration_audio.stat().st_size} bytes")
             
-            cmd = [
-                'ffmpeg',
-                '-i', video_input_absolute,  # Video input (may already have subtitles) - absolute path
-                '-i', audio_input_absolute,  # Audio input (MP3 with all segments + silence) - absolute path
-                '-c:v', 'libx264',  # Re-encode video to ensure compatibility (preserves subtitles)
-                '-preset', 'ultrafast',  # Otimização: codificação mais rápida
-                '-crf', '23',  # Qualidade razoável
-                '-c:a', 'aac',  # AAC codec for MP4
-                '-b:a', '128k',  # Otimização: bitrate de áudio reduzido (era 192k)
-                '-map', '0:v:0',  # Use video from first input (with subtitles if embedded)
-                '-map', '1:a:0',  # Use audio from second input
-                '-shortest',  # End when shortest stream ends (sync with audio)
-                '-movflags', '+faststart',  # Fast start for web playback
-                '-y',  # Overwrite output
-                str(output_path)  # Output path is already absolute
-            ]
+            # Verificar durações do vídeo e áudio
+            try:
+                # Obter duração do vídeo
+                video_duration_cmd = [
+                    'ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+                    '-of', 'default=noprint_wrappers=1:nokey=1', video_input_absolute
+                ]
+                video_duration_result = subprocess.run(video_duration_cmd, capture_output=True, text=True, timeout=10)
+                video_duration = float(video_duration_result.stdout.strip()) if video_duration_result.returncode == 0 else None
+                
+                # Obter duração do áudio
+                audio_duration_cmd = [
+                    'ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+                    '-of', 'default=noprint_wrappers=1:nokey=1', audio_input_absolute
+                ]
+                audio_duration_result = subprocess.run(audio_duration_cmd, capture_output=True, text=True, timeout=10)
+                audio_duration = float(audio_duration_result.stdout.strip()) if audio_duration_result.returncode == 0 else None
+                
+                logger.info(f"🎤 DEBUG: Video duration: {video_duration:.2f}s, Audio duration: {audio_duration:.2f}s")
+                
+                # Se áudio for mais longo que vídeo, estender vídeo repetindo último frame
+                if video_duration and audio_duration and audio_duration > video_duration:
+                    logger.info(f"🎤 DEBUG: Audio ({audio_duration:.2f}s) is longer than video ({video_duration:.2f}s), extending video")
+                    # Usar filtro para estender vídeo até a duração do áudio
+                    video_filter = f"tpad=stop_mode=clone:stop_duration={audio_duration - video_duration}"
+                    cmd = [
+                        'ffmpeg',
+                        '-i', video_input_absolute,
+                        '-i', audio_input_absolute,
+                        '-vf', video_filter,  # Estender vídeo repetindo último frame
+                        '-c:v', 'libx264',
+                        '-preset', 'ultrafast',
+                        '-crf', '23',
+                        '-c:a', 'aac',
+                        '-b:a', '128k',
+                        '-map', '0:v:0',
+                        '-map', '1:a:0',
+                        '-t', str(audio_duration),  # Duração total = duração do áudio
+                        '-movflags', '+faststart',
+                        '-y',
+                        str(output_path)
+                    ]
+                else:
+                    # Áudio não é mais longo, usar shortest normalmente
+                    cmd = [
+                        'ffmpeg',
+                        '-i', video_input_absolute,
+                        '-i', audio_input_absolute,
+                        '-c:v', 'libx264',
+                        '-preset', 'ultrafast',
+                        '-crf', '23',
+                        '-c:a', 'aac',
+                        '-b:a', '128k',
+                        '-map', '0:v:0',
+                        '-map', '1:a:0',
+                        '-shortest',  # End when shortest stream ends
+                        '-movflags', '+faststart',
+                        '-y',
+                        str(output_path)
+                    ]
+            except Exception as e:
+                logger.warning(f"Could not check durations, using default: {e}")
+                # Fallback: usar shortest (comportamento original)
+                cmd = [
+                    'ffmpeg',
+                    '-i', video_input_absolute,
+                    '-i', audio_input_absolute,
+                    '-c:v', 'libx264',
+                    '-preset', 'ultrafast',
+                    '-crf', '23',
+                    '-c:a', 'aac',
+                    '-b:a', '128k',
+                    '-map', '0:v:0',
+                    '-map', '1:a:0',
+                    '-shortest',
+                    '-movflags', '+faststart',
+                    '-y',
+                    str(output_path)
+                ]
             
             logger.info(f"Running ffmpeg to embed audio: {' '.join(cmd)}")
             logger.info(f"🎤 DEBUG: Video input (relative): {video_path}")
