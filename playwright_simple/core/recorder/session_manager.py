@@ -7,7 +7,7 @@ Factory for creating appropriate session types (Recording or Playback).
 """
 
 import logging
-from typing import Optional, Union
+from typing import Optional, Union, List, Dict, Any
 from pathlib import Path
 from datetime import datetime
 
@@ -27,6 +27,12 @@ logger = logging.getLogger(__name__)
 class SessionManager:
     """Manages session creation and lifecycle."""
     
+    __slots__ = (
+        'config', 'page', 'yaml_writer', 'action_converter', 'event_handlers',
+        'command_handlers', 'recorder_logger', 'yaml_steps', 'yaml_data',
+        'video_start_time', 'session'
+    )
+    
     def __init__(
         self,
         config: RecorderConfig,
@@ -36,10 +42,10 @@ class SessionManager:
         event_handlers: EventHandlers,
         command_handlers: CommandHandlers,
         recorder_logger: Optional[RecorderLogger] = None,
-        yaml_steps: Optional[list] = None,
-        yaml_data: Optional[dict] = None,
+        yaml_steps: Optional[List[Dict[str, Any]]] = None,
+        yaml_data: Optional[Dict[str, Any]] = None,
         video_start_time: Optional[datetime] = None
-    ):
+    ) -> None:
         """
         Initialize session manager.
         
@@ -66,9 +72,9 @@ class SessionManager:
         self.yaml_data = yaml_data
         self.video_start_time = video_start_time
         
-        self.session: Optional[RecordingSession | PlaybackSession] = None
+        self.session: Optional[Union[RecordingSession, PlaybackSession]] = None
     
-    def create_session(self) -> RecordingSession | PlaybackSession:
+    def create_session(self) -> Union[RecordingSession, PlaybackSession]:
         """
         Create appropriate session based on mode.
         
@@ -103,7 +109,7 @@ class SessionManager:
         
         return self.session
     
-    async def start(self):
+    async def start(self) -> None:
         """Start the session."""
         if not self.session:
             self.create_session()
@@ -113,7 +119,7 @@ class SessionManager:
         elif isinstance(self.session, PlaybackSession):
             await self.session.execute()
     
-    async def stop(self):
+    async def stop(self) -> None:
         """Stop the session."""
         if isinstance(self.session, RecordingSession):
             await self.session.stop()

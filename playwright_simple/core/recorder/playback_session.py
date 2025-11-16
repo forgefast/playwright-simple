@@ -22,6 +22,11 @@ logger = logging.getLogger(__name__)
 class PlaybackSession:
     """Manages playback session (read mode)."""
     
+    __slots__ = (
+        'page', 'yaml_steps', 'yaml_data', 'command_handlers',
+        'recorder_logger', 'fast_mode', 'video_start_time'
+    )
+    
     def __init__(
         self,
         page: Page,
@@ -31,7 +36,7 @@ class PlaybackSession:
         recorder_logger: Optional[RecorderLogger] = None,
         fast_mode: bool = False,
         video_start_time: Optional[datetime] = None
-    ):
+    ) -> None:
         """
         Initialize playback session.
         
@@ -52,7 +57,7 @@ class PlaybackSession:
         self.fast_mode = fast_mode
         self.video_start_time = video_start_time or datetime.now()
     
-    async def execute(self):
+    async def execute(self) -> None:
         """Execute YAML steps."""
         if not self.yaml_steps:
             logger.warning("No steps to execute")

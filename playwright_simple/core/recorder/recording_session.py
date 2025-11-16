@@ -24,6 +24,11 @@ logger = logging.getLogger(__name__)
 class RecordingSession:
     """Manages recording session (write mode)."""
     
+    __slots__ = (
+        'page', 'yaml_writer', 'action_converter', 'event_handlers',
+        'recorder_logger', 'debug', 'event_capture', 'is_recording', 'is_paused'
+    )
+    
     def __init__(
         self,
         page: Page,
@@ -32,7 +37,7 @@ class RecordingSession:
         event_handlers: EventHandlers,
         recorder_logger: Optional[RecorderLogger] = None,
         debug: bool = False
-    ):
+    ) -> None:
         """
         Initialize recording session.
         
@@ -55,7 +60,7 @@ class RecordingSession:
         self.is_recording = False
         self.is_paused = False
     
-    async def start(self):
+    async def start(self) -> None:
         """Start recording session."""
         # Initialize event capture
         self.event_capture = EventCapture(
@@ -85,7 +90,7 @@ class RecordingSession:
         
         self.is_recording = True
     
-    async def stop(self):
+    async def stop(self) -> None:
         """Stop recording session."""
         if self.event_capture:
             await self.event_capture.stop()
@@ -93,11 +98,11 @@ class RecordingSession:
         
         self.is_recording = False
     
-    def set_recording_state(self, is_recording: bool):
+    def set_recording_state(self, is_recording: bool) -> None:
         """Set recording state."""
         self.is_recording = is_recording
     
-    def set_paused_state(self, is_paused: bool):
+    def set_paused_state(self, is_paused: bool) -> None:
         """Set paused state."""
         self.is_paused = is_paused
 
