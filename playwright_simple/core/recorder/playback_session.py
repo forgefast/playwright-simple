@@ -41,17 +41,36 @@ class PlaybackSession:
         """
         Initialize playback session.
         
+        Manages read mode operations: YAML execution and video generation.
+        This session is responsible for executing pre-recorded YAML steps
+        and generating videos with subtitles and audio.
+        
         Args:
-            page: Playwright Page instance
-            yaml_steps: List of YAML steps to execute
-            yaml_data: Full YAML data
-            command_handlers: CommandHandlers instance
-            recorder_logger: Optional RecorderLogger instance
-            fast_mode: Enable fast mode (reduce delays)
-            video_start_time: Video start time for subtitle/audio timing
+            page: Playwright Page instance where steps will be executed
+            yaml_steps: List of YAML steps to execute (cannot be empty)
+            yaml_data: Full YAML data including metadata and configuration
+            command_handlers: CommandHandlers instance for executing actions
+            recorder_logger: Optional RecorderLogger instance for structured logging
+            fast_mode: Enable fast mode (reduce delays for faster execution)
+            video_start_time: Video start time for subtitle/audio timing synchronization
         
         Raises:
-            PlaybackSessionError: If required dependencies are invalid
+            PlaybackSessionError: If required dependencies are None or invalid,
+                or if yaml_steps is empty
+        
+        Example:
+            ```python
+            session = PlaybackSession(
+                page=page,
+                yaml_steps=yaml_steps,
+                yaml_data=yaml_data,
+                command_handlers=command_handlers,
+                recorder_logger=recorder_logger,
+                fast_mode=True,
+                video_start_time=datetime.now()
+            )
+            await session.execute()  # Execute all YAML steps
+            ```
         """
         # Validate required dependencies
         if page is None:
@@ -78,7 +97,16 @@ class PlaybackSession:
         self.video_start_time = video_start_time or datetime.now()
     
     async def execute(self) -> None:
-        """Execute YAML steps."""
+        """
+        Execute YAML steps.
+        
+        Processes all steps in the YAML file sequentially, executing
+        actions (go_to, click, type, submit, wait) and generating
+        video with subtitles and audio if configured.
+        
+        Raises:
+            PlaybackSessionError: If execution fails for any step
+        """
         if not self.yaml_steps:
             logger.warning("No steps to execute")
             return

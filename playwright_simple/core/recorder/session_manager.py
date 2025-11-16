@@ -49,17 +49,47 @@ class SessionManager:
         """
         Initialize session manager.
         
+        Factory for creating appropriate session types (Recording or Playback)
+        based on the recorder configuration mode.
+        
         Args:
-            config: RecorderConfig instance
+            config: RecorderConfig instance with mode ('write' or 'read')
             page: Playwright Page instance
-            yaml_writer: YAMLWriter instance (for write mode)
+            yaml_writer: YAMLWriter instance (required for write mode)
             action_converter: ActionConverter instance
             event_handlers: EventHandlers instance
             command_handlers: CommandHandlers instance
             recorder_logger: Optional RecorderLogger instance
-            yaml_steps: List of YAML steps (for read mode)
-            yaml_data: Full YAML data (for read mode)
+            yaml_steps: List of YAML steps (required for read mode)
+            yaml_data: Full YAML data (required for read mode)
             video_start_time: Video start time (for read mode)
+        
+        Example:
+            ```python
+            # Write mode
+            manager = SessionManager(
+                config=RecorderConfig(output_path=Path("test.yaml"), mode='write'),
+                page=page,
+                yaml_writer=yaml_writer,
+                action_converter=action_converter,
+                event_handlers=event_handlers,
+                command_handlers=command_handlers
+            )
+            session = manager.create_session()  # Returns RecordingSession
+            
+            # Read mode
+            manager = SessionManager(
+                config=RecorderConfig(output_path=Path("test.yaml"), mode='read'),
+                page=page,
+                yaml_writer=None,
+                action_converter=action_converter,
+                event_handlers=event_handlers,
+                command_handlers=command_handlers,
+                yaml_steps=yaml_steps,
+                yaml_data=yaml_data
+            )
+            session = manager.create_session()  # Returns PlaybackSession
+            ```
         """
         self.config = config
         self.page = page
@@ -78,8 +108,14 @@ class SessionManager:
         """
         Create appropriate session based on mode.
         
+        Factory method that creates either a RecordingSession (for write mode)
+        or PlaybackSession (for read mode) based on the configuration.
+        
         Returns:
-            RecordingSession or PlaybackSession instance
+            RecordingSession if mode is 'write', PlaybackSession if mode is 'read'
+        
+        Raises:
+            ValueError: If required dependencies are missing for the selected mode
         """
         if self.config.mode == 'write':
             if not self.yaml_writer:
@@ -110,7 +146,17 @@ class SessionManager:
         return self.session
     
     async def start(self) -> None:
-        """Start the session."""
+        """
+        Start the session.
+        
+        Creates the session if not already created, then starts it.
+        For RecordingSession, this begins event capture.
+        For PlaybackSession, this executes all YAML steps.
+        
+        Raises:
+            RecordingSessionError: If recording session fails to start
+            PlaybackSessionError: If playback session fails to execute
+        """
         if not self.session:
             self.create_session()
         
@@ -120,7 +166,13 @@ class SessionManager:
             await self.session.execute()
     
     async def stop(self) -> None:
-        """Stop the session."""
+        """
+        Stop the session.
+        
+        Stops the active session. Only RecordingSession needs explicit
+        stopping (to finalize event capture). PlaybackSession completes
+        automatically after execution.
+        """
         if isinstance(self.session, RecordingSession):
             await self.session.stop()
 

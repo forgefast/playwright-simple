@@ -42,16 +42,35 @@ class RecordingSession:
         """
         Initialize recording session.
         
+        Manages write mode operations: event capture, conversion, and YAML writing.
+        This session is responsible for capturing user interactions and converting
+        them into YAML steps.
+        
         Args:
-            page: Playwright Page instance
-            yaml_writer: YAMLWriter instance
-            action_converter: ActionConverter instance
-            event_handlers: EventHandlers instance
-            recorder_logger: Optional RecorderLogger instance
-            debug: Enable debug mode
+            page: Playwright Page instance where events will be captured
+            yaml_writer: YAMLWriter instance for writing captured steps
+            action_converter: ActionConverter instance for converting events to actions
+            event_handlers: EventHandlers instance for processing browser events
+            recorder_logger: Optional RecorderLogger instance for structured logging
+            debug: Enable debug mode (verbose logging)
         
         Raises:
-            RecordingSessionError: If required dependencies are invalid
+            RecordingSessionError: If required dependencies are None or invalid
+        
+        Example:
+            ```python
+            session = RecordingSession(
+                page=page,
+                yaml_writer=yaml_writer,
+                action_converter=action_converter,
+                event_handlers=event_handlers,
+                recorder_logger=recorder_logger,
+                debug=False
+            )
+            await session.start()  # Begin capturing events
+            # ... user interactions ...
+            await session.stop()  # Stop capturing and finalize
+            ```
         """
         # Validate required dependencies
         if page is None:
@@ -86,7 +105,16 @@ class RecordingSession:
         self.is_paused = False
     
     async def start(self) -> None:
-        """Start recording session."""
+        """
+        Start recording session.
+        
+        Initializes event capture and begins listening for user interactions.
+        After calling this method, all browser events (clicks, typing, etc.)
+        will be captured and converted to YAML steps.
+        
+        Raises:
+            RecordingSessionError: If event capture fails to start
+        """
         # Initialize event capture
         self.event_capture = EventCapture(
             self.page,
@@ -116,7 +144,12 @@ class RecordingSession:
         self.is_recording = True
     
     async def stop(self) -> None:
-        """Stop recording session."""
+        """
+        Stop recording session.
+        
+        Stops event capture and finalizes the recording. After calling
+        this method, no more events will be captured.
+        """
         if self.event_capture:
             await self.event_capture.stop()
             self.event_capture = None
@@ -124,10 +157,20 @@ class RecordingSession:
         self.is_recording = False
     
     def set_recording_state(self, is_recording: bool) -> None:
-        """Set recording state."""
+        """
+        Set recording state.
+        
+        Args:
+            is_recording: True to enable recording, False to disable
+        """
         self.is_recording = is_recording
     
     def set_paused_state(self, is_paused: bool) -> None:
-        """Set paused state."""
+        """
+        Set paused state.
+        
+        Args:
+            is_paused: True to pause recording, False to resume
+        """
         self.is_paused = is_paused
 
