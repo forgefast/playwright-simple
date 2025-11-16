@@ -711,6 +711,10 @@ class CursorInteraction:
                 }}
             """)
             
+            # Move Playwright mouse to position before clicking (consistent with other methods)
+            await self.page.mouse.move(click_x, click_y)
+            await asyncio.sleep(_get_delay(self.controller, 0.1))
+            
             # Perform actual click using mouse (consistent with other methods)
             await self.page.mouse.click(click_x, click_y)
             logger.info(f"Clicked on element with selector '{selector}' at ({click_x}, {click_y})")
@@ -775,6 +779,10 @@ class CursorInteraction:
                     }}
                 }}
             """)
+            
+            # Move Playwright mouse to position before clicking (consistent with other methods)
+            await self.page.mouse.move(click_x, click_y)
+            await asyncio.sleep(_get_delay(self.controller, 0.1))
             
             # Perform actual click using mouse (consistent with other methods)
             await self.page.mouse.click(click_x, click_y)
