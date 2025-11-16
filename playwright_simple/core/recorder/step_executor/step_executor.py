@@ -89,9 +89,8 @@ class StepExecutor:
         last_audio_task = None
         
         # Extract pre-generated audio info
+        # Only audio_data is needed - timestamps are now calculated from real step execution times
         audio_data = self.pre_generated_audio_info.get('audio_data', {})
-        adjusted_timestamps = self.pre_generated_audio_info.get('adjusted_timestamps', {})
-        audio_end_times = self.pre_generated_audio_info.get('audio_end_times', {})
         
         # Log execution start
         if self.recorder_logger:
@@ -168,15 +167,36 @@ class StepExecutor:
             
             # AUDIO SYNCHRONIZATION: Wait for previous audio to finish if this step has audio
             # This ensures video is recorded with correct timestamps from the start
-            if i in audio_data and i in adjusted_timestamps and i in audio_end_times:
-                # Step has pre-generated audio
+            # Uses REAL timestamps from previously executed steps, not estimated ones
+            if i in audio_data:
+                # Step has pre-generated audio - get audio data first
+                audio_file, audio_duration = audio_data[i]
                 current_time_elapsed = step_start_elapsed
                 
                 # Check if previous step has audio that is still playing
+                # Use REAL timestamps from the previous step that was already executed
                 previous_audio_end_time = None
-                if i > 1 and (i - 1) in audio_end_times:
-                    # Previous step has audio - check when it ends
-                    previous_audio_end_time = audio_end_times[i - 1]
+                if i > 1 and len(self.steps) > 0:
+                    # Get the previous step (already executed and added to self.steps)
+                    previous_step = self.steps[-1]  # Last executed step
+                    
+                    # Check if previous step has audio
+                    if (hasattr(previous_step, 'audio_file_path') and 
+                        previous_step.audio_file_path and 
+                        hasattr(previous_step, 'audio_duration_seconds') and 
+                        previous_step.audio_duration_seconds and
+                        hasattr(previous_step, '_start_seconds') and
+                        previous_step._start_seconds is not None):
+                        
+                        # If previous and current steps share the same audio file (continuity),
+                        # the audio is already playing, so we don't need to wait
+                        if previous_step.audio_file_path != audio_file:
+                            # Different audio files - calculate when previous audio REALLY ended using real timestamps
+                            previous_audio_end_time = previous_step._start_seconds + previous_step.audio_duration_seconds
+                            logger.debug(f"🎤 Step {i}: Previous step {i-1} audio ends at {previous_audio_end_time:.2f}s (start: {previous_step._start_seconds:.2f}s, duration: {previous_step.audio_duration_seconds:.2f}s)")
+                        else:
+                            # Same audio file - audio is continuing, no need to wait
+                            logger.debug(f"🎤 Step {i}: Previous step {i-1} shares same audio file, audio is continuing")
                 
                 # Determine when this step should start
                 # If previous audio is still playing, wait until it finishes
@@ -189,25 +209,13 @@ class StepExecutor:
                     step_start_datetime = datetime.now()
                     step_start_elapsed = (step_start_datetime - video_start_datetime).total_seconds()
                     logger.info(f"🎤 Step {i}: Waited, new start time: {step_start_elapsed:.2f}s")
-                else:
-                    # No previous audio or it already finished - use adjusted timestamp if available
-                    adjusted_start_time = adjusted_timestamps[i]
-                    if adjusted_start_time > current_time_elapsed:
-                        wait_time = adjusted_start_time - current_time_elapsed
-                        logger.info(f"🎤 Step {i}: Waiting {wait_time:.2f}s to reach adjusted start time (should start at {adjusted_start_time:.2f}s, current time: {current_time_elapsed:.2f}s)")
-                        await asyncio.sleep(wait_time)
-                        step_start_datetime = datetime.now()
-                        step_start_elapsed = (step_start_datetime - video_start_datetime).total_seconds()
-                        logger.info(f"🎤 Step {i}: Waited, new start time: {step_start_elapsed:.2f}s")
                 
                 # Store audio data in step
-                audio_file, audio_duration = audio_data[i]
                 test_step.audio_file_path = audio_file
                 test_step.audio_duration_seconds = audio_duration
                 
-                # Update last_audio_end_time to when THIS audio ends
-                # audio_end_times[i] is when this audio ends (relative to video start)
-                self.last_audio_end_time = audio_end_times[i]
+                # Note: last_audio_end_time will be updated after step execution completes
+                # when we have the real start_time_seconds value
             
             # Initialize timing - mark as starting
             test_step.start()
@@ -280,6 +288,14 @@ class StepExecutor:
             test_step.complete()
             test_step._end_seconds = step_end_elapsed
             test_step._duration = step_duration
+            
+            # Update last_audio_end_time using REAL timestamps if this step has audio
+            if (hasattr(test_step, 'audio_file_path') and test_step.audio_file_path and
+                hasattr(test_step, 'audio_duration_seconds') and test_step.audio_duration_seconds and
+                test_step._start_seconds is not None):
+                # Calculate when this audio REALLY ends using real timestamps
+                self.last_audio_end_time = test_step._start_seconds + test_step.audio_duration_seconds
+                logger.debug(f"🎤 Step {i}: Audio ends at {self.last_audio_end_time:.2f}s (start: {test_step._start_seconds:.2f}s, duration: {test_step.audio_duration_seconds:.2f}s)")
             
             self.steps.append(test_step)
         
