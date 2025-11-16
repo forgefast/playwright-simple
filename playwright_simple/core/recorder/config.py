@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Literal
 
+from .exceptions import RecorderConfigurationError
+
 
 @dataclass
 class RecorderConfig:
@@ -51,15 +53,21 @@ class RecorderConfig:
         
         # Validate mode
         if self.mode not in ('write', 'read'):
-            raise ValueError(f"Invalid mode: {self.mode}. Must be 'write' or 'read'")
+            raise RecorderConfigurationError(
+                f"Invalid mode: {self.mode}. Must be 'write' or 'read'",
+                details={'mode': self.mode, 'valid_modes': ['write', 'read']}
+            )
         
         # Validate log_level if provided
         if self.log_level is not None:
             valid_levels = ('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL')
             if self.log_level.upper() not in valid_levels:
-                raise ValueError(
-                    f"Invalid log_level: {self.log_level}. "
-                    f"Must be one of {valid_levels}"
+                raise RecorderConfigurationError(
+                    f"Invalid log_level: {self.log_level}",
+                    details={
+                        'log_level': self.log_level,
+                        'valid_levels': list(valid_levels)
+                    }
                 )
         
         # Note: In read mode, output_path must exist, but we don't validate here

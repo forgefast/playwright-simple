@@ -14,6 +14,7 @@ from datetime import datetime
 
 from .command_handlers import CommandHandlers
 from .recorder_logger import RecorderLogger
+from .exceptions import PlaybackSessionError
 from playwright.async_api import Page
 
 logger = logging.getLogger(__name__)
@@ -48,7 +49,26 @@ class PlaybackSession:
             recorder_logger: Optional RecorderLogger instance
             fast_mode: Enable fast mode (reduce delays)
             video_start_time: Video start time for subtitle/audio timing
+        
+        Raises:
+            PlaybackSessionError: If required dependencies are invalid
         """
+        # Validate required dependencies
+        if page is None:
+            raise PlaybackSessionError(
+                "Page instance is required",
+                details={'parameter': 'page'}
+            )
+        if not yaml_steps:
+            raise PlaybackSessionError(
+                "YAML steps list cannot be empty",
+                details={'yaml_steps_count': len(yaml_steps) if yaml_steps else 0}
+            )
+        if command_handlers is None:
+            raise PlaybackSessionError(
+                "CommandHandlers instance is required",
+                details={'parameter': 'command_handlers'}
+            )
         self.page = page
         self.yaml_steps = yaml_steps
         self.yaml_data = yaml_data

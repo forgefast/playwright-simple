@@ -16,6 +16,7 @@ from .action_converter import ActionConverter
 from .yaml_writer import YAMLWriter
 from .event_handlers import EventHandlers
 from .recorder_logger import RecorderLogger
+from .exceptions import RecordingSessionError
 from playwright.async_api import Page
 
 logger = logging.getLogger(__name__)
@@ -48,7 +49,31 @@ class RecordingSession:
             event_handlers: EventHandlers instance
             recorder_logger: Optional RecorderLogger instance
             debug: Enable debug mode
+        
+        Raises:
+            RecordingSessionError: If required dependencies are invalid
         """
+        # Validate required dependencies
+        if page is None:
+            raise RecordingSessionError(
+                "Page instance is required",
+                details={'parameter': 'page'}
+            )
+        if yaml_writer is None:
+            raise RecordingSessionError(
+                "YAMLWriter instance is required",
+                details={'parameter': 'yaml_writer'}
+            )
+        if action_converter is None:
+            raise RecordingSessionError(
+                "ActionConverter instance is required",
+                details={'parameter': 'action_converter'}
+            )
+        if event_handlers is None:
+            raise RecordingSessionError(
+                "EventHandlers instance is required",
+                details={'parameter': 'event_handlers'}
+            )
         self.page = page
         self.yaml_writer = yaml_writer
         self.action_converter = action_converter
