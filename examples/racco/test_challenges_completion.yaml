@@ -1,0 +1,167 @@
+name: Completar Desafios
+description: Demonstra desafios disponíveis e como completá-los.
+
+base_url: https://odoo.racco.com.br
+
+config:
+  video:
+    enabled: true
+    quality: high
+    codec: mp4
+    speed: 1.0
+    subtitles: true
+    hard_subtitles: false
+    audio: true
+    narration: true
+    narration_lang: pt-BR
+    narration_engine: gtts
+    narration_slow: false
+  debug:
+    enabled: true
+    pause_on_error: true
+    interactive_mode: true
+    hot_reload_enabled: true
+  logging:
+    level: DEBUG
+    console_output: true
+  browser:
+    headless: false
+    slow_mo: 50
+
+steps:
+  # Login
+  - action: login
+    login: lucia.santos@exemplo.com
+    password: demo123
+    database: devel
+    description: "Login como revendedor"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Navega para Desafios via Portal (mais acessível)
+  - action: navigate_menu
+    menu_path: ["Portal"]
+    description: "Acessar Portal"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: click_button
+    text: "Desafios"
+    description: "Clicar em Desafios"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 01_all_challenges
+    description: "Todos os Desafios"
+  
+  # Mostra desafios ativos
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 02_active_challenges
+    description: "Desafios Ativos"
+  
+  # Tenta abrir um desafio específico (se disponível)
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 03_challenge_detail
+    description: "Detalhes do Desafio"
+  
+  # Volta para lista de desafios
+  - action: navigate_menu
+    menu_path: ["Portal"]
+    description: "Voltar para Portal"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: click_button
+    text: "Desafios"
+    description: "Clicar em Desafios novamente"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Mostra diferentes tipos de desafios
+  - action: search
+    search_text: "Mensal"
+    description: "Buscar Mensal"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 05_challenge_mensal
+    description: "Desafio Mensal"
+  
+  - action: search
+    search_text: "Trimestral"
+    description: "Buscar Trimestral"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 05_challenge_trimestral
+    description: "Desafio Trimestral"
+  
+  - action: search
+    search_text: "Anual"
+    description: "Buscar Anual"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 05_challenge_anual
+    description: "Desafio Anual"
+  
+  - action: search
+    search_text: "Novos Clientes"
+    description: "Buscar Novos Clientes"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 05_challenge_novos_clientes
+    description: "Desafio Novos Clientes"
+  
+  # Mostra progresso do usuário
+  - action: navigate_menu
+    menu_path: ["Portal"]
+    description: "Voltar para Portal"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: click_button
+    text: "Desafios"
+    description: "Clicar em Desafios"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 06_my_challenges
+    description: "Meus Desafios"
+  
+  # Mostra como completar - faz uma venda
+  - action: navigate_menu
+    menu_path: ["Vendas", "Pedidos"]
+    description: "Navegar para Pedidos"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 07_complete_challenge
+    description: "Como Completar Desafio"
+

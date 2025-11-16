@@ -1,0 +1,33 @@
+name: Criar Registro Odoo
+description: Criar um novo registro usando apenas ações core
+
+# Recebe parâmetros: fields (lista de objetos com label e value)
+# Exemplo: fields: [{"label": "Cliente", "value": "João"}, {"label": "Data", "value": "01/01/2024"}]
+
+steps:
+  # Clicar no botão Criar
+  - action: click
+    text: "Criar"
+    description: "Clicar em Criar"
+  
+  # Aguardar formulário carregar
+  - action: wait
+    seconds: 0.5
+    description: "Aguardar formulário carregar"
+  
+  # Preencher campos
+  - if: "{{ fields }}"
+    then:
+      - for: field in fields
+        steps:
+          - set: field_label = "{{ field.label }}"
+          - set: field_value = "{{ field.value }}"
+          - compose: odoo/fill_field.yaml
+            params:
+              field_label: "{{ field_label }}"
+              field_value: "{{ field_value }}"
+  
+  # Salvar registro
+  - action: click
+    text: "Salvar"
+    description: "Salvar registro"

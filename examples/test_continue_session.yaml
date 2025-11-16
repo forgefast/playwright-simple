@@ -1,0 +1,13 @@
+name: Continue Test with Session
+description: Example of loading session from previous test
+
+# Carrega sessão do teste "Login Test with Session"
+load_session: Login Test with Session
+
+steps:
+  # Já está logado, pode ir direto para outras páginas
+  - go_to: "Vendas > Pedidos"
+  - click: "Criar"
+  - fill: "Cliente = João Silva"
+  - click: "Salvar"
+

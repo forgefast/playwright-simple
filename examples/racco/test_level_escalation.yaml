@@ -1,0 +1,163 @@
+name: Escalonamento de Nível
+description: Mostra os níveis disponíveis e revendedores por nível.
+
+base_url: https://odoo.racco.com.br
+
+config:
+  video:
+    enabled: true
+    quality: high
+    codec: mp4
+    speed: 1.0
+    subtitles: true
+    hard_subtitles: false
+    audio: true
+    narration: true
+    narration_lang: pt-BR
+    narration_engine: gtts
+    narration_slow: false
+  debug:
+    enabled: true
+    pause_on_error: true
+    interactive_mode: true
+    hot_reload_enabled: true
+  logging:
+    level: DEBUG
+    console_output: true
+  browser:
+    headless: false
+    slow_mo: 50
+
+steps:
+  # Login
+  - action: login
+    login: admin
+    password: admin
+    database: devel
+    description: "Login como admin"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Mostra níveis disponíveis - Categorias
+  - action: navigate_menu
+    menu_path: ["Contatos", "Categorias"]
+    description: "Navegar para Categorias"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Filtra e mostra cada nível
+  - action: search
+    search_text: "Bronze"
+    description: "Buscar Bronze"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: level_bronze
+    description: "Nível Bronze"
+  
+  - action: search
+    search_text: "Prata"
+    description: "Buscar Prata"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: level_prata
+    description: "Nível Prata"
+  
+  - action: search
+    search_text: "Ouro"
+    description: "Buscar Ouro"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: level_ouro
+    description: "Nível Ouro"
+  
+  - action: search
+    search_text: "Platinum"
+    description: "Buscar Platinum"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: level_platinum
+    description: "Nível Platinum"
+  
+  # Navega para Clientes para ver revendedores por nível
+  - action: navigate_menu
+    menu_path: ["Contatos", "Clientes"]
+    description: "Navegar para Clientes"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Mostra revendedores Bronze
+  - action: search
+    search_text: "Bronze"
+    description: "Buscar Bronze"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: revendedores_bronze
+    description: "Revendedores Bronze"
+  
+  # Mostra revendedores Prata
+  - action: search
+    search_text: "Prata"
+    description: "Buscar Prata"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: revendedores_prata
+    description: "Revendedores Prata"
+  
+  # Mostra revendedores Ouro
+  - action: search
+    search_text: "Ouro"
+    description: "Buscar Ouro"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: revendedores_ouro
+    description: "Revendedores Ouro"
+  
+  # Mostra revendedores Platinum
+  - action: search
+    search_text: "Platinum"
+    description: "Buscar Platinum"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: revendedores_platinum
+    description: "Revendedores Platinum"
+  
+  # Abre um revendedor para ver detalhes
+  - action: open_record
+    record_text: "Bronze"
+    position: primeiro
+    description: "Abrir revendedor Bronze"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: revendedor_detail
+    description: "Detalhes do Revendedor"
+

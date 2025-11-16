@@ -1,0 +1,258 @@
+name: Comparação entre Níveis de Revendedor
+description: Comparação visual entre os 4 níveis de revendedor (Bronze, Prata, Ouro, Platinum) mostrando diferenças de comissão e funcionalidades.
+
+base_url: https://odoo.racco.com.br
+
+config:
+  video:
+    enabled: true
+    quality: high
+    codec: mp4
+    speed: 1.0
+    subtitles: true
+    hard_subtitles: false
+    audio: true
+    narration: true
+    narration_lang: pt-BR
+    narration_engine: gtts
+    narration_slow: false
+  debug:
+    enabled: true
+    pause_on_error: true
+    interactive_mode: true
+    hot_reload_enabled: true
+  logging:
+    level: DEBUG
+    console_output: true
+  browser:
+    headless: false
+    slow_mo: 50
+
+steps:
+  # Login como admin
+  - action: login
+    login: admin
+    password: admin
+    database: devel
+    description: "Login como admin"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Mostra níveis disponíveis (usando apenas Contatos se submenu não disponível)
+  - action: navigate_menu
+    menu_path: ["Contatos"]
+    description: "Navegar para Contatos"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 01_levels_overview
+    description: "Visão Geral dos Níveis"
+  
+  # Nível Bronze
+  - action: search
+    search_text: "Bronze"
+    description: "Buscar Bronze"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 02_level_bronze
+    description: "Nível Bronze - Comissão 5%"
+  
+  # Mostra revendedores Bronze
+  - action: navigate_menu
+    menu_path: ["Contatos"]
+    description: "Voltar para Contatos"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: search
+    search_text: "Bronze"
+    description: "Buscar Bronze"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 03_revendedores_bronze
+    description: "Revendedores Bronze"
+  
+  # Login como Bronze para ver portal
+  - action: login
+    login: lucia.santos@exemplo.com
+    password: demo123
+    database: devel
+    description: "Login como Bronze"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: navigate_menu
+    menu_path: ["Portal"]
+    description: "Acessar Portal"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 04_portal_bronze
+    description: "Portal Revendedor Bronze"
+  
+  - action: click_button
+    text: "Comissões"
+    description: "Clicar em Comissões"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 05_comissoes_bronze
+    description: "Comissões Bronze (5%)"
+  
+  # Logout e login como Prata
+  - action: logout
+    description: "Logout"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: login
+    login: mariana.lima@exemplo.com
+    password: demo123
+    database: devel
+    description: "Login como Prata"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: navigate_menu
+    menu_path: ["Portal"]
+    description: "Acessar Portal"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 06_portal_prata
+    description: "Portal Revendedor Prata"
+  
+  - action: click_button
+    text: "Comissões"
+    description: "Clicar em Comissões"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 07_comissoes_prata
+    description: "Comissões Prata (7.5%)"
+  
+  # Logout e login como Ouro
+  - action: logout
+    description: "Logout"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: login
+    login: adriana.santos@exemplo.com
+    password: demo123
+    database: devel
+    description: "Login como Ouro"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: navigate_menu
+    menu_path: ["Portal"]
+    description: "Acessar Portal"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 08_portal_ouro
+    description: "Portal Revendedor Ouro"
+  
+  - action: click_button
+    text: "Comissões"
+    description: "Clicar em Comissões"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 09_comissoes_ouro
+    description: "Comissões Ouro (10%)"
+  
+  # Logout e login como Platinum
+  - action: logout
+    description: "Logout"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: login
+    login: helena.souza@exemplo.com
+    password: demo123
+    database: devel
+    description: "Login como Platinum"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: navigate_menu
+    menu_path: ["Portal"]
+    description: "Acessar Portal"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 10_portal_platinum
+    description: "Portal Revendedor Platinum"
+  
+  - action: click_button
+    text: "Comissões"
+    description: "Clicar em Comissões"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 11_comissoes_platinum
+    description: "Comissões Platinum (12.5%)"
+  
+  # Volta como admin para mostrar comparação
+  - action: logout
+    description: "Logout"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: login
+    login: admin
+    password: admin
+    database: devel
+    description: "Login como admin"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Mostra comparação de níveis
+  - action: navigate_menu
+    menu_path: ["Contatos"]
+    description: "Navegar para Contatos"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 12_levels_comparison
+    description: "Comparação Final dos Níveis"
+

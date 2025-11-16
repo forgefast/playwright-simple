@@ -1,0 +1,24 @@
+# Teste de Validação: Auto-Fix
+# Use: playwright-simple run test_auto_fix.yaml --debug
+# Este teste tem um erro proposital para testar auto-fix
+
+name: Teste Auto-Fix
+description: Teste para validar correção automática de erros
+
+steps:
+  - action: go_to
+    url: https://example.com
+    description: Navegar para example.com
+    
+  # Este botão não existe - auto-fix deve tentar corrigir
+  - action: click
+    text: "Botão Que Não Existe"
+    description: Clicar em botão inexistente (teste de auto-fix)
+    
+  # Auto-fix deve:
+  # 1. Detectar que botão não existe
+  # 2. Analisar HTML disponível
+  # 3. Sugerir correção (se houver elemento similar)
+  # 4. Aplicar correção automaticamente
+  # 5. Tentar novamente
+

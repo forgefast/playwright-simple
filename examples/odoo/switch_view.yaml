@@ -1,0 +1,30 @@
+name: Trocar View Odoo
+description: Trocar entre List, Form, Kanban usando apenas ações core
+
+# Recebe parâmetros: view_type (list, form, kanban)
+
+steps:
+  # Clicar no botão de trocar view
+  - if: "{{ view_type == 'list' }}"
+    then:
+      - action: click
+        text: "Lista"
+        description: "Trocar para view Lista"
+  - elif:
+      - if: "{{ view_type == 'form' }}"
+        then:
+          - action: click
+            text: "Formulário"
+            description: "Trocar para view Formulário"
+  - elif:
+      - if: "{{ view_type == 'kanban' }}"
+        then:
+          - action: click
+            text: "Kanban"
+            description: "Trocar para view Kanban"
+  
+  # Aguardar view carregar
+  - action: wait
+    seconds: 0.5
+    description: "Aguardar view carregar"
+

@@ -1,0 +1,89 @@
+name: Portal do Colaborador Racco - Completo
+description: Teste completo do portal do colaborador com vídeo, áudio e legendas
+
+base_url: https://odoo.racco.com.br
+
+config:
+  video:
+    enabled: true
+    quality: high
+    codec: mp4
+    speed: 1.0
+    subtitles: true
+    hard_subtitles: false
+    audio: true
+    narration: true
+    narration_lang: pt-BR
+    narration_engine: gtts
+    narration_slow: false
+  cursor:
+    style: arrow
+    color: "#007bff"
+    size: medium
+  browser:
+    headless: false
+    slow_mo: 100
+
+steps:
+  # Login usando action genérica (busca automaticamente odoo/login.yaml)
+  - action: login
+    login: maria.santos@racco.com.br
+    password: demo123
+    database: devel
+    otp: null
+    description: "Login no sistema Odoo"
+  
+  # Dashboard
+  - action: navigate_menu
+    menu_path: ["Dashboard"]
+    description: "Navegar para Dashboard"
+  
+  - action: screenshot
+    name: 01_colaborador_dashboard
+    description: "Dashboard do Colaborador"
+  
+  # Contatos
+  - action: navigate_menu
+    menu_path: ["Contatos"]
+    description: "Navegar para Contatos"
+  
+  - action: screenshot
+    name: 02_colaborador_clientes
+    description: "Gestão de Clientes"
+  
+  # Filtros: Usar action genérica (busca automaticamente odoo/filter_by.yaml)
+  - action: filter_by
+    filter_text: "Consumidor"
+    description: "Filtrar por Consumidor"
+  
+  - action: screenshot
+    name: 03_consumidores_view
+    description: "Lista de Contatos com filtros"
+  
+  # Vendas > Pedidos
+  - action: navigate_menu
+    menu_path: ["Vendas", "Pedidos"]
+    description: "Navegar para Vendas > Pedidos"
+  
+  - action: screenshot
+    name: 05_colaborador_pedidos
+    description: "Gestão de Pedidos"
+  
+  # Vendas > Produtos
+  - action: navigate_menu
+    menu_path: ["Vendas", "Produtos"]
+    description: "Navegar para Vendas > Produtos"
+  
+  - action: screenshot
+    name: 07_colaborador_produtos
+    description: "Gestão de Produtos"
+  
+  # Portal
+  - action: navigate_menu
+    menu_path: ["Portal"]
+    description: "Navegar para Portal"
+  
+  - action: screenshot
+    name: 10_colaborador_portal
+    description: "Portal do Colaborador"
+

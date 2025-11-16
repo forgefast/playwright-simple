@@ -1,0 +1,34 @@
+name: Deletar Registro Odoo
+description: Deletar um registro usando apenas ações core
+
+# Recebe parâmetros: confirm (opcional, default true)
+
+steps:
+  # Clicar no botão Ação ou menu de ações
+  - action: click
+    text: "Ação"
+    description: "Abrir menu de ações"
+    optional: true
+  
+  # Clicar em Deletar
+  - action: click
+    text: "Deletar"
+    description: "Clicar em Deletar"
+  
+  # Confirmar deleção (se solicitado)
+  - if: "{{ confirm != false }}"
+    then:
+      - action: click
+        text: "Confirmar"
+        description: "Confirmar deleção"
+        optional: true
+      - action: click
+        text: "OK"
+        description: "Confirmar deleção (OK)"
+        optional: true
+  
+  # Aguardar deleção completar
+  - action: wait
+    seconds: 0.5
+    description: "Aguardar deleção completar"
+

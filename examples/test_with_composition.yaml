@@ -1,0 +1,11 @@
+name: Test with Composition
+description: Example of using include to compose steps from multiple files
+
+# Inclui steps de common_login.yaml (composição)
+include: common_login.yaml
+
+steps:
+  - go_to: "Dashboard"
+  - wait: 2
+  - screenshot: dashboard_after_login
+

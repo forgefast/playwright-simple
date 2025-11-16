@@ -1,0 +1,137 @@
+name: Portal do Revendedor Platinum
+description: Demonstra portal e funcionalidades específicas do Revendedor Platinum.
+
+base_url: https://odoo.racco.com.br
+
+config:
+  video:
+    enabled: true
+    quality: high
+    codec: mp4
+    speed: 1.0
+    subtitles: true
+    hard_subtitles: false
+    audio: true
+    narration: true
+    narration_lang: pt-BR
+    narration_engine: gtts
+    narration_slow: false
+  debug:
+    enabled: true
+    pause_on_error: true
+    interactive_mode: true
+    hot_reload_enabled: true
+  logging:
+    level: DEBUG
+    console_output: true
+  browser:
+    headless: false
+    slow_mo: 50
+
+steps:
+  # Login
+  - action: login
+    login: helena.souza@exemplo.com
+    password: demo123
+    database: devel
+    description: "Login como Revendedor Platinum"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Dashboard do Revendedor Platinum
+  - action: navigate_menu
+    menu_path: ["Dashboard"]
+    description: "Navegar para Dashboard"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 01_platinum_dashboard
+    description: "Dashboard do Revendedor Platinum"
+  
+  # Acessa portal
+  - action: navigate_menu
+    menu_path: ["Portal"]
+    description: "Acessar Portal"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 02_platinum_portal
+    description: "Portal do Revendedor Platinum"
+  
+  # Mostra pedidos
+  - action: click_button
+    text: "Pedidos"
+    description: "Clicar em Pedidos"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 03_platinum_pedidos
+    description: "Pedidos do Revendedor Platinum"
+  
+  # Mostra comissões (12.5%)
+  - action: click_button
+    text: "Comissões"
+    description: "Clicar em Comissões"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 04_platinum_comissoes
+    description: "Comissões Platinum (12.5%)"
+  
+  # Acessa catálogo
+  - action: navigate_menu
+    menu_path: ["Loja"]
+    description: "Acessar Loja"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 05_platinum_catalogo
+    description: "Catálogo de Produtos"
+  
+  # Mostra cursos disponíveis
+  - action: navigate_menu
+    menu_path: ["Website", "Cursos"]
+    description: "Navegar para Cursos"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 06_platinum_cursos
+    description: "Cursos de Treinamento"
+  
+  # Mostra badges
+  - action: navigate_menu
+    menu_path: ["Gamificação", "Badges"]
+    description: "Navegar para Badges"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 07_platinum_badges
+    description: "Badges Disponíveis"
+  
+  # Volta para portal e mostra nível
+  - action: navigate_menu
+    menu_path: ["Portal"]
+    description: "Voltar para Portal"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 08_platinum_nivel
+    description: "Nível Platinum no Portal"
+

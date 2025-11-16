@@ -1,0 +1,8 @@
+name: Common Login
+description: Reusable login steps for Odoo tests
+
+steps:
+  - login: admin
+    password: admin
+    database: devel
+

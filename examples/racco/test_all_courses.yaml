@@ -1,0 +1,176 @@
+name: Todos os Cursos de Treinamento
+description: Navegação completa pelos 5 cursos de treinamento principais do sistema.
+
+base_url: https://odoo.racco.com.br
+
+config:
+  video:
+    enabled: true
+    quality: high
+    codec: mp4
+    speed: 1.0
+    subtitles: true
+    hard_subtitles: false
+    audio: true
+    narration: true
+    narration_lang: pt-BR
+    narration_engine: gtts
+    narration_slow: false
+  debug:
+    enabled: true
+    pause_on_error: true
+    interactive_mode: true
+    hot_reload_enabled: true
+  logging:
+    level: DEBUG
+    console_output: true
+  browser:
+    headless: false
+    slow_mo: 50
+
+steps:
+  # Login
+  - action: login
+    login: lucia.santos@exemplo.com
+    password: demo123
+    database: devel
+    description: "Login como revendedor"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Acessa cursos
+  - action: navigate_menu
+    menu_path: ["Website", "Cursos"]
+    description: "Navegar para Cursos"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 01_all_courses_list
+    description: "Lista de Todos os Cursos"
+  
+  # Curso 1: Introdução aos Produtos Racco (clique no link)
+  - action: click_button
+    text: "Introdução aos Produtos Racco"
+    description: "Clicar em Introdução aos Produtos Racco"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 02_course_introducao_produtos
+    description: "Curso - Introdução aos Produtos Racco"
+  
+  # Volta para lista
+  - action: navigate_menu
+    menu_path: ["Website", "Cursos"]
+    description: "Voltar para Cursos"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Curso 2: Técnicas de Vendas Racco (clique no link)
+  - action: click_button
+    text: "Técnicas de Vendas Racco"
+    description: "Clicar em Técnicas de Vendas Racco"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 03_course_tecnicas_vendas
+    description: "Curso - Técnicas de Vendas Racco"
+  
+  # Volta para lista
+  - action: navigate_menu
+    menu_path: ["Website", "Cursos"]
+    description: "Voltar para Cursos"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Curso 3: Gestão de Clientes e Relacionamento (clique no link)
+  - action: click_button
+    text: "Gestão de Clientes"
+    description: "Clicar em Gestão de Clientes"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 04_course_gestao_clientes
+    description: "Curso - Gestão de Clientes e Relacionamento"
+  
+  # Volta para lista
+  - action: navigate_menu
+    menu_path: ["Website", "Cursos"]
+    description: "Voltar para Cursos"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Curso 4: Sistema de Comissões e Níveis (clique no link)
+  - action: click_button
+    text: "Sistema de Comissões"
+    description: "Clicar em Sistema de Comissões"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 05_course_sistema_comissoes
+    description: "Curso - Sistema de Comissões e Níveis"
+  
+  # Volta para lista
+  - action: navigate_menu
+    menu_path: ["Website", "Cursos"]
+    description: "Voltar para Cursos"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Curso 5: Como Usar o Portal do Revendedor (clique no link)
+  - action: click_button
+    text: "Portal do Revendedor"
+    description: "Clicar em Portal do Revendedor"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 06_course_portal_revendedor
+    description: "Curso - Como Usar o Portal do Revendedor"
+  
+  # Mostra progresso geral
+  - action: navigate_menu
+    menu_path: ["Website", "Cursos"]
+    description: "Voltar para Cursos"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 07_courses_progress
+    description: "Progresso nos Cursos"
+  
+  # Acessa portal para ver certificados
+  - action: navigate_menu
+    menu_path: ["Portal"]
+    description: "Acessar Portal"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: click_button
+    text: "Certificados"
+    description: "Clicar em Certificados"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 08_courses_certificates
+    description: "Certificados Obtidos"
+

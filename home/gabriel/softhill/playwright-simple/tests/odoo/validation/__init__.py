@@ -1,0 +1,2 @@
+# Odoo validation tests
+

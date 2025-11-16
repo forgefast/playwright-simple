@@ -1,0 +1,9 @@
+include README.md
+include LICENSE
+include requirements.txt
+include pyproject.toml
+recursive-include playwright_simple *.py
+recursive-include examples *.yaml *.py *.md
+recursive-include docs *.md
+recursive-include tests *.py
+

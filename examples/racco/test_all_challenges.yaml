@@ -1,0 +1,236 @@
+name: Todos os Desafios
+description: Visualização detalhada dos 5 desafios principais de gamificação.
+
+base_url: https://odoo.racco.com.br
+
+config:
+  video:
+    enabled: true
+    quality: high
+    codec: mp4
+    speed: 1.0
+    subtitles: true
+    hard_subtitles: false
+    audio: true
+    narration: true
+    narration_lang: pt-BR
+    narration_engine: gtts
+    narration_slow: false
+  debug:
+    enabled: true
+    pause_on_error: true
+    interactive_mode: true
+    hot_reload_enabled: true
+  logging:
+    level: DEBUG
+    console_output: true
+  browser:
+    headless: false
+    slow_mo: 50
+
+steps:
+  # Login
+  - action: login
+    login: lucia.santos@exemplo.com
+    password: demo123
+    database: devel
+    description: "Login como revendedor"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Acessa desafios
+  - action: navigate_menu
+    menu_path: ["Gamificação", "Desafios"]
+    description: "Navegar para Desafios"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 01_all_challenges_list
+    description: "Lista de Todos os Desafios"
+  
+  # Desafio 1: Desafio Mensal de Vendas
+  - action: search
+    search_text: "Mensal de Vendas"
+    description: "Buscar Mensal de Vendas"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 02_challenge_mensal_vendas
+    description: "Desafio - Mensal de Vendas"
+  
+  - action: open_record
+    record_text: "Mensal"
+    position: primeiro
+    description: "Abrir desafio Mensal"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 03_challenge_mensal_detail
+    description: "Detalhes do Desafio Mensal"
+  
+  # Volta para lista
+  - action: navigate_menu
+    menu_path: ["Gamificação", "Desafios"]
+    description: "Voltar para Desafios"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Desafio 2: Novos Clientes
+  - action: search
+    search_text: "Novos Clientes"
+    description: "Buscar Novos Clientes"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 04_challenge_novos_clientes
+    description: "Desafio - Novos Clientes"
+  
+  - action: open_record
+    record_text: "Novos Clientes"
+    position: primeiro
+    description: "Abrir desafio Novos Clientes"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 05_challenge_novos_clientes_detail
+    description: "Detalhes do Desafio Novos Clientes"
+  
+  # Volta para lista
+  - action: navigate_menu
+    menu_path: ["Gamificação", "Desafios"]
+    description: "Voltar para Desafios"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Desafio 3: Desafio Trimestral de Vendas
+  - action: search
+    search_text: "Trimestral"
+    description: "Buscar Trimestral"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 06_challenge_trimestral_vendas
+    description: "Desafio - Trimestral de Vendas"
+  
+  - action: open_record
+    record_text: "Trimestral"
+    position: primeiro
+    description: "Abrir desafio Trimestral"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 07_challenge_trimestral_detail
+    description: "Detalhes do Desafio Trimestral"
+  
+  # Volta para lista
+  - action: navigate_menu
+    menu_path: ["Gamificação", "Desafios"]
+    description: "Voltar para Desafios"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Desafio 4: Crescimento de Rede
+  - action: search
+    search_text: "Crescimento de Rede"
+    description: "Buscar Crescimento de Rede"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 08_challenge_crescimento_rede
+    description: "Desafio - Crescimento de Rede"
+  
+  - action: open_record
+    record_text: "Crescimento"
+    position: primeiro
+    description: "Abrir desafio Crescimento"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 09_challenge_crescimento_detail
+    description: "Detalhes do Desafio Crescimento de Rede"
+  
+  # Volta para lista
+  - action: navigate_menu
+    menu_path: ["Gamificação", "Desafios"]
+    description: "Voltar para Desafios"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Desafio 5: Campeão do Ano
+  - action: search
+    search_text: "Campeão do Ano"
+    description: "Buscar Campeão do Ano"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 10_challenge_campeao_ano
+    description: "Desafio - Campeão do Ano"
+  
+  - action: open_record
+    record_text: "Campeão"
+    position: primeiro
+    description: "Abrir desafio Campeão"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 11_challenge_campeao_detail
+    description: "Detalhes do Desafio Campeão do Ano"
+  
+  # Mostra todos os desafios ativos
+  - action: navigate_menu
+    menu_path: ["Gamificação", "Desafios"]
+    description: "Voltar para Desafios"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 12_challenges_active
+    description: "Desafios Ativos"
+  
+  # Mostra desafios do usuário no portal
+  - action: navigate_menu
+    menu_path: ["Portal"]
+    description: "Acessar Portal"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: click_button
+    text: "Desafios"
+    description: "Clicar em Desafios"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 13_my_challenges
+    description: "Meus Desafios"
+

@@ -1,0 +1,148 @@
+name: Sistema de Comissões
+description: Demonstra visualização de comissões, regras e histórico.
+
+base_url: https://odoo.racco.com.br
+
+config:
+  video:
+    enabled: true
+    quality: high
+    codec: mp4
+    speed: 1.0
+    subtitles: true
+    hard_subtitles: false
+    audio: true
+    narration: true
+    narration_lang: pt-BR
+    narration_engine: gtts
+    narration_slow: false
+  debug:
+    enabled: true
+    pause_on_error: true
+    interactive_mode: true
+    hot_reload_enabled: true
+  logging:
+    level: DEBUG
+    console_output: true
+  browser:
+    headless: false
+    slow_mo: 50
+
+steps:
+  # Login
+  - action: login
+    login: admin
+    password: admin
+    database: devel
+    description: "Login como admin"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Tenta acessar módulo de comissões
+  - action: navigate_menu
+    menu_path: ["Vendas", "Pedidos"]
+    description: "Navegar para Pedidos"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 01_sales_orders
+    description: "Pedidos de Venda"
+  
+  # Abre um pedido para ver comissão calculada
+  - action: open_record
+    record_text: "Pedido"
+    position: primeiro
+    description: "Abrir pedido"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 02_order_with_commission
+    description: "Pedido com Comissão"
+  
+  # Mostra comissões por nível - volta para categorias
+  - action: navigate_menu
+    menu_path: ["Contatos", "Categorias"]
+    description: "Navegar para Categorias"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Mostra cada nível e sua comissão
+  - action: search
+    search_text: "Bronze"
+    description: "Buscar Bronze"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 05_commission_bronze
+    description: "Comissão Bronze (5%)"
+  
+  - action: search
+    search_text: "Prata"
+    description: "Buscar Prata"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 05_commission_prata
+    description: "Comissão Prata (7.5%)"
+  
+  - action: search
+    search_text: "Ouro"
+    description: "Buscar Ouro"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 05_commission_ouro
+    description: "Comissão Ouro (10%)"
+  
+  - action: search
+    search_text: "Platinum"
+    description: "Buscar Platinum"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 05_commission_platinum
+    description: "Comissão Platinum (12.5%)"
+  
+  # Login como revendedor para ver suas comissões
+  - action: login
+    login: lucia.santos@exemplo.com
+    password: demo123
+    database: devel
+    description: "Login como revendedor"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Tenta acessar comissões no portal
+  - action: navigate_menu
+    menu_path: ["Portal"]
+    description: "Acessar Portal"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: click_button
+    text: "Comissões"
+    description: "Clicar em Comissões"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 06_my_commissions
+    description: "Minhas Comissões"
+

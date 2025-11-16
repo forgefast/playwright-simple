@@ -1,0 +1,2 @@
+# Odoo unit tests
+

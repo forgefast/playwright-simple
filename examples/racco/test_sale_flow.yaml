@@ -1,0 +1,199 @@
+name: Fluxo Completo de Venda
+description: Revendedor cria um pedido completo com múltiplos produtos.
+
+base_url: https://odoo.racco.com.br
+
+config:
+  video:
+    enabled: true
+    quality: high
+    codec: mp4
+    speed: 1.0
+    subtitles: true
+    hard_subtitles: false
+    audio: true
+    narration: true
+    narration_lang: pt-BR
+    narration_engine: gtts
+    narration_slow: false
+  debug:
+    enabled: true
+    pause_on_error: true
+    interactive_mode: true
+    hot_reload_enabled: true
+  logging:
+    level: DEBUG
+    console_output: true
+  browser:
+    headless: false
+    slow_mo: 50
+
+setup:
+  # Login como revendedor Bronze
+  - action: login
+    login: lucia.santos@exemplo.com
+    password: demo123
+    database: devel
+    description: "Login como revendedor"
+  
+  - action: wait
+    seconds: 0.2
+
+steps:
+  # Navega para Pedidos
+  - action: navigate_menu
+    menu_path: ["Vendas", "Pedidos"]
+    description: "Navegar para Pedidos"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 01_lista_pedidos
+    description: "Lista de Pedidos de Venda"
+  
+  # Cria novo pedido
+  - action: click_button
+    text: "Criar"
+    description: "Criar novo pedido"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 02_formulario_pedido_vazio
+    description: "Formulário de Novo Pedido"
+  
+  # Seleciona cliente
+  - action: fill_field
+    field_label: "Cliente"
+    field_value: "Juliana"
+    description: "Preencher campo Cliente"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 03_cliente_selecionado
+    description: "Cliente Selecionado"
+  
+  # Adiciona primeiro produto
+  - action: click_button
+    text: "Adicionar linha"
+    description: "Adicionar linha de produto"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: fill_field
+    field_label: "Produto"
+    field_value: "Batom"
+    description: "Preencher campo Produto"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: fill_field
+    field_label: "Quantidade"
+    field_value: "10"
+    description: "Preencher campo Quantidade"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 04_primeiro_produto_adicionado
+    description: "Primeiro Produto Adicionado"
+  
+  # Adiciona segundo produto
+  - action: click_button
+    text: "Adicionar linha"
+    description: "Adicionar segunda linha"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: fill_field
+    field_label: "Produto"
+    field_value: "Base"
+    description: "Preencher campo Produto"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: fill_field
+    field_label: "Quantidade"
+    field_value: "5"
+    description: "Preencher campo Quantidade"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 05_segundo_produto_adicionado
+    description: "Segundo Produto Adicionado"
+  
+  # Adiciona terceiro produto
+  - action: click_button
+    text: "Adicionar linha"
+    description: "Adicionar terceira linha"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: fill_field
+    field_label: "Produto"
+    field_value: "Perfume"
+    description: "Preencher campo Produto"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: fill_field
+    field_label: "Quantidade"
+    field_value: "2"
+    description: "Preencher campo Quantidade"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 06_todos_produtos_adicionados
+    description: "Todos os Produtos Adicionados"
+  
+  # Salva pedido
+  - action: click_button
+    text: "Salvar"
+    description: "Salvar pedido"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 07_pedido_salvo
+    description: "Pedido Salvo com Sucesso"
+  
+  # Verifica total do pedido
+  - action: screenshot
+    name: 08_pedido_completo
+    description: "Pedido Completo com Total Calculado"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Tenta confirmar pedido
+  - action: click_button
+    text: "Confirmar"
+    description: "Confirmar pedido"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 09_pedido_confirmado
+    description: "Pedido Confirmado e Processado"
+
+teardown:
+  - action: logout
+    description: "Logout"
+

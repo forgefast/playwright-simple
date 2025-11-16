@@ -1,0 +1,243 @@
+name: Fluxo MLM Completo
+description: "Demonstra jornada completa: ingresso → venda → escalonamento."
+
+base_url: https://odoo.racco.com.br
+
+config:
+  video:
+    enabled: true
+    quality: high
+    codec: mp4
+    speed: 1.0
+    subtitles: true
+    hard_subtitles: false
+    audio: true
+    narration: true
+    narration_lang: pt-BR
+    narration_engine: gtts
+    narration_slow: false
+  debug:
+    enabled: true
+    pause_on_error: true
+    interactive_mode: true
+    hot_reload_enabled: true
+  logging:
+    level: DEBUG
+    console_output: true
+  browser:
+    headless: false
+    slow_mo: 50
+
+steps:
+  # 1. INGRESSO - Mostra como se tornar revendedor
+  - action: login
+    login: admin
+    password: admin
+    database: devel
+    description: "Login como admin"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: navigate_menu
+    menu_path: ["Contatos", "Categorias"]
+    description: "Navegar para Categorias"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 01_mlm_ingress
+    description: "Critérios de Ingresso"
+  
+  # 2. NOVO REVENDEDOR - Login como revendedor Bronze
+  - action: login
+    login: lucia.santos@exemplo.com
+    password: demo123
+    database: devel
+    description: "Login como revendedor"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 02_mlm_new_reseller
+    description: "Novo Revendedor Bronze"
+  
+  # 3. PRIMEIRA VENDA - Cria pedido
+  - action: navigate_menu
+    menu_path: ["Vendas", "Pedidos"]
+    description: "Navegar para Pedidos"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: click_button
+    text: "Criar"
+    description: "Criar novo pedido"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: fill_field
+    field_label: "Cliente"
+    field_value: "Juliana"
+    description: "Preencher campo Cliente"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: click_button
+    text: "Adicionar linha"
+    description: "Adicionar linha"
+  
+  - action: fill_field
+    field_label: "Produto"
+    field_value: "Batom"
+    description: "Preencher campo Produto"
+  
+  - action: fill_field
+    field_label: "Quantidade"
+    field_value: "5"
+    description: "Preencher campo Quantidade"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: click_button
+    text: "Salvar"
+    description: "Salvar pedido"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 03_mlm_first_sale
+    description: "Primeira Venda"
+  
+  # 4. CRESCIMENTO - Mostra progresso
+  - action: navigate_menu
+    menu_path: ["Vendas", "Pedidos"]
+    description: "Navegar para Pedidos"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 04_mlm_growth
+    description: "Crescimento de Vendas"
+  
+  # 5. ESCALONAMENTO - Mostra níveis
+  - action: login
+    login: admin
+    password: admin
+    database: devel
+    description: "Login como admin"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: navigate_menu
+    menu_path: ["Contatos", "Clientes"]
+    description: "Navegar para Clientes"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: search
+    search_text: "Bronze"
+    description: "Buscar Bronze"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: search
+    search_text: "Prata"
+    description: "Buscar Prata"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: search
+    search_text: "Ouro"
+    description: "Buscar Ouro"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: search
+    search_text: "Platinum"
+    description: "Buscar Platinum"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 05_mlm_levels
+    description: "Níveis de Escalonamento"
+  
+  # 6. REDE MLM - Mostra hierarquia
+  - action: search
+    search_text: "Revendedor"
+    description: "Buscar Revendedor"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 06_mlm_network
+    description: "Rede MLM Completa"
+  
+  # 7. COMISSÕES - Mostra sistema de comissões
+  - action: navigate_menu
+    menu_path: ["Vendas", "Pedidos"]
+    description: "Navegar para Pedidos"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: open_record
+    record_text: "Pedido"
+    position: primeiro
+    description: "Abrir pedido"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 07_mlm_commissions
+    description: "Sistema de Comissões"
+  
+  # 8. GAMIFICAÇÃO - Mostra badges e conquistas
+  - action: login
+    login: lucia.santos@exemplo.com
+    password: demo123
+    database: devel
+    description: "Login como revendedor"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: navigate_menu
+    menu_path: ["Gamificação", "Badges"]
+    description: "Navegar para Badges"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 08_mlm_gamification
+    description: "Gamificação e Conquistas"
+  
+  # 9. TREINAMENTO - Mostra cursos
+  - action: navigate_menu
+    menu_path: ["Website", "Cursos"]
+    description: "Navegar para Cursos"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 09_mlm_training
+    description: "Treinamento e Desenvolvimento"
+

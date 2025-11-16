@@ -1,0 +1,189 @@
+name: Gestão de Rede pelo Diretor
+description: Demonstra funcionalidades de gestão de rede MLM pelo Diretor de Rede.
+
+base_url: https://odoo.racco.com.br
+
+config:
+  video:
+    enabled: true
+    quality: high
+    codec: mp4
+    speed: 1.0
+    subtitles: true
+    hard_subtitles: false
+    audio: true
+    narration: true
+    narration_lang: pt-BR
+    narration_engine: gtts
+    narration_slow: false
+  debug:
+    enabled: true
+    pause_on_error: true
+    interactive_mode: true
+    hot_reload_enabled: true
+  logging:
+    level: DEBUG
+    console_output: true
+  browser:
+    headless: false
+    slow_mo: 50
+
+steps:
+  # Login
+  - action: login
+    login: roberto.gomes@racco.com.br
+    password: demo123
+    database: devel
+    description: "Login como Diretor de Rede"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Dashboard do Diretor
+  - action: navigate_menu
+    menu_path: ["Dashboard"]
+    description: "Navegar para Dashboard"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 01_diretor_dashboard
+    description: "Dashboard do Diretor de Rede"
+  
+  # Acessa gestão completa de parceiros
+  - action: navigate_menu
+    menu_path: ["Contatos"]
+    description: "Navegar para Contatos"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 02_diretor_parceiros
+    description: "Todos os Parceiros da Rede"
+  
+  # Mostra revendedores por nível
+  - action: search
+    search_text: "Bronze"
+    description: "Buscar Bronze"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 03_rede_bronze
+    description: "Revendedores Bronze na Rede"
+  
+  - action: search
+    search_text: "Prata"
+    description: "Buscar Prata"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 04_rede_prata
+    description: "Revendedores Prata na Rede"
+  
+  - action: search
+    search_text: "Ouro"
+    description: "Buscar Ouro"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 05_rede_ouro
+    description: "Revendedores Ouro na Rede"
+  
+  - action: search
+    search_text: "Platinum"
+    description: "Buscar Platinum"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 06_rede_platinum
+    description: "Revendedores Platinum na Rede"
+  
+  # Mostra outros perfis
+  - action: search
+    search_text: "Promotor"
+    description: "Buscar Promotor"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 07_rede_promotores
+    description: "Promotores de Vendas"
+  
+  - action: search
+    search_text: "Centro"
+    description: "Buscar Centro"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 08_rede_centros
+    description: "Centros de Distribuição"
+  
+  # Acessa estatísticas da rede
+  - action: search
+    search_text: "Revendedor"
+    description: "Buscar Revendedor"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 09_rede_estatisticas
+    description: "Estatísticas da Rede MLM"
+  
+  # Acessa vendas da rede
+  - action: navigate_menu
+    menu_path: ["Vendas", "Pedidos"]
+    description: "Navegar para Pedidos"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 10_diretor_vendas
+    description: "Vendas da Rede"
+  
+  # Mostra comissões da rede
+  - action: navigate_menu
+    menu_path: ["Vendas", "Pedidos"]
+    description: "Navegar para Pedidos novamente"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: open_record
+    record_text: "Pedido"
+    position: primeiro
+    description: "Abrir pedido"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 11_diretor_comissoes
+    description: "Comissões da Rede"
+  
+  # Acessa portal do diretor
+  - action: navigate_menu
+    menu_path: ["Portal"]
+    description: "Acessar Portal"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 12_diretor_portal
+    description: "Portal do Diretor de Rede"
+

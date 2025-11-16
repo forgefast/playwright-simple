@@ -1,0 +1,119 @@
+name: Arquitetura do Sistema
+description: Mostra módulos instalados, estrutura de perfis e configurações principais.
+
+base_url: https://odoo.racco.com.br
+
+config:
+  video:
+    enabled: true
+    quality: high
+    codec: mp4
+    speed: 1.0
+    subtitles: true
+    hard_subtitles: false
+    audio: true
+    narration: true
+    narration_lang: pt-BR
+    narration_engine: gtts
+    narration_slow: false
+  debug:
+    enabled: true
+    pause_on_error: true
+    interactive_mode: true
+    hot_reload_enabled: true
+  logging:
+    level: DEBUG
+    console_output: true
+  browser:
+    headless: false
+    slow_mo: 50
+
+steps:
+  # Login
+  - action: login
+    login: admin
+    password: admin
+    database: devel
+    description: "Login como admin"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Acessa Apps para ver módulos instalados
+  - action: navigate_menu
+    menu_path: ["Dashboard"]
+    description: "Navegar para Dashboard"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: click_button
+    text: "Apps"
+    description: "Clicar em Apps"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 01_apps_menu
+    description: "Menu de Aplicativos"
+  
+  # Mostra estrutura de perfis - Categorias de Parceiros
+  - action: navigate_menu
+    menu_path: ["Contatos"]
+    description: "Navegar para Contatos"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 02_partner_categories
+    description: "Categorias de Parceiros (Perfis)"
+  
+  # Filtra para mostrar diferentes perfis
+  - action: search
+    search_text: "Revendedor"
+    description: "Buscar Revendedor"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 03_revendedor_categories
+    description: "Categorias de Revendedores"
+  
+  # Mostra níveis de revendedor
+  - action: search
+    search_text: "Bronze"
+    description: "Buscar Bronze"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 04_levels_bronze
+    description: "Nível Bronze"
+  
+  - action: search
+    search_text: "Platinum"
+    description: "Buscar Platinum"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 05_levels_platinum
+    description: "Nível Platinum"
+  
+  # Mostra configurações principais - Vendas
+  - action: navigate_menu
+    menu_path: ["Vendas", "Configuração"]
+    description: "Navegar para Vendas > Configuração"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 06_sales_config
+    description: "Configurações de Vendas"
+

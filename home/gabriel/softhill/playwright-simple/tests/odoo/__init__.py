@@ -1,0 +1,2 @@
+# Odoo extension tests
+

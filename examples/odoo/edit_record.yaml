@@ -1,0 +1,41 @@
+name: Editar Registro Odoo
+description: Editar um registro existente usando apenas ações core
+
+# Recebe parâmetros: record_text (opcional, para buscar), fields (dict com campos a editar)
+
+steps:
+  # Abrir registro se necessário
+  - if: "{{ record_text }}"
+    then:
+      - compose: odoo/open_record.yaml
+        params:
+          record_text: "{{ record_text }}"
+  
+  # Clicar em Editar
+  - action: click
+    text: "Editar"
+    description: "Clicar em Editar"
+  
+  # Aguardar formulário entrar em modo edição
+  - action: wait
+    seconds: 0.5
+    description: "Aguardar modo edição"
+  
+  # Preencher campos
+  # Nota: Para usar com dict, passe fields como lista: [{"label": "Cliente", "value": "João"}, ...]
+  - if: "{{ fields }}"
+    then:
+      - for: field in fields
+        steps:
+          - set: field_label = "{{ field.label }}"
+          - set: field_value = "{{ field.value }}"
+          - compose: odoo/fill_field.yaml
+            params:
+              field_label: "{{ field_label }}"
+              field_value: "{{ field_value }}"
+  
+  # Salvar alterações
+  - action: click
+    text: "Salvar"
+    description: "Salvar alterações"
+

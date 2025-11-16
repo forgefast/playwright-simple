@@ -1,0 +1,92 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project.scripts]
+playwright-simple = "playwright_simple.cli:main"
+
+[project]
+name = "playwright-simple"
+version = "1.0.0"
+description = "A simple and intuitive library for writing Playwright tests, designed for QAs without deep programming knowledge"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "ForgeFast Team", email = "dev@forgefast.com"}
+]
+keywords = ["playwright", "testing", "automation", "qa", "e2e"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Quality Assurance",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Software Development :: Quality Assurance",
+]
+dependencies = [
+    "playwright>=1.40.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+    "types-PyYAML>=6.0.0",
+]
+odoo = [
+    # No additional Python dependencies required
+    # Odoo is a web application, accessed via Playwright
+]
+forgeerp = [
+    # No additional Python dependencies required
+    # ForgeERP is a web application, accessed via Playwright
+]
+tts = [
+    "gtts>=2.3.0",  # Google Text-to-Speech for natural voice narration
+    "edge-tts>=6.1.0",  # Microsoft Edge TTS (lightweight, performatic, recommended)
+    "pyttsx3>=2.90",  # Offline TTS alternative (optional)
+]
+
+[project.urls]
+Documentation = "https://github.com/forgefast/playwright-simple/blob/main/docs/README.md"
+Source = "https://github.com/forgefast/playwright-simple"
+Tracker = "https://github.com/forgefast/playwright-simple/issues"
+
+[tool.black]
+line-length = 100
+target-version = ['py38', 'py39', 'py310', 'py311']
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = [
+    "-v",
+    "--cov=playwright_simple",
+    "--cov-report=html",
+    "--cov-report=term",
+    "--cov-report=xml",
+    "--cov-fail-under=80",
+]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+

@@ -1,0 +1,40 @@
+name: Login Odoo
+description: Login específico do Odoo usando apenas ações core
+steps:
+- action: wait
+  seconds: 2
+  description: Aguardando elemento aparecer
+- action: click
+  text: Login
+  description: Clicar no campo de login
+  timeout: 10
+- action: type
+  text: '{{ login }}'
+  description: Digitar email no campo de login
+- action: click
+  text: Password
+  description: Clicar no campo de senha
+- action: type
+  text: '{{ password }}'
+  description: Digitar senha no campo de senha
+- action: click
+  text: Database
+  description: Clicar no campo de database
+  optional: true
+- action: type
+  text: '{{ database }}'
+  description: Digitar database no campo
+  optional: true
+- action: click
+  text: OTP
+  description: Clicar no campo de OTP
+  optional: true
+  condition: '{{ otp }}'
+- action: type
+  text: '{{ otp }}'
+  description: Digitar OTP no campo
+  optional: true
+  condition: '{{ otp }}'
+- action: click
+  text: Entrar
+  description: Clicar no botão de login

@@ -1,0 +1,12 @@
+name: Login Test with Session
+description: Example of saving session after login
+
+save_session: true
+
+steps:
+  - login: admin
+    password: admin
+    database: devel
+  - go_to: "Dashboard"
+  - wait: 2
+

@@ -1,0 +1,20 @@
+# Teste de Validação: Gravação Básica
+# Este arquivo deve ser gerado pelo recorder, não criado manualmente
+# Use: playwright-simple record test_recorder_basic.yaml --url https://example.com
+
+name: Teste de Gravação Básica
+description: Teste para validar gravação de interações
+
+steps:
+  - action: go_to
+    url: https://example.com
+    description: Navegar para example.com
+  
+  # Durante a gravação, você deve:
+  # - Clicar em elementos
+  # - Digitar em campos
+  # - Navegar entre páginas
+  # - Usar comandos: caption, audio, screenshot
+  
+  # Este arquivo será gerado automaticamente pelo recorder
+

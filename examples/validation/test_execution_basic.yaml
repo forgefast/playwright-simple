@@ -1,0 +1,19 @@
+# Teste de Validação: Execução Básica
+# Use: playwright-simple run test_execution_basic.yaml --video
+
+name: Teste de Execução Básica
+description: Teste para validar execução de testes YAML
+
+steps:
+  - action: go_to
+    url: https://example.com
+    description: Navegar para example.com
+    
+  - action: wait
+    seconds: 2
+    description: Aguardar página carregar
+    
+  - action: assert_visible
+    selector: body
+    description: Verificar que página carregou
+

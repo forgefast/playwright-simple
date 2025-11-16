@@ -1,0 +1,42 @@
+name: Teste Simples Login
+description: Teste simples apenas com login para debug rápido
+base_url: http://localhost:18069
+config:
+  video:
+    enabled: true
+    quality: high
+    codec: mp4
+    speed: 1.0
+    subtitles: true
+    hard_subtitles: false
+    audio: true
+    narration: true
+    narration_lang: pt-BR
+    narration_engine: gtts
+    narration_slow: false
+  debug:
+    enabled: true
+    pause_on_error: true
+    interactive_mode: true
+    hot_reload_enabled: true
+  logging:
+    level: DEBUG
+    console_output: true
+  browser:
+    headless: false
+    slow_mo: 50
+steps:
+- action: wait
+  seconds: 2
+  description: Aguardando elemento aparecer
+- action: login
+  login: maria.santos@racco.com.br
+  password: demo123
+  database: devel
+  description: Realizando login no sistema
+  subtitle: Realizando login no sistema
+  timeout: 10
+- action: screenshot
+  name: login_success
+  description: Tela após login
+  subtitle: Login realizado com sucesso

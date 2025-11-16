@@ -1,0 +1,43 @@
+name: Exemplo de Passos Estáticos
+description: Demonstra uso de passos estáticos e espera por carregamento
+
+base_url: http://localhost:8000
+
+config:
+  browser:
+    wait_for_load: "load"  # load, domcontentloaded, networkidle
+    wait_timeout: 10000  # 10 segundos
+  step:
+    static_min_duration: 3.0  # Passos static ficam visíveis por pelo menos 3 segundos
+    fast_mode: false  # Se true, ignora delays em passos static (para debug rápido)
+
+steps:
+  - action: navigate
+    url: /
+    subtitle: "Navegando para página inicial"
+    # Este passo não é static, então executa normalmente
+  
+  - action: screenshot
+    name: home_page
+    description: "Página inicial"
+    subtitle: "Visualizando página inicial"
+    static: true  # Este passo fica visível por pelo menos 3 segundos (config.step.static_min_duration)
+  
+  - action: click
+    selector: "button.login"
+    subtitle: "Clicando em login"
+    # Este passo não é static, então executa normalmente
+  
+  - action: screenshot
+    name: login_page
+    description: "Página de login"
+    subtitle: "Visualizando página de login"
+    static: true  # Fica visível por pelo menos 3 segundos
+  
+  # Exemplo com wait desabilitado
+  - action: wait
+    seconds: 1.0
+    wait: false  # Não espera carregamento após este passo (já é um wait explícito)
+    subtitle: "Aguardando 1 segundo"
+
+

@@ -1,0 +1,108 @@
+name: Jornada de Treinamento
+description: Navega pelos cursos disponíveis e mostra conteúdo completo.
+
+base_url: https://odoo.racco.com.br
+
+config:
+  video:
+    enabled: true
+    quality: high
+    codec: mp4
+    speed: 1.0
+    subtitles: true
+    hard_subtitles: false
+    audio: true
+    narration: true
+    narration_lang: pt-BR
+    narration_engine: gtts
+    narration_slow: false
+  debug:
+    enabled: true
+    pause_on_error: true
+    interactive_mode: true
+    hot_reload_enabled: true
+  logging:
+    level: DEBUG
+    console_output: true
+  browser:
+    headless: false
+    slow_mo: 50
+
+steps:
+  # Login
+  - action: login
+    login: lucia.santos@exemplo.com
+    password: demo123
+    database: devel
+    description: "Login como revendedor"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Navega para Cursos
+  - action: navigate_menu
+    menu_path: ["Website", "Cursos"]
+    description: "Navegar para Cursos"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 01_courses_list
+    description: "Lista de Cursos"
+  
+  # Abre curso "Introdução aos Produtos"
+  - action: open_record
+    record_text: "Introdução"
+    position: primeiro
+    description: "Abrir curso Introdução"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 02_course_intro
+    description: "Curso Introdução aos Produtos"
+  
+  # Tenta abrir um slide/aula
+  - action: open_record
+    record_text: "Slide"
+    position: primeiro
+    description: "Abrir slide"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 03_slide_content
+    description: "Conteúdo do Slide"
+  
+  # Volta para lista de cursos
+  - action: navigate_menu
+    menu_path: ["Website", "Cursos"]
+    description: "Voltar para Cursos"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Tenta abrir outro curso
+  - action: open_record
+    record_text: "Técnicas"
+    position: primeiro
+    description: "Abrir curso Técnicas"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 04_course_sales
+    description: "Curso Técnicas de Vendas"
+  
+  # Mostra progresso
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 05_training_progress
+    description: "Progresso de Treinamento"
+

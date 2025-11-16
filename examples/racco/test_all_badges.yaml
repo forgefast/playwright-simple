@@ -1,0 +1,285 @@
+name: Todos os Badges de Conquistas
+description: Visualização detalhada dos 13 badges principais de gamificação.
+
+base_url: https://odoo.racco.com.br
+
+config:
+  video:
+    enabled: true
+    quality: high
+    codec: mp4
+    speed: 1.0
+    subtitles: true
+    hard_subtitles: false
+    audio: true
+    narration: true
+    narration_lang: pt-BR
+    narration_engine: gtts
+    narration_slow: false
+  debug:
+    enabled: true
+    pause_on_error: true
+    interactive_mode: true
+    hot_reload_enabled: true
+  logging:
+    level: DEBUG
+    console_output: true
+  browser:
+    headless: false
+    slow_mo: 50
+
+steps:
+  # Login
+  - action: login
+    login: lucia.santos@exemplo.com
+    password: demo123
+    database: devel
+    description: "Login como revendedor"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Acessa badges via Portal (mais acessível que menu administrativo)
+  - action: navigate_menu
+    menu_path: ["Portal"]
+    description: "Acessar Portal"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: click_button
+    text: "Badges"
+    description: "Clicar em Badges"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 01_all_badges_list
+    description: "Lista de Todos os Badges"
+  
+  # Badges de Vendas (5 badges)
+  - action: search
+    search_text: "Primeira Venda"
+    description: "Buscar Primeira Venda"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 02_badge_primeira_venda
+    description: "Badge - Primeira Venda"
+  
+  - action: search
+    search_text: "Vendedor R$ 1.000"
+    description: "Buscar Vendedor R$ 1.000"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 03_badge_vendedor_1000
+    description: "Badge - Vendedor R$ 1.000"
+  
+  - action: search
+    search_text: "Vendedor R$ 5.000"
+    description: "Buscar Vendedor R$ 5.000"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 04_badge_vendedor_5000
+    description: "Badge - Vendedor R$ 5.000"
+  
+  - action: search
+    search_text: "Vendedor R$ 10.000"
+    description: "Buscar Vendedor R$ 10.000"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 05_badge_vendedor_10000
+    description: "Badge - Vendedor R$ 10.000"
+  
+  - action: search
+    search_text: "Subiu de Nível"
+    description: "Buscar Subiu de Nível"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 06_badge_subiu_nivel
+    description: "Badge - Subiu de Nível"
+  
+  # Badges de Treinamento (3 badges)
+  - action: search
+    search_text: "Iniciante nos Estudos"
+    description: "Buscar Iniciante nos Estudos"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 07_badge_iniciante_estudos
+    description: "Badge - Iniciante nos Estudos"
+  
+  - action: search
+    search_text: "Expert em Treinamento"
+    description: "Buscar Expert em Treinamento"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 08_badge_expert_treinamento
+    description: "Badge - Expert em Treinamento"
+  
+  - action: search
+    search_text: "Mestre em Conhecimento"
+    description: "Buscar Mestre em Conhecimento"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 09_badge_mestre_conhecimento
+    description: "Badge - Mestre em Conhecimento"
+  
+  # Badges de Rede (3 badges)
+  - action: search
+    search_text: "Primeiro Indicado"
+    description: "Buscar Primeiro Indicado"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 10_badge_primeiro_indicado
+    description: "Badge - Primeiro Indicado"
+  
+  - action: search
+    search_text: "Construtor de Rede"
+    description: "Buscar Construtor de Rede"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 11_badge_construtor_rede
+    description: "Badge - Construtor de Rede"
+  
+  - action: search
+    search_text: "Líder de Rede"
+    description: "Buscar Líder de Rede"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 12_badge_lider_rede
+    description: "Badge - Líder de Rede"
+  
+  # Badges de Fidelidade (2 badges)
+  - action: search
+    search_text: "Cliente Fiel"
+    description: "Buscar Cliente Fiel"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 13_badge_cliente_fiel
+    description: "Badge - Cliente Fiel"
+  
+  - action: search
+    search_text: "Cliente VIP"
+    description: "Buscar Cliente VIP"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 14_badge_cliente_vip
+    description: "Badge - Cliente VIP"
+  
+  # Mostra badges por categoria (volta para lista de badges)
+  - action: navigate_menu
+    menu_path: ["Portal"]
+    description: "Voltar para Portal"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: click_button
+    text: "Badges"
+    description: "Clicar em Badges"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: search
+    search_text: "Vendas"
+    description: "Buscar Vendas"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 15_badges_categoria_vendas
+    description: "Badges de Vendas"
+  
+  - action: search
+    search_text: "Treinamento"
+    description: "Buscar Treinamento"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 16_badges_categoria_treinamento
+    description: "Badges de Treinamento"
+  
+  - action: search
+    search_text: "Rede"
+    description: "Buscar Rede"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 17_badges_categoria_rede
+    description: "Badges de Rede"
+  
+  - action: search
+    search_text: "Fidelidade"
+    description: "Buscar Fidelidade"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 18_badges_categoria_fidelidade
+    description: "Badges de Fidelidade"
+  
+  # Mostra badges do usuário no portal
+  - action: navigate_menu
+    menu_path: ["Portal"]
+    description: "Voltar para Portal"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: click_button
+    text: "Badges"
+    description: "Clicar em Badges"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 19_my_badges_all
+    description: "Meus Badges Conquistados"
+

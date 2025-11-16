@@ -1,0 +1,57 @@
+name: Teste Avançado com Playwright
+description: Exemplo usando funcionalidades avançadas do Playwright diretamente
+
+steps:
+  # Interceptar requisições de API
+  - action: route
+    url: "**/api/users"
+    handler: |
+      async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ users: [{ id: 1, name: 'Mock User' }] })
+        });
+      }
+  
+  # Adicionar script customizado
+  - action: add_init_script
+    script: |
+      window.myCustomFunction = () => {
+        console.log('Custom function called');
+        return 'result';
+      };
+  
+  # Executar JavaScript customizado
+  - action: evaluate
+    code: |
+      () => {
+        // Modificar DOM
+        const element = document.querySelector('body');
+        element.setAttribute('data-test', 'true');
+        
+        // Acessar window
+        window.testData = { count: 0 };
+        
+        return document.title;
+      }
+  
+  # Usar ações do playwright-simple normalmente
+  - action: click
+    text: "Login"
+  
+  - action: type
+    text: "user@email.com"
+  
+  # Verificar resultado com JavaScript
+  - action: evaluate
+    code: |
+      () => {
+        const token = localStorage.getItem('token');
+        return token !== null;
+      }
+  
+  # Continuar com playwright-simple
+  - action: click
+    text: "Dashboard"
+

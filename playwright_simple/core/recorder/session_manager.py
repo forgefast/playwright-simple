@@ -1,0 +1,178 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Session Manager.
+
+Factory for creating appropriate session types (Recording or Playback).
+"""
+
+import logging
+from typing import Optional, Union, List, Dict, Any
+from pathlib import Path
+from datetime import datetime
+
+from .recording_session import RecordingSession
+from .playback_session import PlaybackSession
+from .yaml_writer import YAMLWriter
+from .action_converter import ActionConverter
+from .event_handlers import EventHandlers
+from .command_handlers import CommandHandlers
+from .recorder_logger import RecorderLogger
+from .config import RecorderConfig
+from playwright.async_api import Page
+
+logger = logging.getLogger(__name__)
+
+
+class SessionManager:
+    """Manages session creation and lifecycle."""
+    
+    __slots__ = (
+        'config', 'page', 'yaml_writer', 'action_converter', 'event_handlers',
+        'command_handlers', 'recorder_logger', 'yaml_steps', 'yaml_data',
+        'video_start_time', 'session'
+    )
+    
+    def __init__(
+        self,
+        config: RecorderConfig,
+        page: Page,
+        yaml_writer: Optional[YAMLWriter],
+        action_converter: ActionConverter,
+        event_handlers: EventHandlers,
+        command_handlers: CommandHandlers,
+        recorder_logger: Optional[RecorderLogger] = None,
+        yaml_steps: Optional[List[Dict[str, Any]]] = None,
+        yaml_data: Optional[Dict[str, Any]] = None,
+        video_start_time: Optional[datetime] = None
+    ) -> None:
+        """
+        Initialize session manager.
+        
+        Factory for creating appropriate session types (Recording or Playback)
+        based on the recorder configuration mode.
+        
+        Args:
+            config: RecorderConfig instance with mode ('write' or 'read')
+            page: Playwright Page instance
+            yaml_writer: YAMLWriter instance (required for write mode)
+            action_converter: ActionConverter instance
+            event_handlers: EventHandlers instance
+            command_handlers: CommandHandlers instance
+            recorder_logger: Optional RecorderLogger instance
+            yaml_steps: List of YAML steps (required for read mode)
+            yaml_data: Full YAML data (required for read mode)
+            video_start_time: Video start time (for read mode)
+        
+        Example:
+            ```python
+            # Write mode
+            manager = SessionManager(
+                config=RecorderConfig(output_path=Path("test.yaml"), mode='write'),
+                page=page,
+                yaml_writer=yaml_writer,
+                action_converter=action_converter,
+                event_handlers=event_handlers,
+                command_handlers=command_handlers
+            )
+            session = manager.create_session()  # Returns RecordingSession
+            
+            # Read mode
+            manager = SessionManager(
+                config=RecorderConfig(output_path=Path("test.yaml"), mode='read'),
+                page=page,
+                yaml_writer=None,
+                action_converter=action_converter,
+                event_handlers=event_handlers,
+                command_handlers=command_handlers,
+                yaml_steps=yaml_steps,
+                yaml_data=yaml_data
+            )
+            session = manager.create_session()  # Returns PlaybackSession
+            ```
+        """
+        self.config = config
+        self.page = page
+        self.yaml_writer = yaml_writer
+        self.action_converter = action_converter
+        self.event_handlers = event_handlers
+        self.command_handlers = command_handlers
+        self.recorder_logger = recorder_logger
+        self.yaml_steps = yaml_steps
+        self.yaml_data = yaml_data
+        self.video_start_time = video_start_time
+        
+        self.session: Optional[Union[RecordingSession, PlaybackSession]] = None
+    
+    def create_session(self) -> Union[RecordingSession, PlaybackSession]:
+        """
+        Create appropriate session based on mode.
+        
+        Factory method that creates either a RecordingSession (for write mode)
+        or PlaybackSession (for read mode) based on the configuration.
+        
+        Returns:
+            RecordingSession if mode is 'write', PlaybackSession if mode is 'read'
+        
+        Raises:
+            ValueError: If required dependencies are missing for the selected mode
+        """
+        if self.config.mode == 'write':
+            if not self.yaml_writer:
+                raise ValueError("YAMLWriter required for write mode")
+            
+            self.session = RecordingSession(
+                page=self.page,
+                yaml_writer=self.yaml_writer,
+                action_converter=self.action_converter,
+                event_handlers=self.event_handlers,
+                recorder_logger=self.recorder_logger,
+                debug=self.config.debug
+            )
+        else:  # read mode
+            if not self.yaml_steps:
+                raise ValueError("YAML steps required for read mode")
+            
+            self.session = PlaybackSession(
+                page=self.page,
+                yaml_steps=self.yaml_steps,
+                yaml_data=self.yaml_data or {},
+                command_handlers=self.command_handlers,
+                recorder_logger=self.recorder_logger,
+                fast_mode=self.config.fast_mode,
+                video_start_time=self.video_start_time
+            )
+        
+        return self.session
+    
+    async def start(self) -> None:
+        """
+        Start the session.
+        
+        Creates the session if not already created, then starts it.
+        For RecordingSession, this begins event capture.
+        For PlaybackSession, this executes all YAML steps.
+        
+        Raises:
+            RecordingSessionError: If recording session fails to start
+            PlaybackSessionError: If playback session fails to execute
+        """
+        if not self.session:
+            self.create_session()
+        
+        if isinstance(self.session, RecordingSession):
+            await self.session.start()
+        elif isinstance(self.session, PlaybackSession):
+            await self.session.execute()
+    
+    async def stop(self) -> None:
+        """
+        Stop the session.
+        
+        Stops the active session. Only RecordingSession needs explicit
+        stopping (to finalize event capture). PlaybackSession completes
+        automatically after execution.
+        """
+        if isinstance(self.session, RecordingSession):
+            await self.session.stop()
+

@@ -1,0 +1,30 @@
+name: "Basic Login Test"
+base_url: "http://localhost:8000"
+steps:
+  - action: go_to
+    url: "/login"
+    description: "Navigate to login page"
+  
+  - action: type
+    selector: 'input[name="username"]'
+    text: "admin"
+    description: "Username field"
+  
+  - action: type
+    selector: 'input[name="password"]'
+    text: "password123"
+    description: "Password field"
+  
+  - action: click
+    selector: 'button[type="submit"]'
+    description: "Login button"
+  
+  - action: wait_for_url
+    url_pattern: "/dashboard"
+  
+  - action: assert_text
+    selector: ".user-name"
+    expected: "admin"
+    description: "User name display"
+
+

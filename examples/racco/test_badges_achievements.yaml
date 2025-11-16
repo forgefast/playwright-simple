@@ -1,0 +1,145 @@
+name: Conquista de Badges
+description: Demonstra como conquistar badges e ver progresso.
+
+base_url: https://odoo.racco.com.br
+
+config:
+  video:
+    enabled: true
+    quality: high
+    codec: mp4
+    speed: 1.0
+    subtitles: true
+    hard_subtitles: false
+    audio: true
+    narration: true
+    narration_lang: pt-BR
+    narration_engine: gtts
+    narration_slow: false
+  debug:
+    enabled: true
+    pause_on_error: true
+    interactive_mode: true
+    hot_reload_enabled: true
+  logging:
+    level: DEBUG
+    console_output: true
+  browser:
+    headless: false
+    slow_mo: 50
+
+steps:
+  # Login
+  - action: login
+    login: lucia.santos@exemplo.com
+    password: demo123
+    database: devel
+    description: "Login como revendedor"
+  
+  - action: wait
+    seconds: 0.2
+  
+  # Navega para Badges via Portal
+  - action: navigate_menu
+    menu_path: ["Portal"]
+    description: "Acessar Portal"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: click_button
+    text: "Badges"
+    description: "Clicar em Badges"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 01_all_badges
+    description: "Todos os Badges Disponíveis"
+  
+  # Mostra badges por categoria
+  - action: search
+    search_text: "Vendas"
+    description: "Buscar Vendas"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 02_badges_vendas
+    description: "Badges de Vendas"
+  
+  - action: search
+    search_text: "Treinamento"
+    description: "Buscar Treinamento"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 02_badges_treinamento
+    description: "Badges de Treinamento"
+  
+  - action: search
+    search_text: "Rede"
+    description: "Buscar Rede"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 02_badges_rede
+    description: "Badges de Rede"
+  
+  - action: search
+    search_text: "Fidelidade"
+    description: "Buscar Fidelidade"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 02_badges_fidelidade
+    description: "Badges de Fidelidade"
+  
+  # Mostra badges disponíveis (sem tentar abrir detalhes se não disponível)
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 03_badge_detail
+    description: "Detalhes do Badge"
+  
+  # Mostra badges de vendas
+  - action: search
+    search_text: "Vendedor"
+    description: "Buscar Vendedor"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 04_sales_badges
+    description: "Badges de Vendas"
+  
+  # Mostra progresso do usuário (já está no portal)
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 05_my_badges
+    description: "Meus Badges Conquistados"
+  
+  # Mostra ranking (via Portal se disponível)
+  - action: navigate_menu
+    menu_path: ["Portal"]
+    description: "Voltar para Portal"
+  
+  - action: wait
+    seconds: 0.2
+  
+  - action: screenshot
+    name: 06_badges_ranking
+    description: "Ranking de Badges"
+

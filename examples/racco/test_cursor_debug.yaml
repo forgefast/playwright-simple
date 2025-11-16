@@ -1,0 +1,49 @@
+name: Debug Cursor - Go To
+description: Teste simplificado para debugar problemas do cursor com go_to
+
+base_url: https://odoo.racco.com.br
+
+config:
+  video:
+    enabled: false  # Desabilitar vídeo para ganhar velocidade - só screenshots
+    subtitles: false
+    audio: false
+  debug:
+    enabled: true
+    pause_on_error: true
+    interactive_mode: true
+    hot_reload_enabled: true
+  logging:
+    level: DEBUG
+    console_output: true
+  browser:
+    headless: false
+    slow_mo: 50
+
+steps:
+  # Login
+  - action: login
+    login: admin
+    password: admin
+    database: devel
+    description: "Realizando login no sistema"
+    subtitle: "Realizando login no sistema"
+  
+  # Teste simples de go_to - primeiro navega para discuss para testar navegação
+  - action: navigate_menu
+    menu_path: ["Mensagens"]
+    description: "Navegando para Mensagens"
+    subtitle: "Navegando para Mensagens"
+  
+  # Agora tenta ir para Dashboard (deve detectar que não está no dashboard e tentar navegar)
+  - action: navigate_menu
+    menu_path: ["Dashboard"]
+    description: "Navegando para o Dashboard"
+    subtitle: "Navegando para o Dashboard"
+  
+  # Tenta ir para Dashboard novamente (deve detectar que já está no dashboard e não navegar)
+  - action: navigate_menu
+    menu_path: ["Dashboard"]
+    description: "Já no Dashboard"
+    subtitle: "Já no Dashboard"
+

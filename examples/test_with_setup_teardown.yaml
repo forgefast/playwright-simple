@@ -1,0 +1,17 @@
+name: Test with Setup and Teardown
+description: Example of using setup and teardown sections
+
+setup:
+  - login: admin
+    password: admin
+    database: devel
+
+steps:
+  - go_to: "Vendas > Pedidos"
+  - click: "Criar"
+  - fill: "Cliente = João Silva"
+  - click: "Salvar"
+
+teardown:
+  - logout:
+
