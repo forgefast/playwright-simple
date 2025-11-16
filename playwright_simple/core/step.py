@@ -10,6 +10,7 @@ pending -> starting -> executing -> waiting_for_load -> completed
 import logging
 from datetime import datetime
 from typing import Optional, Dict, Any, List
+from pathlib import Path
 from statemachine import StateMachine, State
 
 logger = logging.getLogger(__name__)
@@ -84,6 +85,10 @@ class TestStep(StateMachine):
         self._start_seconds: Optional[float] = None
         self._end_seconds: Optional[float] = None
         self._duration: Optional[float] = None
+        
+        # Audio generation data (filled after TTS generation)
+        self.audio_file_path: Optional[Path] = None
+        self.audio_duration_seconds: Optional[float] = None
         
         # Error information
         self.error: Optional[Exception] = None
@@ -209,9 +214,72 @@ class TestStep(StateMachine):
         return self._end_seconds or (self.start_time_seconds + (self.duration or 0.0))
     
     @property
+    def duration_seconds(self) -> Optional[float]:
+        """Get duration in seconds (alias for duration property)."""
+        return self.duration
+    
+    @property
     def duration(self) -> Optional[float]:
         """Get duration in seconds."""
         return self._duration
+    
+    def validate(self) -> List[str]:
+        """
+        Validate step data integrity.
+        
+        Returns:
+            List of validation error messages (empty if valid)
+        """
+        errors = []
+        
+        # Validate step number
+        if self.step_number < 1:
+            errors.append(f"Step number must be >= 1, got {self.step_number}")
+        
+        # Validate action
+        if not self.action:
+            errors.append("Step must have an action")
+        
+        # Validate timing if step is completed
+        if self.current_state in [self.completed, self.failed]:
+            if self._start_seconds is None or self._start_seconds < 0:
+                errors.append("Step start_time_seconds must be set and >= 0")
+            if self._end_seconds is None or self._end_seconds < self._start_seconds:
+                errors.append("Step end_time_seconds must be set and >= start_time_seconds")
+            if self._duration is None or self._duration < 0:
+                errors.append("Step duration must be set and >= 0")
+        
+        # Validate audio data if audio file is set
+        if self.audio_file_path is not None:
+            if not self.audio_file_path.exists():
+                errors.append(f"Audio file does not exist: {self.audio_file_path}")
+            if self.audio_duration_seconds is None or self.audio_duration_seconds <= 0:
+                errors.append("audio_duration_seconds must be set and > 0 when audio_file_path is set")
+        
+        return errors
+    
+    def is_complete(self) -> bool:
+        """
+        Check if step has all necessary data for video/audio synchronization.
+        
+        Returns:
+            True if step is complete, False otherwise
+        """
+        # Basic requirements
+        if not self.action:
+            return False
+        
+        # If step has audio text, it should have audio file generated
+        if self.audio and self.audio.strip():
+            if self.audio_file_path is None or self.audio_duration_seconds is None:
+                return False
+        
+        # Timing should be set if step is completed
+        if self.current_state in [self.completed, self.failed]:
+            if self._start_seconds is None or self._end_seconds is None or self._duration is None:
+                return False
+        
+        return len(self.validate()) == 0
     
     def fail_with_error(self, error: Exception):
         """
@@ -240,12 +308,14 @@ class TestStep(StateMachine):
         Returns:
             Dictionary with step information
         """
-        return {
+        result = {
             'text': self.subtitle or self.description or f'Passo {self.step_number}',
             'description': self.description or self.subtitle or f'Passo {self.step_number}',
             'subtitle': self.subtitle,
+            'audio': self.audio,
             'start_time': self.start_time_seconds,
             'duration': self.duration or 0.0,
+            'duration_seconds': self.duration_seconds or 0.0,
             'end_time': self.end_time_seconds,
             'step_number': self.step_number,
             'state': self.current_state.id,
@@ -255,6 +325,14 @@ class TestStep(StateMachine):
             'warnings': self.warnings,
             'action_details': self.action_details
         }
+        
+        # Add audio generation data if available
+        if self.audio_file_path:
+            result['audio_file_path'] = str(self.audio_file_path)
+        if self.audio_duration_seconds:
+            result['audio_duration_seconds'] = self.audio_duration_seconds
+        
+        return result
     
     def __repr__(self) -> str:
         """String representation of the step."""
