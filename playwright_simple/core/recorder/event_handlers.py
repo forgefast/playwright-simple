@@ -15,32 +15,78 @@ logger = logging.getLogger(__name__)
 class EventHandlers:
     """Handles browser events during recording."""
     
-    def __init__(self, action_converter, yaml_writer, is_recording_getter, is_paused_getter, recorder_logger=None):
+    def __init__(
+        self,
+        action_converter,
+        yaml_writer,
+        is_recording_getter=None,
+        is_paused_getter=None,
+        recorder_logger=None,
+        # New: Direct injection (preferred)
+        is_recording: bool = False,
+        is_paused: bool = False,
+        recording_state_setter=None,
+        paused_state_setter=None
+    ):
         """
         Initialize event handlers.
         
         Args:
             action_converter: ActionConverter instance
             yaml_writer: YAMLWriter instance
-            is_recording_getter: Callable that returns recording state
-            is_paused_getter: Callable that returns paused state
+            is_recording_getter: Callable that returns recording state (legacy, use is_recording instead)
+            is_paused_getter: Callable that returns paused state (legacy, use is_paused instead)
             recorder_logger: Optional RecorderLogger instance
+            is_recording: Direct recording state (preferred)
+            is_paused: Direct paused state (preferred)
+            recording_state_setter: Callable to set recording state (for direct injection)
+            paused_state_setter: Callable to set paused state (for direct injection)
         """
         self.action_converter = action_converter
         self.yaml_writer = yaml_writer
-        self._is_recording = is_recording_getter
-        self._is_paused = is_paused_getter
         self.recorder_logger = recorder_logger
+        
+        # Support both legacy (getters) and new (direct) injection
+        if is_recording_getter is not None or is_paused_getter is not None:
+            # Legacy mode: use getters
+            self._is_recording_getter = is_recording_getter
+            self._is_paused_getter = is_paused_getter
+            self._use_getters = True
+        else:
+            # New mode: direct injection with setters
+            self._is_recording_value = is_recording
+            self._is_paused_value = is_paused
+            self._recording_state_setter = recording_state_setter
+            self._paused_state_setter = paused_state_setter
+            self._use_getters = False
     
     @property
     def is_recording(self) -> bool:
         """Check if recording is active."""
-        return self._is_recording()
+        if self._use_getters:
+            return self._is_recording_getter() if self._is_recording_getter else False
+        return self._is_recording_value
     
     @property
     def is_paused(self) -> bool:
         """Check if recording is paused."""
-        return self._is_paused()
+        if self._use_getters:
+            return self._is_paused_getter() if self._is_paused_getter else False
+        return self._is_paused_value
+    
+    def set_recording_state(self, value: bool):
+        """Set recording state (for direct injection mode)."""
+        if not self._use_getters:
+            self._is_recording_value = value
+            if self._recording_state_setter:
+                self._recording_state_setter(value)
+    
+    def set_paused_state(self, value: bool):
+        """Set paused state (for direct injection mode)."""
+        if not self._use_getters:
+            self._is_paused_value = value
+            if self._paused_state_setter:
+                self._paused_state_setter(value)
     
     def handle_click(self, event_data: dict) -> None:
         """Handle click event."""

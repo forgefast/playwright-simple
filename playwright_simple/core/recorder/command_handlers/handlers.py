@@ -20,33 +20,54 @@ class CommandHandlers:
     def __init__(
         self,
         yaml_writer,
-        event_capture_getter: Callable,
-        cursor_controller_getter: Callable,
-        recording_state_setter: Callable,
-        paused_state_setter: Callable,
+        event_capture_getter: Optional[Callable] = None,
+        cursor_controller_getter: Optional[Callable] = None,
+        recording_state_setter: Optional[Callable] = None,
+        paused_state_setter: Optional[Callable] = None,
         page_getter: Optional[Callable] = None,
         recorder = None,
-        recorder_logger = None
+        recorder_logger = None,
+        # New: Direct injection (preferred)
+        event_capture = None,
+        cursor_controller = None,
+        page = None
     ):
         """
         Initialize command handlers.
         
         Args:
             yaml_writer: YAMLWriter instance
-            event_capture_getter: Callable that returns EventCapture instance
-            cursor_controller_getter: Callable that returns CursorController instance
+            event_capture_getter: Callable that returns EventCapture instance (legacy, use event_capture instead)
+            cursor_controller_getter: Callable that returns CursorController instance (legacy, use cursor_controller instead)
             recording_state_setter: Callable to set recording state
             paused_state_setter: Callable to set paused state
-            page_getter: Optional callable that returns Playwright Page instance
+            page_getter: Optional callable that returns Playwright Page instance (legacy, use page instead)
             recorder: Optional Recorder instance (for accessing action_converter)
             recorder_logger: Optional RecorderLogger instance
+            event_capture: Direct EventCapture instance (preferred)
+            cursor_controller: Direct CursorController instance (preferred)
+            page: Direct Page instance (preferred)
         """
         self.yaml_writer = yaml_writer
+        
+        # Support both legacy (getters) and new (direct) injection
+        use_getters = event_capture_getter is not None or cursor_controller_getter is not None or page_getter is not None
+        
+        if use_getters:
+            # Legacy mode: use getters
+            _event_capture_getter = event_capture_getter
+            _cursor_controller_getter = cursor_controller_getter
+            _page_getter = page_getter
+        else:
+            # New mode: create getters from direct instances
+            _event_capture_getter = lambda: event_capture if event_capture else None
+            _cursor_controller_getter = lambda: cursor_controller if cursor_controller else None
+            _page_getter = lambda: page if page else None
         
         # Initialize handler modules
         self._recording = RecordingHandlers(
             yaml_writer=yaml_writer,
-            event_capture_getter=event_capture_getter,
+            event_capture_getter=_event_capture_getter,
             recording_state_setter=recording_state_setter,
             paused_state_setter=paused_state_setter
         )
@@ -55,13 +76,13 @@ class CommandHandlers:
         
         self._cursor = CursorHandlers(
             yaml_writer=yaml_writer,
-            cursor_controller_getter=cursor_controller_getter
+            cursor_controller_getter=_cursor_controller_getter
         )
         
         self._playwright = PlaywrightHandlers(
             yaml_writer=yaml_writer,
-            page_getter=page_getter,
-            cursor_controller_getter=cursor_controller_getter,
+            page_getter=_page_getter,
+            cursor_controller_getter=_cursor_controller_getter,
             recorder=recorder,  # Pass recorder so handlers can access action_converter
             recorder_logger=recorder_logger
         )
