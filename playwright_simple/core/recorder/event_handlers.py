@@ -104,8 +104,8 @@ class EventHandlers:
                     error=str(e),
                     element_info=structured_element
                 )
-            else:
-                logger.error(f"Error handling click event: {e}", exc_info=True)
+        else:
+            logger.error(f"Error handling click event: {e}", exc_info=True)
     
     def handle_input(self, event_data: dict) -> None:
         """Handle input event - accumulates, doesn't save yet."""

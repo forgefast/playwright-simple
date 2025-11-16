@@ -21,6 +21,7 @@ from .event_handlers import EventHandlers
 from .command_handlers import CommandHandlers
 from .command_server import CommandServer
 from .recorder_logger import RecorderLogger
+from .config import RecorderConfig
 
 logger = logging.getLogger(__name__)
 
@@ -49,37 +50,73 @@ except ImportError:
 class Recorder:
     """Main recorder class that coordinates event capture, conversion, and YAML writing."""
     
-    def __init__(self, output_path: Path, initial_url: str = None, headless: bool = False, debug: bool = False, fast_mode: bool = False, mode: str = 'write', log_level: str = None, log_file: Path = None):
+    def __init__(
+        self,
+        output_path: Path = None,
+        config: RecorderConfig = None,
+        # Legacy parameters for backward compatibility
+        initial_url: str = None,
+        headless: bool = False,
+        debug: bool = False,
+        fast_mode: bool = False,
+        mode: str = 'write',
+        log_level: str = None,
+        log_file: Path = None
+    ):
         """
         Initialize recorder.
         
         Args:
-            output_path: Path to output YAML file
-            initial_url: Initial URL to open (default: about:blank)
-            headless: Run browser in headless mode
-            debug: Enable debug mode (verbose logging)
-            fast_mode: Accelerate steps (reduce delays, instant animations)
-            mode: 'write' for recording (export), 'read' for playback (import)
-            log_level: Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-            log_file: Optional log file path
+            output_path: Path to output YAML file (legacy parameter, use config instead)
+            config: RecorderConfig instance (preferred way)
+            initial_url: Initial URL to open (legacy parameter, use config instead)
+            headless: Run browser in headless mode (legacy parameter, use config instead)
+            debug: Enable debug mode (legacy parameter, use config instead)
+            fast_mode: Accelerate steps (legacy parameter, use config instead)
+            mode: 'write' or 'read' (legacy parameter, use config instead)
+            log_level: Log level (legacy parameter, use config instead)
+            log_file: Optional log file path (legacy parameter, use config instead)
+        
+        Note:
+            Either provide `config` (preferred) or use legacy parameters.
+            If both are provided, `config` takes precedence.
         """
-        self.output_path = Path(output_path)
-        self.initial_url = initial_url or 'about:blank'
-        self.headless = headless
-        self.debug = debug
-        self.mode = mode  # 'write' or 'read'
+        # Handle configuration: prefer config object, fallback to legacy parameters
+        if config is not None:
+            self.config = config
+        elif output_path is not None:
+            # Create config from legacy parameters
+            self.config = RecorderConfig.from_kwargs(
+                output_path=output_path,
+                initial_url=initial_url,
+                headless=headless,
+                debug=debug,
+                fast_mode=fast_mode,
+                mode=mode,
+                log_level=log_level,
+                log_file=log_file
+            )
+        else:
+            raise ValueError("Either 'config' or 'output_path' must be provided")
+        
+        # Extract configuration values for backward compatibility
+        self.output_path = self.config.output_path
+        self.initial_url = self.config.initial_url
+        self.headless = self.config.headless
+        self.debug = self.config.debug
+        self.mode = self.config.mode
         
         # Initialize recorder logger
-        console_level = 'DEBUG' if debug else log_level
+        console_level = 'DEBUG' if self.config.debug else self.config.log_level
         self.recorder_logger = RecorderLogger(
             name="recorder",
             console_level=console_level,
             file_level='DEBUG',  # Always DEBUG for file
-            log_file=log_file
+            log_file=self.config.log_file
         )
         
         # Initialize browser manager - will be configured with video options if needed
-        self.browser_manager = BrowserManager(headless=headless)
+        self.browser_manager = BrowserManager(headless=self.config.headless)
         self.event_capture: Optional[EventCapture] = None
         self.cursor_controller: Optional[CursorController] = None
         self.action_converter = ActionConverter(recorder_logger=self.recorder_logger)
@@ -104,7 +141,7 @@ class Recorder:
             self.yaml_data = yaml_data
             self.yaml_steps = yaml_data.get('steps', [])
             # Get initial_url from YAML if not provided
-            if not initial_url:
+            if not self.config.initial_url or self.config.initial_url == 'about:blank':
                 first_step = self.yaml_steps[0] if self.yaml_steps else {}
                 if first_step.get('action') == 'go_to':
                     self.initial_url = first_step.get('url', 'about:blank')
@@ -115,7 +152,7 @@ class Recorder:
             self.video_config = None
             self.video_manager = None
             self.video_start_time = None
-            logger.info(f"🎬 VIDEO DEBUG: Checking video config - VIDEO_AVAILABLE={VIDEO_AVAILABLE}, mode={mode}")
+            logger.info(f"🎬 VIDEO DEBUG: Checking video config - VIDEO_AVAILABLE={VIDEO_AVAILABLE}, mode={self.config.mode}")
             if yaml_data:
                 logger.info(f"🎬 VIDEO DEBUG: yaml_data exists, has 'config': {'config' in yaml_data}")
                 if 'config' in yaml_data:
@@ -160,7 +197,7 @@ class Recorder:
         
         self.is_recording = False
         self.is_paused = False
-        self.fast_mode = fast_mode  # Accelerate steps (reduce delays, instant animations)
+        self.fast_mode = self.config.fast_mode  # Accelerate steps (reduce delays, instant animations)
         
         # Initialize command server for external commands
         self.command_server: Optional[CommandServer] = None

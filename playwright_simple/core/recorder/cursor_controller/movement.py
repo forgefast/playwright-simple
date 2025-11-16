@@ -72,8 +72,8 @@ class CursorMovement:
                 await self.page.evaluate(f"""
                     () => {{
                         return new Promise((resolve) => {{
-                            const cursor = document.getElementById('__playwright_cursor');
-                            if (cursor) {{
+                        const cursor = document.getElementById('__playwright_cursor');
+                        if (cursor) {{
                                 // Set up transition end listener
                                 const onTransitionEnd = () => {{
                                     cursor.removeEventListener('transitionend', onTransitionEnd);
@@ -85,19 +85,19 @@ class CursorMovement:
                                 
                                 // Start animation
                                 cursor.style.transition = 'left {animation_duration_str}s ease-out, top {animation_duration_str}s ease-out';
-                                cursor.style.left = '{x}px';
-                                cursor.style.top = '{y}px';
-                                cursor.style.display = 'block';
-                                
+                            cursor.style.left = '{x}px';
+                            cursor.style.top = '{y}px';
+                            cursor.style.display = 'block';
+                            
                                 // Fallback timeout in case transitionend doesn't fire
-                                setTimeout(() => {{
+                            setTimeout(() => {{
                                     cursor.removeEventListener('transitionend', onTransitionEnd);
-                                    cursor.style.transition = 'none';
+                                cursor.style.transition = 'none';
                                     resolve(true);
                                 }}, {timeout_str});
                             }} else {{
                                 resolve(false);
-                            }}
+                        }}
                         }});
                     }}
                 """)

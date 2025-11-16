@@ -365,11 +365,11 @@ class PlaywrightHandlers:
                 print(f"❌ Failed to click - element not found")
             else:
                 print(f"⚠️  Clicked but action may not have worked (no state changes detected)")
-                print("   Usage examples:")
-                print("     pw-click \"Entrar\"")
-                print("     pw-click selector \"#login-button\"")
-                print("     pw-click role button [0]")
-        
+            print("   Usage examples:")
+            print("     pw-click \"Entrar\"")
+            print("     pw-click selector \"#login-button\"")
+            print("     pw-click role button [0]")
+    
         return result
     
     async def handle_pw_type(self, args: str) -> Dict[str, Any]:
@@ -622,7 +622,7 @@ class PlaywrightHandlers:
         # This focuses the field and ensures it's ready for typing
         # NOTE: We only click if the field is not already focused
         # If there was a click action before this type action, the field might already be focused
-        field_clicked = False
+            field_clicked = False
         field_already_focused = False
         
         # Check if field is already focused
@@ -775,7 +775,7 @@ class PlaywrightHandlers:
                     page_state=state_after,
                     details={'value_changed': value_after != value_before}
                 )
-            else:
+        else:
                 level = 'CRITICAL' if not result['element_found'] else 'WARNING'
                 if level == 'CRITICAL':
                     self.recorder_logger.log_critical_failure(
@@ -1111,22 +1111,22 @@ class PlaywrightHandlers:
                     page_state=state_after,
                     details={'url_changed': changes.get('url_changed'), 'html_changed': changes.get('html_changed')}
                 )
+        else:
+            level = 'CRITICAL' if not result['element_found'] else 'WARNING'
+            if level == 'CRITICAL':
+                self.recorder_logger.log_critical_failure(
+                    action='pw-submit',
+                    error=result.get('error', 'Action failed'),
+                    element_info=element_info,
+                    page_state=state_before
+                )
             else:
-                level = 'CRITICAL' if not result['element_found'] else 'WARNING'
-                if level == 'CRITICAL':
-                    self.recorder_logger.log_critical_failure(
-                        action='pw-submit',
-                        error=result.get('error', 'Action failed'),
-                        element_info=element_info,
-                        page_state=state_before
-                    )
-                else:
-                    self.recorder_logger.log_user_action(
-                        action_type='submit',
-                        element_info=element_info,
-                        success=False,
-                        duration_ms=duration_ms,
-                        error=result.get('error'),
+                self.recorder_logger.log_user_action(
+                    action_type='submit',
+                    element_info=element_info,
+                    success=False,
+                    duration_ms=duration_ms,
+                    error=result.get('error'),
                         warnings=warnings,
                         page_state=state_after
                     )
