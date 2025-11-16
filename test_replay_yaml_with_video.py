@@ -43,7 +43,7 @@ async def replay_yaml(yaml_path: Path, headless: bool = True):
         initial_url=None,  # Will be read from YAML
         headless=headless,
         debug=False,
-        fast_mode=True,  # Usar fast mode na reprodução
+        fast_mode=True,  # Usar fast mode para acelerar typing e outras ações
         mode='read'  # Read mode: import YAML instead of export
     )
     logger.info("Recorder criado")

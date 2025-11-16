@@ -25,7 +25,8 @@ class CommandHandlers:
         recording_state_setter: Callable,
         paused_state_setter: Callable,
         page_getter: Optional[Callable] = None,
-        recorder = None
+        recorder = None,
+        recorder_logger = None
     ):
         """
         Initialize command handlers.
@@ -38,6 +39,7 @@ class CommandHandlers:
             paused_state_setter: Callable to set paused state
             page_getter: Optional callable that returns Playwright Page instance
             recorder: Optional Recorder instance (for accessing action_converter)
+            recorder_logger: Optional RecorderLogger instance
         """
         self.yaml_writer = yaml_writer
         
@@ -60,7 +62,8 @@ class CommandHandlers:
             yaml_writer=yaml_writer,
             page_getter=page_getter,
             cursor_controller_getter=cursor_controller_getter,
-            recorder=recorder  # Pass recorder so handlers can access action_converter
+            recorder=recorder,  # Pass recorder so handlers can access action_converter
+            recorder_logger=recorder_logger
         )
     
     # Recording control
@@ -131,17 +134,17 @@ class CommandHandlers:
         """Handle find-all command."""
         await self._playwright.handle_find_all(args)
     
-    async def handle_pw_click(self, args: str) -> None:
+    async def handle_pw_click(self, args: str):
         """Handle pw-click command."""
-        await self._playwright.handle_pw_click(args)
+        return await self._playwright.handle_pw_click(args)
     
-    async def handle_pw_type(self, args: str) -> None:
+    async def handle_pw_type(self, args: str):
         """Handle pw-type command."""
-        await self._playwright.handle_pw_type(args)
+        return await self._playwright.handle_pw_type(args)
     
-    async def handle_pw_submit(self, args: str) -> None:
+    async def handle_pw_submit(self, args: str):
         """Handle pw-submit command."""
-        await self._playwright.handle_pw_submit(args)
+        return await self._playwright.handle_pw_submit(args)
     
     async def handle_pw_wait(self, args: str) -> None:
         """Handle pw-wait command."""

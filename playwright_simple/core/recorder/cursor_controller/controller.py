@@ -21,12 +21,20 @@ logger = logging.getLogger(__name__)
 class CursorController:
     """Controls a visual cursor overlay in the browser."""
     
-    def __init__(self, page: Page):
-        """Initialize cursor controller."""
+    def __init__(self, page: Page, fast_mode: bool = False, recorder_logger=None):
+        """Initialize cursor controller.
+        
+        Args:
+            page: Playwright Page instance
+            fast_mode: If True, reduce delays for faster execution
+            recorder_logger: Optional RecorderLogger instance for logging
+        """
         self.page = page
         self.is_active = False
         self.current_x = 0
         self.current_y = 0
+        self.fast_mode = fast_mode
+        self.recorder_logger = recorder_logger
         
         # Initialize modules
         self._visual = CursorVisual(page)

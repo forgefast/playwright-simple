@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class EventCapture:
     """Captures browser events for recording."""
     
-    def __init__(self, page: Page, debug: bool = False, event_handlers_instance=None):
+    def __init__(self, page: Page, debug: bool = False, event_handlers_instance=None, recorder_logger=None):
         """Initialize event capture."""
         self.page = page
         self.debug = debug
@@ -31,6 +31,8 @@ class EventCapture:
         self._pending_navigation_request = None
         # Store reference to event handlers for immediate processing
         self._event_handlers_instance = event_handlers_instance
+        # Store reference to recorder logger
+        self.recorder_logger = recorder_logger
     
     def on_event(self, event_type: str, handler: Callable):
         """Register event handler."""
@@ -61,6 +63,14 @@ class EventCapture:
         self.is_capturing = True
         self.last_url = self.page.url
         
+        # Log event capture started
+        if self.recorder_logger:
+            self.recorder_logger.log_screen_event(
+                event_type='event_capture_started',
+                page_state={'url': self.page.url},
+                details={'debug': self.debug}
+            )
+        
         # CRITICAL: Expose function for immediate event processing from JavaScript
         # This allows JavaScript to call Python directly when link is clicked
         # This is the key to processing events BEFORE navigation destroys context
@@ -85,6 +95,15 @@ class EventCapture:
         # Inject script and wait a bit for it to initialize
         # CRITICAL: Inject script immediately to catch early clicks
         await self._inject_capture_script()
+        
+        # Log script injected
+        if self.recorder_logger:
+            self.recorder_logger.log_screen_event(
+                event_type='script_injected',
+                page_state={'url': self.page.url},
+                details={}
+            )
+        
         await asyncio.sleep(0.2)  # Reduced delay - script should be ready faster now
         
         # Verify script is working
@@ -120,6 +139,13 @@ class EventCapture:
             
             if not is_working.get('initialized') or not is_working.get('eventsArrayReady'):
                 logger.error("Script injection failed after retry - events may not be captured!")
+                if self.recorder_logger:
+                    self.recorder_logger.log_critical_failure(
+                        action='script_injection',
+                        error="Script injection failed after retry",
+                        page_state={'url': self.page.url},
+                        details={'initialized': is_working.get('initialized'), 'eventsArrayReady': is_working.get('eventsArrayReady')}
+                    )
         
         if self.debug:
             logger.info(f"🔍 DEBUG: Script verification - Initialized: {is_working.get('initialized')}, Listeners available: {is_working.get('hasListeners')}")
@@ -172,12 +198,27 @@ class EventCapture:
                     pending_events = pending_result.get('events', [])
                     if pending_events and len(pending_events) > 0:
                         logger.info(f"🚨 Navigation request intercepted! Processing {len(pending_events)} event(s) before navigation")
+                        
+                        # Log navigation interception
+                        if self.recorder_logger:
+                            self.recorder_logger.log_screen_event(
+                                event_type='navigation_intercepted',
+                                page_state={'url': request.url if hasattr(request, 'url') else self.page.url},
+                                details={'pending_events_count': len(pending_events), 'resource_type': request.resource_type}
+                            )
+                        
                         # Process events immediately before navigation
                         for event in pending_events:
                             try:
                                 await self._process_event(event)
                             except Exception as e:
                                 logger.debug(f"Error processing event before navigation: {e}")
+                                if self.recorder_logger:
+                                    self.recorder_logger.log_critical_failure(
+                                        action='process_event_before_navigation',
+                                        error=str(e),
+                                        page_state={'url': request.url if hasattr(request, 'url') else self.page.url}
+                                    )
                         
                         # Clear events after processing
                         try:
@@ -201,6 +242,14 @@ class EventCapture:
         # Start polling tasks
         poll_task = asyncio.create_task(self._poll_events())
         scroll_task = asyncio.create_task(self._monitor_scroll())
+        
+        # Log polling started
+        if self.recorder_logger:
+            self.recorder_logger.log_screen_event(
+                event_type='polling_started',
+                page_state={'url': self.page.url},
+                details={}
+            )
         
         # Do MULTIPLE immediate polls to catch any events that happened during initialization
         # This is CRITICAL for capturing the first click on pages that load quickly
@@ -236,6 +285,15 @@ class EventCapture:
     async def stop(self):
         """Stop capturing events."""
         self.is_capturing = False
+        
+        # Log event capture stopped
+        if self.recorder_logger:
+            self.recorder_logger.log_screen_event(
+                event_type='event_capture_stopped',
+                page_state={'url': self.page.url if hasattr(self.page, 'url') else 'N/A'},
+                details={}
+            )
+        
         logger.info("Event capture stopped")
     
     async def _inject_capture_script(self):
@@ -739,6 +797,15 @@ class EventCapture:
                     logger.debug(f"🔍 DEBUG: Poll #{poll_count} - Script initialized: {is_initialized}, Events in queue: {event_count}")
                 
                 if events:
+                    # Log events polled (only in debug mode to avoid spam)
+                    if self.recorder_logger and self.recorder_logger.is_debug:
+                        event_types = [e.get('type', 'unknown') for e in events]
+                        self.recorder_logger.log_screen_event(
+                            event_type='events_polled',
+                            page_state={'url': self.page.url if hasattr(self.page, 'url') else 'N/A'},
+                            details={'event_count': len(events), 'event_types': event_types, 'has_link_click': has_link_click}
+                        )
+                    
                     if self.debug:
                         logger.info(f"🔍 DEBUG: Polled {len(events)} event(s) from page: {[e.get('type', 'unknown') for e in events]}")
                         for event in events:
@@ -764,6 +831,15 @@ class EventCapture:
                         logger.error(f"🔍 DEBUG: Error polling events: {e}", exc_info=True)
                     else:
                         logger.debug(f"Error polling events: {e}")
+                    
+                    # Log polling error
+                    if self.recorder_logger:
+                        self.recorder_logger.log_critical_failure(
+                            action='poll_events',
+                            error=str(e),
+                            page_state={'url': self.page.url if hasattr(self.page, 'url') else 'N/A'},
+                            details={'poll_count': poll_count}
+                        )
                 await asyncio.sleep(0.5)
     
     async def _process_event(self, event_data: Dict[str, Any]):
@@ -774,19 +850,45 @@ class EventCapture:
         else:
             logger.debug(f"Processing event: {event_type}")
         
-        if event_type == 'click':
-            await self._handle_click(event_data)
-        elif event_type == 'input':
-            await self._handle_input(event_data)
-        elif event_type == 'blur':
-            await self._handle_blur(event_data)
-        elif event_type == 'keydown':
-            await self._handle_keydown(event_data)
-        else:
-            if self.debug:
-                logger.warning(f"🔍 DEBUG: Unknown event type: {event_type} - {event_data}")
+        # Log event processed (only in debug mode to avoid spam)
+        if self.recorder_logger and self.recorder_logger.is_debug:
+            element_info = event_data.get('element', {})
+            self.recorder_logger.log_screen_event(
+                event_type='event_processed',
+                page_state={'url': self.page.url if hasattr(self.page, 'url') else 'N/A'},
+                details={'event_type': event_type, 'element_text': element_info.get('text', '')[:50] if element_info else ''}
+            )
+        
+        try:
+            if event_type == 'click':
+                await self._handle_click(event_data)
+            elif event_type == 'input':
+                await self._handle_input(event_data)
+            elif event_type == 'blur':
+                await self._handle_blur(event_data)
+            elif event_type == 'keydown':
+                await self._handle_keydown(event_data)
             else:
-                logger.debug(f"Unknown event type: {event_type}")
+                if self.debug:
+                    logger.warning(f"🔍 DEBUG: Unknown event type: {event_type} - {event_data}")
+                else:
+                    logger.debug(f"Unknown event type: {event_type}")
+                
+                # Log unknown event type
+                if self.recorder_logger:
+                    self.recorder_logger.warning(
+                        message=f"Unknown event type: {event_type}",
+                        details={'event_data': event_data}
+                    )
+        except Exception as e:
+            logger.error(f"Error processing event {event_type}: {e}", exc_info=True)
+            if self.recorder_logger:
+                self.recorder_logger.log_critical_failure(
+                    action='process_event',
+                    error=str(e),
+                    page_state={'url': self.page.url if hasattr(self.page, 'url') else 'N/A'},
+                    details={'event_type': event_type}
+                )
     
     async def _handle_blur(self, event_data: Dict[str, Any]):
         """Handle blur event - finalize input."""

@@ -334,9 +334,130 @@ await recorder.start()
 # Vídeo finalizado e renomeado automaticamente
 ```
 
+### Nível 4: Extensão Odoo (Funcionando ✅)
+
+#### playwright_simple/odoo/base.py
+- **Classe**: `OdooTestBase`
+- **Herança**: Estende `SimpleTestBase` com 8 mixins:
+  - `OdooAuthMixin`: login, logout
+  - `OdooWaitMixin`: wait_until_ready
+  - `OdooNavigationMixin`: go_to_menu, go_to_dashboard, go_to_model
+  - `OdooTextInteractionMixin`: hover, double_click, right_click, drag_and_drop, scroll
+  - `OdooCRUDMixin`: create_record, search_and_open, assert_record_exists, open_record, add_line
+  - `OdooFormsMixin`: fill, click_button, click (com suporte a texto)
+- **Helpers (lazy initialization)**:
+  - `menu`: MenuNavigator (navegação por menus)
+  - `field`: FieldHelper (interação com campos)
+  - `view`: ViewHelper (manipulação de views)
+  - `wizard`: WizardHelper (manipulação de wizards)
+  - `workflow`: WorkflowHelper (execução de workflows)
+- **Funcionalidades**:
+  - Login/logout específico para Odoo
+  - Navegação por menus (ex: "Vendas > Pedidos")
+  - Preenchimento de campos Odoo (many2one, many2many, one2many)
+  - CRUD operations (create, read, update, delete)
+  - Detecção automática de versão Odoo
+  - State machine para evitar navegações desnecessárias
+
+#### playwright_simple/odoo/yaml_parser/
+- **OdooYAMLParser**: Parser YAML específico para Odoo
+  - Suporta sintaxe user-friendly (ex: `login: admin`, `go_to: "Vendas > Pedidos"`)
+  - Converte YAML em funções Python executáveis
+  - Suporta setup, steps, teardown
+  - Suporta herança (extends) e composição (includes)
+- **ActionParser**: Converte ações YAML em funções executáveis
+  - Parse de ações Odoo (login, go_to, click, fill, etc.)
+  - Suporte a wizards e contextos
+- **ActionValidator**: Valida ações antes da execução
+- **StepExecutor**: Executa steps com validação e gerenciamento de estado
+
+#### playwright_simple/odoo/menus.py
+- **MenuNavigator**: Navegação por menus Odoo
+- Suporte a Community e Enterprise
+- Detecção automática de versão
+- Navegação com cursor visual
+
+#### playwright_simple/odoo/fields/
+- **FieldHelper**: Coordenador principal
+  - `basic_fields.py`: Campos básicos (char, integer, float, date, datetime)
+  - `relational_fields.py`: Campos relacionais (many2one, many2many, one2many)
+  - `special_fields.py`: Campos especiais (HTML, etc.)
+- Identificação de campos por label
+- Suporte a contexto para campos duplicados
+
+#### playwright_simple/odoo/views/
+- **ViewHelper**: Manipulação de views
+  - `list_view.py`: Operações em list view (search, open, filter)
+  - `form_view.py`: Operações em form view
+  - `view_switcher.py`: Troca entre views (List, Kanban, Form, Graph, Pivot)
+
+#### Integração com Recorder
+- **Modo 'read'**: Recorder carrega YAML e executa steps usando OdooYAMLParser
+- **Modo 'write'**: Recorder gera YAML que pode ser executado com OdooYAMLParser
+- **CommandHandlers**: Permite interações programáticas durante gravação
+  - `handle_pw_click()`: Clica em elementos
+  - `handle_pw_type()`: Digita em campos
+  - `handle_pw_submit()`: Submete formulários
+  - `handle_subtitle()`: Adiciona legendas
+  - `handle_audio_step()`: Adiciona narração
+
+### Árvore de Dependências Completa
+
+```
+test_full_cycle_with_video.py
+├── Recorder (write mode)
+│   ├── BrowserManager
+│   ├── EventCapture
+│   ├── ActionConverter
+│   ├── YAMLWriter
+│   └── CommandHandlers
+│       ├── RecordingHandlers
+│       ├── MetadataHandlers
+│       ├── CursorHandlers
+│       └── PlaywrightHandlers
+└── Recorder (read mode)
+    ├── BrowserManager (com vídeo se config.video)
+    ├── VideoManager (se config.video.enabled)
+    ├── OdooYAMLParser
+    │   ├── ActionParser
+    │   ├── ActionValidator
+    │   └── StepExecutor
+    └── OdooTestBase
+        ├── MenuNavigator
+        ├── FieldHelper
+        │   ├── BasicFieldsHandler
+        │   ├── RelationalFieldsHandler
+        │   └── SpecialFieldsHandler
+        ├── ViewHelper
+        │   ├── ListViewHandler
+        │   ├── FormViewHandler
+        │   └── ViewSwitcher
+        ├── WizardHelper
+        └── WorkflowHelper
+```
+
 ## Notas Importantes
 
 ⚠️ **Código Antigo**: Todo código que não está nesta stack deve ser considerado "não testado" e usado apenas como referência.
 
 ✅ **Base Confiável**: Apenas os arquivos documentados aqui são garantidos como funcionando.
+
+## Problemas Arquiteturais Identificados
+
+### Estrutura de Classes
+- **Muitos mixins (8)**: OdooTestBase herda de 8 mixins diferentes, dificultando rastreamento
+- **Duplicação de lógica**: login() implementado em OdooTestBase E OdooAuthMixin
+- **Lazy initialization inconsistente**: Helpers (menu, field, view) são propriedades lazy, mas dependências não são claras
+- **Dependências implícitas**: Helpers dependem de `_version`, mas version não é inicializado no __init__
+
+### Organização de Código
+- **Responsabilidades sobrepostas**: Mixins e Helpers fazem coisas similares
+- **Acoplamento alto**: Helpers acessam page diretamente, sem abstração
+- **Falta de interfaces**: Não há contratos claros entre componentes
+- **Inicialização complexa**: __init__ tem muita lógica e dependências não explícitas
+
+### Testabilidade
+- **Dependências difíceis de mockar**: Helpers são criados internamente
+- **Estado compartilhado**: _version, _edition são estado global da instância
+- **Falta de injeção de dependências**: Helpers não podem ser substituídos facilmente
 

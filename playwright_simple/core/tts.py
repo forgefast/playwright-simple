@@ -325,9 +325,9 @@ class TTSManager:
             # Import TestStep here to avoid circular dependency
             from .step import TestStep
             
-            # Generate audio for each step
+            # First pass: prepare all steps with audio text
             # Track current audio text for inheritance (similar to subtitles)
-            # IMPORTANT: Include ALL steps to maintain video sync - steps without audio get silence
+            prepared_steps = []
             current_audio_text = None
             for i, step in enumerate(test_steps, 1):
                 # Handle both TestStep objects and dicts
@@ -366,44 +366,97 @@ class TTSManager:
                     step_start_time = 0.0
                     step_duration = 0.0
                 
-                # Generate audio or silence for this step
-                if step_text and step_text.strip():
-                    # Step has audio text - generate TTS
-                    audio_file = temp_dir / f"step_{i}.mp3"
+                # Store prepared step
+                prepared_steps.append({
+                    'audio_text': step_text,
+                    'start_time': step_start_time,
+                    'duration': step_duration,
+                    'step_index': i
+                })
+            
+            # Second pass: group consecutive steps with same audio text
+            audio_groups = []
+            current_group = None
+            
+            for step_data in prepared_steps:
+                audio_text = step_data['audio_text']
+                start_time = step_data['start_time']
+                duration = step_data['duration']
+                
+                if audio_text and audio_text.strip():
+                    # Step has audio text
+                    if current_group and current_group['audio_text'] == audio_text:
+                        # Same audio text as previous - extend group
+                        current_group['duration'] += duration
+                        current_group['end_time'] = start_time + duration
+                    else:
+                        # New audio text - start new group
+                        if current_group:
+                            audio_groups.append(current_group)
+                        current_group = {
+                            'audio_text': audio_text,
+                            'start_time': start_time,
+                            'duration': duration,
+                            'end_time': start_time + duration
+                        }
+                else:
+                    # Step has no audio - finalize current group if exists
+                    if current_group:
+                        audio_groups.append(current_group)
+                        current_group = None
+                    # Add silence step
+                    if return_timed_audio and duration > 0:
+                        audio_groups.append({
+                            'audio_text': None,
+                            'start_time': start_time,
+                            'duration': duration,
+                            'end_time': start_time + duration
+                        })
+            
+            # Add final group if exists
+            if current_group:
+                audio_groups.append(current_group)
+            
+            # Third pass: generate audio for each group
+            audio_file_counter = 0
+            for group_idx, group in enumerate(audio_groups, 1):
+                if group['audio_text'] and group['audio_text'].strip():
+                    # Generate audio for this group (only once per group)
+                    audio_file = temp_dir / f"group_{group_idx}.mp3"
                     
-                    logger.info(f"Generating narration for step {i} (starts at {step_start_time:.2f}s, duration {step_duration:.2f}s): {step_text[:50]}...")
+                    logger.info(f"Generating narration for group {group_idx} (starts at {group['start_time']:.2f}s, duration {group['duration']:.2f}s): {group['audio_text'][:50]}...")
                     try:
-                        success = await self.generate_audio(step_text, audio_file)
+                        success = await self.generate_audio(group['audio_text'], audio_file)
                         
                         if success and audio_file.exists():
                             audio_duration = self._get_audio_duration(audio_file)
                             
                             if return_timed_audio:
                                 # Store with timestamp and duration for synchronized playback
-                                timed_audio_list.append((audio_file, step_start_time, audio_duration, step_duration))
+                                timed_audio_list.append((audio_file, group['start_time'], audio_duration, group['duration']))
                             else:
                                 audio_files.append(audio_file)
                         else:
-                            logger.warning(f"Failed to generate audio for step {i}")
-                            # Create silence file for this step to maintain sync
+                            logger.warning(f"Failed to generate audio for group {group_idx}")
+                            # Create silence file for this group to maintain sync
                             if return_timed_audio:
-                                silence_file = temp_dir / f"silence_{i}.mp3"
-                                if self._create_silence_file(silence_file, step_duration):
-                                    timed_audio_list.append((silence_file, step_start_time, step_duration, step_duration))
+                                silence_file = temp_dir / f"silence_group_{group_idx}.mp3"
+                                if self._create_silence_file(silence_file, group['duration']):
+                                    timed_audio_list.append((silence_file, group['start_time'], group['duration'], group['duration']))
                     except TTSGenerationError as e:
-                        logger.error(f"TTS generation error for step {i}: {e}")
-                        # Create silence file for this step to maintain sync
+                        logger.error(f"TTS generation error for group {group_idx}: {e}")
+                        # Create silence file for this group to maintain sync
                         if return_timed_audio:
-                            silence_file = temp_dir / f"silence_{i}.mp3"
-                            if self._create_silence_file(silence_file, step_duration):
-                                timed_audio_list.append((silence_file, step_start_time, step_duration, step_duration))
+                            silence_file = temp_dir / f"silence_group_{group_idx}.mp3"
+                            if self._create_silence_file(silence_file, group['duration']):
+                                timed_audio_list.append((silence_file, group['start_time'], group['duration'], group['duration']))
                 else:
-                    # Step has no audio - create silence file to maintain video sync
-                    if return_timed_audio and step_duration > 0:
-                        silence_file = temp_dir / f"silence_{i}.mp3"
-                        logger.debug(f"Creating silence for step {i} (duration {step_duration:.2f}s)")
-                        if self._create_silence_file(silence_file, step_duration):
-                            timed_audio_list.append((silence_file, step_start_time, step_duration, step_duration))
+                    # Group has no audio - create silence file to maintain video sync
+                    if return_timed_audio and group['duration'] > 0:
+                        silence_file = temp_dir / f"silence_group_{group_idx}.mp3"
+                        logger.debug(f"Creating silence for group {group_idx} (duration {group['duration']:.2f}s)")
+                        if self._create_silence_file(silence_file, group['duration']):
+                            timed_audio_list.append((silence_file, group['start_time'], group['duration'], group['duration']))
             
             # Final audio file path
             final_audio = output_dir / f"{test_name}_narration.mp3"

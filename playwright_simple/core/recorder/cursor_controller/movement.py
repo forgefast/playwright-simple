@@ -7,6 +7,7 @@ Handles cursor movement and positioning.
 """
 
 import logging
+import asyncio
 from playwright.async_api import Page
 
 logger = logging.getLogger(__name__)
@@ -52,21 +53,52 @@ class CursorMovement:
             await self.controller.show()
             
             if smooth:
+                # Check if fast_mode is enabled
+                fast_mode = getattr(self.controller, 'fast_mode', False)
+                
+                if fast_mode:
+                    # Fast mode: shorter animation, but still wait for it
+                    animation_duration = 0.15  # 150ms instead of 300ms
+                    timeout = 200  # 200ms timeout
+                else:
+                    # Normal mode: full animation
+                    animation_duration = 0.3  # 300ms
+                    timeout = 350  # 350ms timeout
+                
                 # Smooth animation to position
+                # Use Promise to wait for animation to complete
+                animation_duration_str = str(animation_duration)
+                timeout_str = str(timeout)
                 await self.page.evaluate(f"""
                     () => {{
-                        const cursor = document.getElementById('__playwright_cursor');
-                        if (cursor) {{
-                            cursor.style.transition = 'left 0.3s ease-out, top 0.3s ease-out';
-                            cursor.style.left = '{x}px';
-                            cursor.style.top = '{y}px';
-                            cursor.style.display = 'block';
-                            
-                            // Remove transition after animation
-                            setTimeout(() => {{
-                                cursor.style.transition = 'none';
-                            }}, 300);
-                        }}
+                        return new Promise((resolve) => {{
+                            const cursor = document.getElementById('__playwright_cursor');
+                            if (cursor) {{
+                                // Set up transition end listener
+                                const onTransitionEnd = () => {{
+                                    cursor.removeEventListener('transitionend', onTransitionEnd);
+                                    cursor.style.transition = 'none';
+                                    resolve(true);
+                                }};
+                                
+                                cursor.addEventListener('transitionend', onTransitionEnd);
+                                
+                                // Start animation
+                                cursor.style.transition = 'left {animation_duration_str}s ease-out, top {animation_duration_str}s ease-out';
+                                cursor.style.left = '{x}px';
+                                cursor.style.top = '{y}px';
+                                cursor.style.display = 'block';
+                                
+                                // Fallback timeout in case transitionend doesn't fire
+                                setTimeout(() => {{
+                                    cursor.removeEventListener('transitionend', onTransitionEnd);
+                                    cursor.style.transition = 'none';
+                                    resolve(true);
+                                }}, {timeout_str});
+                            }} else {{
+                                resolve(false);
+                            }}
+                        }});
                     }}
                 """)
             else:
@@ -82,6 +114,14 @@ class CursorMovement:
                     }}
                 """)
             logger.debug(f"Cursor moved to ({x}, {y})")
+            
+            # Log cursor movement (only in debug mode)
+            if self.controller.recorder_logger and self.controller.recorder_logger.is_debug:
+                self.controller.recorder_logger.log_cursor_movement(
+                    x=x,
+                    y=y,
+                    animation_duration_ms=animation_duration * 1000 if smooth else None
+                )
         except Exception as e:
             logger.error(f"Error moving cursor: {e}")
 

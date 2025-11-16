@@ -14,6 +14,27 @@ from playwright.async_api import Page
 logger = logging.getLogger(__name__)
 
 
+def _get_delay(controller, normal_delay: float, min_delay: float = None) -> float:
+    """Get delay based on fast_mode.
+    
+    Args:
+        controller: CursorController instance
+        normal_delay: Normal delay in seconds
+        min_delay: Minimum delay (overrides fast_mode reduction if provided)
+        
+    Returns:
+        Reduced delay if fast_mode, otherwise normal delay
+    """
+    fast_mode = getattr(controller, 'fast_mode', False)
+    if fast_mode:
+        # In fast mode, reduce delays significantly (but not zero to avoid issues)
+        # But respect min_delay if provided (for critical delays like cursor movement)
+        if min_delay is not None:
+            return max(normal_delay * 0.1, min_delay)
+        return min(normal_delay * 0.1, 0.01)  # 10% of normal, minimum 10ms
+    return normal_delay
+
+
 class CursorInteraction:
     """Handles cursor interactions."""
     
@@ -33,8 +54,11 @@ class CursorInteraction:
             
             # Move cursor if coordinates provided
             if x is not None and y is not None:
+                # Always use smooth=True to ensure cursor moves visibly
                 await self.controller.move(click_x, click_y, smooth=True)
-                await asyncio.sleep(0.2)  # Small delay so user can see cursor move
+                # Small delay so user can see cursor at destination before clicking
+                # Use minimum 50ms even in fast_mode to ensure cursor is visible at destination
+                await asyncio.sleep(_get_delay(self.controller, 0.15, min_delay=0.05))
             
             # Show click animation
             await self.page.evaluate(f"""
@@ -86,7 +110,7 @@ class CursorInteraction:
             try:
                 await self.page.wait_for_load_state('domcontentloaded', timeout=5000)
                 # Wait a bit more for dynamic content
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(_get_delay(self.controller, 0.5))
             except:
                 pass  # Continue even if timeout
             
@@ -281,9 +305,27 @@ class CursorInteraction:
             if found_text.lower() != text.lower():
                 print(f"   ℹ️  Texto real do elemento: '{found_text}' (prioridade: {priority})")
             
-            # Move cursor to element position with a small delay for visibility
-            await self.controller.move(click_x, click_y)
-            await asyncio.sleep(0.3)  # Small delay so user can see cursor move
+            # Move cursor to element position and wait for animation to complete
+            # The move() method now waits for the animation to complete
+            # Always use smooth=True to ensure cursor moves visibly, even in fast_mode
+            # In fast_mode, the animation is shorter (150ms) but still visible
+            await self.controller.move(click_x, click_y, smooth=True)
+            
+            # Log cursor movement with target element
+            if self.controller.recorder_logger and self.controller.recorder_logger.is_debug:
+                target_element = {
+                    'text': found_text,
+                    'coordinates': (click_x, click_y)
+                }
+                self.controller.recorder_logger.log_cursor_movement(
+                    x=click_x,
+                    y=click_y,
+                    target_element=target_element
+                )
+            
+            # Small additional delay so user can see cursor at destination before clicking
+            # Use minimum 50ms even in fast_mode to ensure cursor is visible at destination
+            await asyncio.sleep(_get_delay(self.controller, 0.15, min_delay=0.05))
             
             # Show click animation
             await self.page.evaluate(f"""
@@ -347,7 +389,7 @@ class CursorInteraction:
             click_y = element_info['y']
             
             await self.controller.move(click_x, click_y)
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(_get_delay(self.controller, 0.2))
             
             await self.page.evaluate(f"""
                 () => {{
@@ -456,7 +498,7 @@ class CursorInteraction:
             click_y = element_info['y']
             
             await self.controller.move(click_x, click_y)
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(_get_delay(self.controller, 0.2))
             
             await self.page.evaluate(f"""
                 () => {{
@@ -553,7 +595,7 @@ class CursorInteraction:
             click_y = element_info['y']
             
             await self.controller.move(click_x, click_y)
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(_get_delay(self.controller, 0.2))
             
             await self.page.evaluate(f"""
                 () => {{
@@ -613,7 +655,7 @@ class CursorInteraction:
             
             # Move cursor to element position
             await self.controller.move(click_x, click_y)
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(_get_delay(self.controller, 0.2))
             
             # Show click animation
             await self.page.evaluate(f"""
@@ -678,7 +720,7 @@ class CursorInteraction:
             
             # Move cursor to element position
             await self.controller.move(click_x, click_y)
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(_get_delay(self.controller, 0.2))
             
             # Show click animation
             await self.page.evaluate(f"""
@@ -819,20 +861,27 @@ class CursorInteraction:
                 if field_info and field_info.get('success'):
                     # Move cursor to field
                     await self.controller.move(field_info['x'], field_info['y'])
-                    await asyncio.sleep(0.2)
+                    await asyncio.sleep(_get_delay(self.controller, 0.2))
                     
                     # Click to focus
                     await self.page.mouse.click(field_info['x'], field_info['y'])
-                    await asyncio.sleep(0.1)
+                    await asyncio.sleep(_get_delay(self.controller, 0.1))
                     
                     # Clear field first
                     await self.page.keyboard.press('Control+A')
-                    await asyncio.sleep(0.1)
+                    await asyncio.sleep(_get_delay(self.controller, 0.1))
                     
                     # Type character by character for visual effect
-                    for char in text:
-                        await self.page.keyboard.type(char, delay=50)  # Small delay between chars
-                        await asyncio.sleep(0.03)  # Small delay for visual effect
+                    # Use fast_mode to reduce delays
+                    fast_mode = getattr(self.controller, 'fast_mode', False)
+                    if fast_mode:
+                        # Fast mode: type quickly with minimal delay
+                        await self.page.keyboard.type(text, delay=10)  # Minimal delay
+                    else:
+                        # Normal mode: type character by character for visual effect
+                        for char in text:
+                            await self.page.keyboard.type(char, delay=50)  # Small delay between chars
+                            await asyncio.sleep(_get_delay(self.controller, 0.03))  # Small delay for visual effect
                     
                     logger.info(f"Typed '{text}' into field '{field_selector}'")
                     return True
@@ -865,20 +914,50 @@ class CursorInteraction:
                 
                 if field_pos:
                     await self.controller.move(field_pos['x'], field_pos['y'])
-                    await asyncio.sleep(0.2)
+                    await asyncio.sleep(_get_delay(self.controller, 0.2))
                     
-                    # Click to focus
-                    await self.page.mouse.click(field_pos['x'], field_pos['y'])
-                    await asyncio.sleep(0.1)
+                    # Check if field is already focused before clicking
+                    is_focused = await self.page.evaluate("""
+                        () => {
+                            const active = document.activeElement;
+                            if (!active) return false;
+                            const field = document.querySelector('input:focus, textarea:focus');
+                            return field !== null;
+                        }
+                    """)
+                    
+                    # Only click if field is not already focused
+                    if not is_focused:
+                        if self.controller.recorder_logger:
+                            self.controller.recorder_logger.debug(
+                                message="Clicking field to focus before typing",
+                                details={'field_selector': field_selector, 'position': field_pos}
+                            )
+                        # Click to focus
+                        await self.page.mouse.click(field_pos['x'], field_pos['y'])
+                        await asyncio.sleep(_get_delay(self.controller, 0.1))
+                    else:
+                        if self.controller.recorder_logger:
+                            self.controller.recorder_logger.debug(
+                                message="Field already focused, skipping click",
+                                details={'field_selector': field_selector}
+                            )
                     
                     # Clear field first
                     await self.page.keyboard.press('Control+A')
-                    await asyncio.sleep(0.1)
+                    await asyncio.sleep(_get_delay(self.controller, 0.1))
                 
                 # Type character by character for visual effect
-                for char in text:
-                    await self.page.keyboard.type(char, delay=50)  # Small delay between chars
-                    await asyncio.sleep(0.03)  # Small delay for visual effect
+                # Use fast_mode to reduce delays
+                fast_mode = getattr(self.controller, 'fast_mode', False)
+                if fast_mode:
+                    # Fast mode: type quickly with minimal delay
+                    await self.page.keyboard.type(text, delay=10)  # Minimal delay
+                else:
+                    # Normal mode: type character by character for visual effect
+                    for char in text:
+                        await self.page.keyboard.type(char, delay=50)  # Small delay between chars
+                        await asyncio.sleep(0.03)  # Small delay for visual effect
                 
                 logger.info(f"Typed '{text}' into focused field")
                 return True

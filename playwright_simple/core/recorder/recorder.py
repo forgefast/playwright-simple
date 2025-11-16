@@ -20,6 +20,7 @@ from .utils.browser import BrowserManager
 from .event_handlers import EventHandlers
 from .command_handlers import CommandHandlers
 from .command_server import CommandServer
+from .recorder_logger import RecorderLogger
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +49,7 @@ except ImportError:
 class Recorder:
     """Main recorder class that coordinates event capture, conversion, and YAML writing."""
     
-    def __init__(self, output_path: Path, initial_url: str = None, headless: bool = False, debug: bool = False, fast_mode: bool = False, mode: str = 'write'):
+    def __init__(self, output_path: Path, initial_url: str = None, headless: bool = False, debug: bool = False, fast_mode: bool = False, mode: str = 'write', log_level: str = None, log_file: Path = None):
         """
         Initialize recorder.
         
@@ -59,6 +60,8 @@ class Recorder:
             debug: Enable debug mode (verbose logging)
             fast_mode: Accelerate steps (reduce delays, instant animations)
             mode: 'write' for recording (export), 'read' for playback (import)
+            log_level: Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+            log_file: Optional log file path
         """
         self.output_path = Path(output_path)
         self.initial_url = initial_url or 'about:blank'
@@ -66,11 +69,20 @@ class Recorder:
         self.debug = debug
         self.mode = mode  # 'write' or 'read'
         
+        # Initialize recorder logger
+        console_level = 'DEBUG' if debug else log_level
+        self.recorder_logger = RecorderLogger(
+            name="recorder",
+            console_level=console_level,
+            file_level='DEBUG',  # Always DEBUG for file
+            log_file=log_file
+        )
+        
         # Initialize browser manager - will be configured with video options if needed
         self.browser_manager = BrowserManager(headless=headless)
         self.event_capture: Optional[EventCapture] = None
         self.cursor_controller: Optional[CursorController] = None
-        self.action_converter = ActionConverter()
+        self.action_converter = ActionConverter(recorder_logger=self.recorder_logger)
         
         # In write mode: YAMLWriter, in read mode: load YAML steps
         if mode == 'write':
@@ -158,7 +170,8 @@ class Recorder:
             action_converter=self.action_converter,
             yaml_writer=self.yaml_writer,
             is_recording_getter=lambda: self.is_recording,
-            is_paused_getter=lambda: self.is_paused
+            is_paused_getter=lambda: self.is_paused,
+            recorder_logger=self.recorder_logger
         )
         
         self.command_handlers = CommandHandlers(
@@ -168,7 +181,8 @@ class Recorder:
             recording_state_setter=lambda v: setattr(self, 'is_recording', v),
             paused_state_setter=lambda v: setattr(self, 'is_paused', v),
             page_getter=lambda: self.page if hasattr(self, 'page') else None,
-            recorder=self  # Pass recorder so handlers can access action_converter for programmatic actions
+            recorder=self,  # Pass recorder so handlers can access action_converter for programmatic actions
+            recorder_logger=self.recorder_logger
         )
         
         self._setup_console_commands()
@@ -208,6 +222,17 @@ class Recorder:
     
     async def start(self):
         """Start recording session."""
+        # Track start time for duration calculation
+        self.recorder_start_time = datetime.now()
+        
+        # Log recorder started
+        if self.recorder_logger:
+            self.recorder_logger.log_screen_event(
+                event_type='recorder_started',
+                page_state=None,
+                details={'mode': self.mode, 'initial_url': self.initial_url, 'headless': self.headless, 'fast_mode': self.fast_mode}
+            )
+        
         try:
             # Clean up old sessions before starting (with timeout to avoid blocking)
             from .command_server import cleanup_old_sessions
@@ -215,8 +240,19 @@ class Recorder:
                 cleaned = cleanup_old_sessions(force=True, timeout=5.0)
                 if cleaned > 0:
                     logger.info(f"Cleaned up {cleaned} old recording session(s) before starting")
+                    if self.recorder_logger:
+                        self.recorder_logger.log_screen_event(
+                            event_type='cleanup_completed',
+                            page_state=None,
+                            details={'cleaned_sessions': cleaned}
+                        )
             except Exception as e:
                 logger.warning(f"Error during cleanup (continuing anyway): {e}")
+                if self.recorder_logger:
+                    self.recorder_logger.warning(
+                        message=f"Error during cleanup: {e}",
+                        details={'operation': 'cleanup_old_sessions'}
+                    )
             
             # Configure browser manager with video options if needed
             if self.mode == 'read':
@@ -260,6 +296,18 @@ class Recorder:
                 elapsed_since_start = browser_started_time - video_start_timestamp
                 logger.info(f"🎬 VIDEO DEBUG: Browser started at {elapsed_since_start:.2f}s after video start")
                 
+                # Log browser started
+                if self.recorder_logger:
+                    try:
+                        page_url = page.url if hasattr(page, 'url') else 'N/A'
+                    except:
+                        page_url = 'N/A'
+                    self.recorder_logger.log_screen_event(
+                        event_type='browser_started',
+                        page_state={'url': page_url},
+                        details={'video_enabled': True, 'test_name': test_name, 'viewport': viewport, 'elapsed_seconds': elapsed_since_start}
+                    )
+                
                 # Verify page and context are from browser_manager
                 logger.info(f"Browser started: page={id(page)}, browser_manager.page={id(self.browser_manager.page) if self.browser_manager.page else 'None'}, context={id(self.browser_manager.context) if self.browser_manager.context else 'None'}")
                 
@@ -286,14 +334,34 @@ class Recorder:
                 # Normal browser start (no video or write mode)
                 page = await self.browser_manager.start()
                 self.page = page  # Store page reference for command handlers
+                
+                # Log browser started
+                if self.recorder_logger:
+                    try:
+                        page_url = page.url if hasattr(page, 'url') else 'N/A'
+                    except:
+                        page_url = 'N/A'
+                    self.recorder_logger.log_screen_event(
+                        event_type='browser_started',
+                        page_state={'url': page_url},
+                        details={'video_enabled': False, 'mode': self.mode}
+                    )
             
             # Initialize event capture only in write mode
             if self.mode == 'write':
                 # Initialize event capture EARLY - before navigation if possible
                 # This allows script injection to happen as soon as page loads
                 # Pass event_handlers so event_capture can process events immediately
-                self.event_capture = EventCapture(page, debug=self.debug, event_handlers_instance=self.event_handlers)
+                self.event_capture = EventCapture(page, debug=self.debug, event_handlers_instance=self.event_handlers, recorder_logger=self.recorder_logger)
                 self._setup_event_handlers()
+                
+                # Log event capture initialized
+                if self.recorder_logger:
+                    self.recorder_logger.log_screen_event(
+                        event_type='event_capture_initialized',
+                        page_state={'url': page.url if hasattr(page, 'url') else 'N/A'},
+                        details={'debug': self.debug}
+                    )
             
             # Store initial URL for first step
             if self.initial_url and self.initial_url != 'about:blank':
@@ -320,12 +388,29 @@ class Recorder:
                 await page.goto(self.initial_url, wait_until='domcontentloaded')
                 logger.info(f"Page loaded: {page.url}")
                 
+                # Log initial navigation
+                if self.recorder_logger:
+                    try:
+                        page_title = await page.title()
+                    except:
+                        page_title = 'N/A'
+                    self.recorder_logger.log_screen_event(
+                        event_type='initial_navigation',
+                        page_state={'url': page.url, 'title': page_title},
+                        details={'target_url': self.initial_url}
+                    )
+                
                 # Wait for page to be fully loaded (important for dynamic content like Odoo)
                 try:
                     await page.wait_for_load_state('networkidle', timeout=10000)
                     logger.info("Page network idle - ready for interactions")
                 except Exception as e:
                     logger.warning(f"Network idle timeout, continuing anyway: {e}")
+                    if self.recorder_logger:
+                        self.recorder_logger.warning(
+                            message=f"Network idle timeout: {e}",
+                            details={'operation': 'wait_for_networkidle', 'timeout': 10000}
+                        )
                     # Fallback: wait for load state
                     try:
                         await page.wait_for_load_state('load', timeout=5000)
@@ -345,11 +430,19 @@ class Recorder:
             
             # Initialize cursor controller if available
             if CURSOR_AVAILABLE:
-                self.cursor_controller = CursorController(page)
+                self.cursor_controller = CursorController(page, fast_mode=self.fast_mode, recorder_logger=self.recorder_logger)
                 # Start cursor at center of screen (or last position if available)
                 await self.cursor_controller.start()
                 # Set up navigation listener (encapsulated method, same logic as before)
                 self.cursor_controller.setup_navigation_listener()
+                
+                # Log cursor controller started
+                if self.recorder_logger:
+                    self.recorder_logger.log_screen_event(
+                        event_type='cursor_controller_started',
+                        page_state={'url': page.url if hasattr(page, 'url') else 'N/A'},
+                        details={'fast_mode': self.fast_mode}
+                    )
             
             if self.mode == 'write':
                 # Start console interface
@@ -359,6 +452,14 @@ class Recorder:
                 # Start recording
                 logger.info("Starting event capture...")
                 await self.event_capture.start()
+                
+                # Log event capture started
+                if self.recorder_logger:
+                    self.recorder_logger.log_screen_event(
+                        event_type='event_capture_started',
+                        page_state={'url': page.url if hasattr(page, 'url') else 'N/A'},
+                        details={}
+                    )
                 
                 # Ensure script is fully ready before allowing interactions
                 # Wait a bit more to ensure all event listeners are attached and polling is active
@@ -373,8 +474,21 @@ class Recorder:
                     }
                 """)
                 
+                # Log script verification
+                if self.recorder_logger:
+                    self.recorder_logger.log_screen_event(
+                        event_type='script_verification',
+                        page_state={'url': page.url if hasattr(page, 'url') else 'N/A'},
+                        details={'script_ready': script_ready}
+                    )
+                
                 if not script_ready:
                     logger.warning("Script may not be fully ready, but continuing...")
+                    if self.recorder_logger:
+                        self.recorder_logger.warning(
+                            message="Script may not be fully ready",
+                            details={'operation': 'script_verification'}
+                        )
                 
                 # Do a test poll to ensure polling is working
                 # This helps catch any events that happened during initialization
@@ -393,6 +507,9 @@ class Recorder:
                 self.is_recording = True
                 logger.info("✅ Recording started successfully - ready to capture interactions")
                 
+                # Log state change: is_recording = True
+                self._log_state_change('is_recording', False, True, {'mode': 'write'})
+                
                 # Start command server for external commands
                 self.command_server = CommandServer(self)
                 await self.command_server.start()
@@ -406,11 +523,38 @@ class Recorder:
             else:  # read mode
                 self.is_recording = True  # Set to True so handlers work
                 logger.info("✅ Playback mode initialized - executing YAML steps...")
+                
+                # Log state change: is_recording = True (read mode)
+                self._log_state_change('is_recording', False, True, {'mode': 'read'})
+                
                 await self._execute_yaml_steps()
                 logger.info("YAML steps execution completed")
             
         except Exception as e:
             logger.error(f"Error in recorder: {e}", exc_info=True)
+            
+            # Log critical failure with context
+            if self.recorder_logger:
+                try:
+                    page_url = self.page.url if self.page and hasattr(self.page, 'url') else 'N/A'
+                    try:
+                        if self.page and hasattr(self.page, 'title'):
+                            page_title = await self.page.title()
+                        else:
+                            page_title = 'N/A'
+                    except:
+                        page_title = 'N/A'
+                    page_state = {'url': page_url, 'title': page_title}
+                except:
+                    page_state = {'url': 'N/A', 'title': 'N/A'}
+                
+                self.recorder_logger.log_critical_failure(
+                    action='recorder_start',
+                    error=str(e),
+                    page_state=page_state,
+                    details={'mode': self.mode, 'initial_url': self.initial_url}
+                )
+            
             print(f"❌ Error: {e}")
             raise
         finally:
@@ -419,6 +563,19 @@ class Recorder:
             if self.command_server:
                 await self.command_server.stop()
             await self.stop()
+    
+    def _log_state_change(self, state_name: str, old_value: Any, new_value: Any, details: Dict[str, Any] = None):
+        """Helper method to log state changes."""
+        if self.recorder_logger:
+            try:
+                page_url = self.page.url if self.page and hasattr(self.page, 'url') else 'N/A'
+            except:
+                page_url = 'N/A'
+            self.recorder_logger.log_screen_event(
+                event_type='state_changed',
+                page_state={'url': page_url},
+                details={'state_name': state_name, 'old_value': old_value, 'new_value': new_value, **(details or {})}
+            )
     
     def _setup_event_handlers(self):
         """Set up event handlers."""
@@ -433,10 +590,15 @@ class Recorder:
         """Stop recording and optionally save YAML."""
         logger.info(f"stop() method called (save={save})")
         
+        # Calculate duration if start time is available
+        duration_seconds = None
+        if hasattr(self, 'recorder_start_time') and self.recorder_start_time:
+            duration_seconds = (datetime.now() - self.recorder_start_time).total_seconds()
+        
         # Check if we have steps to save (even if already stopped)
         # In read mode, yaml_writer is None, so use yaml_steps length instead
         if self.mode == 'read':
-            steps_count = len(self.yaml_steps) if hasattr(self, 'yaml_steps') and self.yaml_steps else 0
+            steps_count = len(self.yaml_steps) if hasattr(self, 'yaml_steps') and self.yaml_steps and isinstance(self.yaml_steps, list) else 0
         else:
             steps_count = self.yaml_writer.get_steps_count() if self.yaml_writer else 0
         logger.info(f"Current state - is_recording: {self.is_recording}, steps_count: {steps_count}, mode: {self.mode}")
@@ -450,6 +612,9 @@ class Recorder:
         self.is_recording = False
         logger.info(f"Set is_recording to False (was: {was_recording})")
         
+        # Log state change: is_recording = False
+        self._log_state_change('is_recording', was_recording, False)
+        
         # Stop event capture (only in write mode)
         if self.event_capture:
             try:
@@ -457,6 +622,12 @@ class Recorder:
                 await self.event_capture.stop()
             except Exception as e:
                 logger.debug(f"Error stopping event capture: {e}")
+                if self.recorder_logger:
+                    self.recorder_logger.log_critical_failure(
+                        action='stop_event_capture',
+                        error=str(e),
+                        page_state={'url': self.page.url if self.page and hasattr(self.page, 'url') else 'N/A'}
+                    )
         
         # Stop cursor controller
         if self.cursor_controller:
@@ -464,6 +635,12 @@ class Recorder:
                 await self.cursor_controller.stop()
             except Exception as e:
                 logger.debug(f"Error stopping cursor controller: {e}")
+                if self.recorder_logger:
+                    self.recorder_logger.log_critical_failure(
+                        action='stop_cursor_controller',
+                        error=str(e),
+                        page_state={'url': self.page.url if self.page and hasattr(self.page, 'url') else 'N/A'}
+                    )
         
         # Stop command server (only in write mode)
         if self.command_server:
@@ -471,6 +648,12 @@ class Recorder:
                 await self.command_server.stop()
             except Exception as e:
                 logger.debug(f"Error stopping command server: {e}")
+                if self.recorder_logger:
+                    self.recorder_logger.log_critical_failure(
+                        action='stop_command_server',
+                        error=str(e),
+                        page_state={'url': self.page.url if self.page and hasattr(self.page, 'url') else 'N/A'}
+                    )
         
         # Stop console (only in write mode)
         if self.mode == 'write':
@@ -479,6 +662,12 @@ class Recorder:
                 self.console.stop()
             except Exception as e:
                 logger.debug(f"Error stopping console: {e}")
+                if self.recorder_logger:
+                    self.recorder_logger.log_critical_failure(
+                        action='stop_console',
+                        error=str(e),
+                        page_state={'url': self.page.url if self.page and hasattr(self.page, 'url') else 'N/A'}
+                    )
         
         # Save YAML if requested (only in write mode)
         if save and self.mode == 'write' and self.yaml_writer:
@@ -491,11 +680,38 @@ class Recorder:
                     saved_path = self.output_path.resolve()
                     logger.info(f"✅ YAML saved successfully to: {saved_path}")
                     logger.info(f"Total steps: {steps_count}")
+                    
+                    # Log YAML saved
+                    if self.recorder_logger:
+                        try:
+                            page_url = self.page.url if self.page and hasattr(self.page, 'url') else 'N/A'
+                        except:
+                            page_url = 'N/A'
+                        self.recorder_logger.log_screen_event(
+                            event_type='yaml_saved',
+                            page_state={'url': page_url},
+                            details={'file_path': str(saved_path), 'total_steps': steps_count, 'duration_seconds': duration_seconds}
+                        )
+                    
                     print(f"\n✅ Recording saved!")
                     print(f"   File: {saved_path}")
                     print(f"   Total steps: {steps_count}")
                 else:
                     logger.error(f"❌ Failed to save YAML to: {self.output_path}")
+                    
+                    # Log YAML save failed
+                    if self.recorder_logger:
+                        try:
+                            page_url = self.page.url if self.page and hasattr(self.page, 'url') else 'N/A'
+                        except:
+                            page_url = 'N/A'
+                        self.recorder_logger.log_critical_failure(
+                            action='yaml_save',
+                            error=f"Failed to save YAML to {self.output_path}",
+                            page_state={'url': page_url},
+                            details={'file_path': str(self.output_path), 'total_steps': steps_count}
+                        )
+                    
                     print(f"\n❌ Failed to save recording")
                     print(f"   Expected location: {self.output_path.resolve()}")
                     print(f"   Check log file for details")
@@ -510,6 +726,18 @@ class Recorder:
             if steps_count > 0:
                 print(f"   ⚠️  {steps_count} steps will be lost")
                 print(f"   Use 'save' command before 'exit' to save progress")
+        
+        # Log recorder stopped with final statistics
+        if self.recorder_logger:
+            try:
+                page_url = self.page.url if self.page and hasattr(self.page, 'url') else 'N/A'
+            except:
+                page_url = 'N/A'
+            self.recorder_logger.log_screen_event(
+                event_type='recorder_stopped',
+                page_state={'url': page_url},
+                details={'total_steps': steps_count, 'duration_seconds': duration_seconds, 'saved': save, 'mode': self.mode}
+            )
         
         # Handle video recording in read mode
         if self.mode == 'read' and hasattr(self, 'video_manager') and self.video_manager and hasattr(self, 'video_config') and self.video_config and self.video_config.enabled:
@@ -698,12 +926,9 @@ class Recorder:
                             expected_path_final = current_video_path
                     
                     # Clean up temporary files (SRT, MP3, intermediate videos)
-                    # TEMPORARIAMENTE DESABILITADO PARA DEBUG - não remover arquivos temporários
                     # Extract test name for cleanup
                     test_name = self.yaml_data.get('name', 'test') if hasattr(self, 'yaml_data') and self.yaml_data else 'test'
-                    # await self._cleanup_temp_files(self.video_manager.video_dir, test_name)
-                    logger.info(f"🧹 DEBUG: Limpeza de arquivos temporários DESABILITADA para debug")
-                    print(f"🧹 DEBUG: Arquivos temporários (SRT, MP3) NÃO foram removidos para verificação")
+                    await self._cleanup_temp_files(self.video_manager.video_dir, test_name)
                     
                     # Clean up old videos with hash-based names (after renaming)
                     # Re-scan to get updated list
@@ -992,10 +1217,14 @@ class Recorder:
                 simple_srt_path = None  # Don't try to clean up
             
             # Always use MP4 codecs for output
+            # Otimização: usar preset 'ultrafast' para codificação mais rápida
             if output_ext == '.mp4' or self.video_config.codec == 'mp4':
                 cmd.extend([
                     '-c:v', 'libx264',
+                    '-preset', 'ultrafast',  # Otimização: codificação mais rápida
+                    '-crf', '23',  # Qualidade razoável (18-28 é aceitável, 23 é padrão)
                     '-c:a', 'aac',
+                    '-b:a', '128k',  # Otimização: bitrate de áudio reduzido
                     '-movflags', '+faststart',
                 ])
             else:
@@ -1068,15 +1297,12 @@ class Recorder:
                 if output_path != video_path:
                     output_path.rename(video_path)
                 # Clean up SRT file (subtitles are now embedded)
-                # TEMPORARIAMENTE DESABILITADO PARA DEBUG
                 if srt_path.exists():
-                    logger.info(f"🧹 DEBUG: SRT file mantido para debug: {srt_path.name}")
-                    print(f"🧹 DEBUG: Arquivo SRT mantido: {srt_path.name}")
-                    # try:
-                    #     srt_path.unlink()
-                    #     logger.debug(f"Cleaned up SRT file: {srt_path.name}")
-                    # except Exception as e:
-                    #     logger.warning(f"Could not remove SRT file: {e}")
+                    try:
+                        srt_path.unlink()
+                        logger.debug(f"Cleaned up SRT file: {srt_path.name}")
+                    except Exception as e:
+                        logger.warning(f"Could not remove SRT file: {e}")
                 logger.info(f"Video processed with subtitles: {video_path.name}")
                 print(f"✅ Vídeo processado com legendas embutidas: {video_path.name}")
                 return video_path
@@ -1364,8 +1590,10 @@ class Recorder:
                 '-i', video_input_absolute,  # Video input (may already have subtitles) - absolute path
                 '-i', audio_input_absolute,  # Audio input (MP3 with all segments + silence) - absolute path
                 '-c:v', 'libx264',  # Re-encode video to ensure compatibility (preserves subtitles)
+                '-preset', 'ultrafast',  # Otimização: codificação mais rápida
+                '-crf', '23',  # Qualidade razoável
                 '-c:a', 'aac',  # AAC codec for MP4
-                '-b:a', '192k',  # Audio bitrate
+                '-b:a', '128k',  # Otimização: bitrate de áudio reduzido (era 192k)
                 '-map', '0:v:0',  # Use video from first input (with subtitles if embedded)
                 '-map', '1:a:0',  # Use audio from second input
                 '-shortest',  # End when shortest stream ends (sync with audio)
@@ -1426,16 +1654,13 @@ class Recorder:
                 logger.info(f"Video processed with embedded audio: {video_path.name}")
                 print(f"✅ Vídeo processado com áudio embutido: {video_path.name}")
                 
-                # Clean up temporary audio file
-                # TEMPORARIAMENTE DESABILITADO PARA DEBUG
+                # Clean up temporary audio file (audio is now embedded)
                 if narration_audio.exists():
-                    logger.info(f"🧹 DEBUG: Arquivo MP3 mantido para debug: {narration_audio.name}")
-                    print(f"🧹 DEBUG: Arquivo MP3 mantido: {narration_audio.name}")
-                    # try:
-                    #     narration_audio.unlink()
-                    #     logger.info(f"Cleaned up temporary audio file: {narration_audio.name}")
-                    # except Exception as e:
-                    #     logger.warning(f"Could not delete temporary audio file: {e}")
+                    try:
+                        narration_audio.unlink()
+                        logger.info(f"Cleaned up temporary audio file: {narration_audio.name}")
+                    except Exception as e:
+                        logger.warning(f"Could not delete temporary audio file: {e}")
                 
                 return video_path
             else:
@@ -1521,6 +1746,17 @@ class Recorder:
                         except Exception as e:
                             logger.warning(f"Could not remove temporary file {video_file.name}: {e}")
             
+            # Remove temporary TTS directories
+            import shutil
+            for temp_dir in video_dir.glob("*_tts_temp"):
+                if temp_dir.is_dir():
+                    try:
+                        shutil.rmtree(temp_dir)
+                        cleaned.append(temp_dir.name)
+                        logger.debug(f"Removed temporary TTS directory: {temp_dir.name}")
+                    except Exception as e:
+                        logger.warning(f"Could not remove TTS directory {temp_dir.name}: {e}")
+            
             if cleaned:
                 logger.info(f"Cleaned up {len(cleaned)} temporary files")
                 print(f"🧹 Limpeza: {len(cleaned)} arquivos temporários removidos")
@@ -1542,19 +1778,81 @@ class Recorder:
         Args:
             timeout: Maximum time to wait in seconds
         """
+        # Log screen event: waiting for page stability
+        if self.recorder_logger and self.recorder_logger.is_debug:
+            try:
+                page_title = await self.page.title()
+            except:
+                page_title = 'N/A'
+            page_state = {
+                'url': self.page.url if hasattr(self.page, 'url') else 'N/A',
+                'title': page_title
+            }
+            self.recorder_logger.log_screen_event(
+                event_type='waiting_for_stability',
+                page_state=page_state,
+                details={'timeout': timeout}
+            )
+        
         try:
             # First, wait for DOM to be ready
             await self.page.wait_for_load_state('domcontentloaded', timeout=int(timeout * 1000))
+            
+            # Log screen event: DOM ready
+            if self.recorder_logger and self.recorder_logger.is_debug:
+                try:
+                    page_title = await self.page.title()
+                except:
+                    page_title = 'N/A'
+                page_state = {
+                    'url': self.page.url if hasattr(self.page, 'url') else 'N/A',
+                    'title': page_title
+                }
+                self.recorder_logger.log_screen_event(
+                    event_type='dom_ready',
+                    page_state=page_state
+                )
         except Exception:
             pass
         
         try:
             # Wait for network to be idle (no requests for 500ms)
             await self.page.wait_for_load_state('networkidle', timeout=int(timeout * 1000))
+            
+            # Log screen event: network idle
+            if self.recorder_logger and self.recorder_logger.is_debug:
+                try:
+                    page_title = await self.page.title()
+                except:
+                    page_title = 'N/A'
+                page_state = {
+                    'url': self.page.url if hasattr(self.page, 'url') else 'N/A',
+                    'title': page_title,
+                    'network_idle': True
+                }
+                self.recorder_logger.log_screen_event(
+                    event_type='network_idle',
+                    page_state=page_state
+                )
         except Exception:
             # Fallback: wait for load state
             try:
                 await self.page.wait_for_load_state('load', timeout=int(timeout * 1000))
+                
+                # Log screen event: page loaded
+                if self.recorder_logger and self.recorder_logger.is_debug:
+                    try:
+                        page_title = await self.page.title()
+                    except:
+                        page_title = 'N/A'
+                    page_state = {
+                        'url': self.page.url if hasattr(self.page, 'url') else 'N/A',
+                        'title': page_title
+                    }
+                    self.recorder_logger.log_screen_event(
+                        event_type='page_loaded',
+                        page_state=page_state
+                    )
             except Exception:
                 pass
         
@@ -1602,7 +1900,15 @@ class Recorder:
         
         # Verify we're using the correct page (same one that has video recording)
         if not self.page:
-            logger.error("No page available for executing steps!")
+            error_msg = "No page available for executing steps!"
+            if self.recorder_logger:
+                self.recorder_logger.log_critical_failure(
+                    action='execute_yaml_steps',
+                    error=error_msg,
+                    page_state=None,
+                    details={'mode': self.mode}
+                )
+            logger.error(error_msg)
             raise RuntimeError("Page not available")
         
         # Log page and context info for debugging
@@ -1625,8 +1931,22 @@ class Recorder:
         
         video_start_timestamp = time.time()
         self.step_timestamps = []  # Store timestamps for subtitle generation
-        logger.info(f"🎬 VIDEO DEBUG: Starting YAML steps execution at {video_start_timestamp:.2f}")
-        logger.info(f"Executing {len(self.yaml_steps)} YAML steps on page={id(self.page)}, {context_info}, url={page_url}")
+        
+        # Log screen event: execution started
+        if self.recorder_logger:
+            total_steps = len(self.yaml_steps) if self.yaml_steps and isinstance(self.yaml_steps, list) else 0
+            try:
+                if hasattr(self.page, 'title'):
+                    page_title = await self.page.title()
+                else:
+                    page_title = 'N/A'
+            except:
+                page_title = 'N/A'
+            self.recorder_logger.log_screen_event(
+                event_type='yaml_execution_started',
+                page_state={'url': page_url, 'title': page_title},
+                details={'total_steps': total_steps, 'context_info': context_info}
+            )
         
         # Track current subtitle and audio for continuity
         current_subtitle = None
@@ -1642,9 +1962,24 @@ class Recorder:
             step_start_datetime = datetime.now()
             step_start_elapsed = (step_start_datetime - video_start_datetime).total_seconds()
             
-            logger.info(f"🎬 VIDEO DEBUG: Step {i}/{len(self.yaml_steps)} starting at {step_start_elapsed:.2f}s - {action} - {description}")
-            logger.debug(f"🎬 DEBUG: Step {i} YAML fields: subtitle={subtitle}, audio={audio}")
-            logger.info(f"[{i}/{len(self.yaml_steps)}] Executing: {action} - {description}")
+            # Set step context in logger
+            if self.recorder_logger:
+                self.recorder_logger.set_step_context(i, action)
+            
+            # Log step execution start
+            if self.recorder_logger:
+                try:
+                    if hasattr(self.page, 'title'):
+                        page_title = await self.page.title()
+                    else:
+                        page_title = 'N/A'
+                except:
+                    page_title = 'N/A'
+                page_state = {
+                    'url': self.page.url if hasattr(self.page, 'url') else 'N/A',
+                    'title': page_title
+                }
+                self.recorder_logger.set_page_state(page_state)
             
             # Handle subtitle continuity
             # If step has subtitle, use it; if not, continue previous subtitle
@@ -1685,13 +2020,34 @@ class Recorder:
             
             logger.debug(f"🎬 DEBUG: Step {i} step_data: subtitle='{current_subtitle}', audio='{current_audio}'")
             
+            # Start timer for step execution
+            step_action_id = f"step_{i}_{action}"
+            if self.recorder_logger:
+                self.recorder_logger.start_action_timer(step_action_id)
+            
             try:
                 if action == 'go_to':
                     url = step.get('url')
                     if url:
+                        # Log screen event: navigation
+                        if self.recorder_logger:
+                            self.recorder_logger.log_screen_event(
+                                event_type='navigation',
+                                page_state={'url': url, 'previous_url': self.page.url if hasattr(self.page, 'url') else ''}
+                            )
                         await self.page.goto(url, wait_until='domcontentloaded')
                         # Use dynamic wait to detect when page stops changing
                         await self._wait_for_page_stable(timeout=10.0)
+                        # Log screen event: page loaded
+                        if self.recorder_logger:
+                            try:
+                                page_title = await self.page.title()
+                            except:
+                                page_title = 'N/A'
+                            self.recorder_logger.log_screen_event(
+                                event_type='page_loaded',
+                                page_state={'url': self.page.url, 'title': page_title}
+                            )
                 
                 elif action == 'click':
                     text = step.get('text')
@@ -1704,11 +2060,37 @@ class Recorder:
                         pass
                     
                     if text:
-                        await self.command_handlers.handle_pw_click(f'"{text}"')
+                        result = await self.command_handlers.handle_pw_click(f'"{text}"')
                     elif selector:
-                        await self.command_handlers.handle_pw_click(f'selector "{selector}"')
+                        result = await self.command_handlers.handle_pw_click(f'selector "{selector}"')
                     else:
                         logger.warning(f"Click step has no text or selector: {step}")
+                        result = {'success': False, 'error': 'No text or selector'}
+                    
+                    # Log step execution result
+                    if self.recorder_logger:
+                        duration_ms = self.recorder_logger.end_action_timer(step_action_id)
+                        element_info = {'text': text, 'selector': selector} if text or selector else None
+                        try:
+                            if hasattr(self.page, 'title'):
+                                page_title = await self.page.title()
+                            else:
+                                page_title = 'N/A'
+                        except:
+                            page_title = 'N/A'
+                        page_state = {
+                            'url': self.page.url if hasattr(self.page, 'url') else 'N/A',
+                            'title': page_title
+                        }
+                        self.recorder_logger.log_step_execution(
+                            step_number=i,
+                            action=action,
+                            success=result.get('success', False) if result else False,
+                            duration_ms=duration_ms,
+                            error=result.get('error') if result else None,
+                            element_info=element_info,
+                            page_state=page_state
+                        )
                     
                     # Use dynamic wait to detect when page stops changing after click
                     await self._wait_for_page_stable(timeout=10.0)
@@ -1718,11 +2100,36 @@ class Recorder:
                     selector = step.get('selector')
                     field_text = step.get('field_text')
                     if selector:
-                        await self.command_handlers.handle_pw_type(f'"{text}" selector "{selector}"')
+                        result = await self.command_handlers.handle_pw_type(f'"{text}" selector "{selector}"')
                     elif field_text:
-                        await self.command_handlers.handle_pw_type(f'"{text}" into "{field_text}"')
+                        result = await self.command_handlers.handle_pw_type(f'"{text}" into "{field_text}"')
                     else:
-                        await self.command_handlers.handle_pw_type(f'"{text}"')
+                        result = await self.command_handlers.handle_pw_type(f'"{text}"')
+                    
+                    # Log step execution result
+                    if self.recorder_logger:
+                        duration_ms = self.recorder_logger.end_action_timer(step_action_id)
+                        element_info = {'field': field_text or selector, 'text': text}
+                        try:
+                            if hasattr(self.page, 'title'):
+                                page_title = await self.page.title()
+                            else:
+                                page_title = 'N/A'
+                        except:
+                            page_title = 'N/A'
+                        page_state = {
+                            'url': self.page.url if hasattr(self.page, 'url') else 'N/A',
+                            'title': page_title
+                        }
+                        self.recorder_logger.log_step_execution(
+                            step_number=i,
+                            action=action,
+                            success=result.get('success', False) if result else False,
+                            duration_ms=duration_ms,
+                            error=result.get('error') if result else None,
+                            element_info=element_info,
+                            page_state=page_state
+                        )
                     
                     # Use dynamic wait to detect when page stops changing after type
                     await self._wait_for_page_stable(timeout=5.0)
@@ -1730,18 +2137,82 @@ class Recorder:
                 elif action == 'submit':
                     button_text = step.get('button_text') or step.get('text')
                     if button_text:
-                        await self.command_handlers.handle_pw_submit(f'"{button_text}"')
+                        result = await self.command_handlers.handle_pw_submit(f'"{button_text}"')
                     else:
-                        await self.command_handlers.handle_pw_submit('')
+                        result = await self.command_handlers.handle_pw_submit('')
+                    
+                    # Log step execution result
+                    if self.recorder_logger:
+                        duration_ms = self.recorder_logger.end_action_timer(step_action_id)
+                        element_info = {'button_text': button_text}
+                        try:
+                            if hasattr(self.page, 'title'):
+                                page_title = await self.page.title()
+                            else:
+                                page_title = 'N/A'
+                        except:
+                            page_title = 'N/A'
+                        page_state = {
+                            'url': self.page.url if hasattr(self.page, 'url') else 'N/A',
+                            'title': page_title
+                        }
+                        self.recorder_logger.log_step_execution(
+                            step_number=i,
+                            action=action,
+                            success=result.get('success', False) if result else False,
+                            duration_ms=duration_ms,
+                            error=result.get('error') if result else None,
+                            element_info=element_info,
+                            page_state=page_state
+                        )
                     
                     # Use dynamic wait to detect when page stops changing after submit
                     await self._wait_for_page_stable(timeout=10.0)
                 
+                elif action == 'wait':
+                    # Wait action - reduce time in fast_mode
+                    seconds = step.get('seconds', 1.0)
+                    if self.fast_mode:
+                        # In fast mode, reduce wait time significantly (but keep minimum for video)
+                        seconds = max(seconds * 0.1, 0.1)  # 10% of original, minimum 0.1s
+                    await asyncio.sleep(seconds)
+                    
+                    # Log wait step
+                    if self.recorder_logger:
+                        duration_ms = self.recorder_logger.end_action_timer(step_action_id)
+                        self.recorder_logger.log_step_execution(
+                            step_number=i,
+                            action=action,
+                            success=True,
+                            duration_ms=duration_ms,
+                            details={'wait_seconds': seconds}
+                        )
+                
             except Exception as e:
                 step_error_datetime = datetime.now()
                 step_error_elapsed = (step_error_datetime - video_start_datetime).total_seconds()
-                logger.error(f"🎬 VIDEO DEBUG: Step {i} ERROR at {step_error_elapsed:.2f}s")
-                logger.error(f"Error executing step {i} ({action}): {e}", exc_info=True)
+                
+                # Log critical failure
+                if self.recorder_logger:
+                    duration_ms = self.recorder_logger.end_action_timer(step_action_id)
+                    page_state = {
+                        'url': self.page.url if hasattr(self.page, 'url') else 'N/A',
+                        'title': await self.page.title() if hasattr(self.page, 'title') else 'N/A'
+                    }
+                    self.recorder_logger.log_critical_failure(
+                        action=f'step_{i}_{action}',
+                        error=str(e),
+                        page_state=page_state
+                    )
+                    self.recorder_logger.log_step_execution(
+                        step_number=i,
+                        action=action,
+                        success=False,
+                        duration_ms=duration_ms,
+                        error=str(e),
+                        page_state=page_state
+                    )
+                
                 # Store error time for subtitle
                 step_data['end_time'] = step_error_elapsed
                 step_data['duration'] = step_error_elapsed - step_data['start_time']
@@ -1752,26 +2223,39 @@ class Recorder:
             step_end_datetime = datetime.now()
             step_end_elapsed = (step_end_datetime - video_start_datetime).total_seconds()
             step_duration = step_end_elapsed - step_data['start_time']
-            logger.info(f"🎬 VIDEO DEBUG: Step {i}/{len(self.yaml_steps)} completed at {step_end_elapsed:.2f}s")
             
             # Store step end time for subtitle generation
             step_data['end_time'] = step_end_elapsed
             step_data['duration'] = step_duration
             self.step_timestamps.append(step_data)
-            
-            # Debug: log step data being stored
-            logger.debug(f"🎬 DEBUG: Step {i} data stored: subtitle='{current_subtitle}', audio='{current_audio}', start={step_start_elapsed:.2f}s, end={step_end_elapsed:.2f}s, duration={step_duration:.2f}s")
         
         steps_end_datetime = datetime.now()
         total_elapsed = (steps_end_datetime - video_start_datetime).total_seconds()
-        logger.info(f"🎬 VIDEO DEBUG: All steps completed at {total_elapsed:.2f}s")
-        logger.info(f"🎬 DEBUG: Total step_timestamps collected: {len(self.step_timestamps)}")
         
-        # Debug: show what's in step_timestamps
-        if self.step_timestamps:
-            logger.info(f"🎬 DEBUG: First step_timestamp: subtitle='{self.step_timestamps[0].get('subtitle')}', audio='{self.step_timestamps[0].get('audio')}'")
-            logger.info(f"🎬 DEBUG: Last step_timestamp: subtitle='{self.step_timestamps[-1].get('subtitle')}', audio='{self.step_timestamps[-1].get('audio')}'")
-            # Count steps with subtitle and audio
+        # Log screen event: execution completed
+        if self.recorder_logger:
+            try:
+                page_url = self.page.url if hasattr(self.page, 'url') else 'N/A'
+                if hasattr(self.page, 'title'):
+                    page_title = await self.page.title()
+                else:
+                    page_title = 'N/A'
+            except:
+                page_url = 'N/A'
+                page_title = 'N/A'
+            page_state = {
+                'url': page_url,
+                'title': page_title
+            }
+            total_steps = len(self.yaml_steps) if self.yaml_steps and isinstance(self.yaml_steps, list) else 0
+            self.recorder_logger.log_screen_event(
+                event_type='yaml_execution_completed',
+                page_state=page_state,
+                details={'total_steps': total_steps, 'total_duration_seconds': total_elapsed}
+            )
+        
+        # Debug: show what's in step_timestamps (only in debug mode)
+        if self.recorder_logger and self.recorder_logger.is_debug and self.step_timestamps:
             steps_with_subtitle = sum(1 for s in self.step_timestamps if s.get('subtitle'))
             steps_with_audio = sum(1 for s in self.step_timestamps if s.get('audio'))
             logger.info(f"🎬 DEBUG: Steps with subtitle: {steps_with_subtitle}/{len(self.step_timestamps)}")

@@ -16,13 +16,15 @@ logger = logging.getLogger(__name__)
 class ActionConverter:
     """Converts events to YAML actions."""
     
-    def __init__(self):
+    def __init__(self, recorder_logger=None):
         """Initialize action converter."""
         self.last_input_value = None
         self.last_input_element = None
         self.pending_inputs: Dict[str, Dict[str, Any]] = {}  # Track pending inputs by element key
         self.initial_url = None  # Store initial URL
         self._last_click = {}  # Track last click to filter duplicates
+        self._recent_clicks = []  # Track recent clicks (last 5) for better duplicate detection
+        self.recorder_logger = recorder_logger
     
     def convert_click(self, event_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
@@ -58,22 +60,54 @@ class ActionConverter:
         label_text = element_info.get('label', '')
         
         # Create a more specific key for input fields
+        # Also include text in the key to better identify elements
+        element_text = (element_info.get('text', '') or element_info.get('value', '') or '').strip()[:50]
         if element_tag == 'INPUT':
             element_key = f"{element_tag}:{element_id}:{element_name}:{element_placeholder}:{element_type}"
         else:
-            element_key = f"{element_tag}:{element_id}:{element_name}"
+            # For non-inputs, include text in key for better identification
+            element_key = f"{element_tag}:{element_id}:{element_name}:{element_text}"
         timestamp = event_data.get('timestamp', 0)
         
         # Check if this is a duplicate click on the same element
-        if self._last_click:
-            last_key = self._last_click.get('key', '')
-            last_tag = self._last_click.get('tag', '')
-            last_timestamp = self._last_click.get('timestamp', 0)
+        # Check against all recent clicks (not just the last one) for better duplicate detection
+        current_href = element_info.get('href', '')
+        current_text = element_text.strip().lower()
+        
+        # Check all recent clicks
+        for recent_click in self._recent_clicks:
+            last_key = recent_click.get('key', '')
+            last_tag = recent_click.get('tag', '')
+            last_timestamp = recent_click.get('timestamp', 0)
+            last_href = recent_click.get('href', '')
+            last_text = recent_click.get('text', '').strip().lower()
             time_diff = timestamp - last_timestamp
             
-            # Filter if same element clicked within 500ms
-            if last_key == element_key and time_diff < 500:
-                logger.debug(f"Filtering duplicate click on {element_key} within {time_diff}ms")
+            # Only check clicks within 2000ms window
+            if time_diff >= 2000:
+                continue
+            
+            # Check multiple ways to identify same element:
+            # 1. Same key (most reliable)
+            # 2. Same href (for links)
+            # 3. Same text and tag (for elements without id/name)
+            is_same_element = (
+                last_key == element_key or
+                (current_href and last_href == current_href) or
+                (current_text and last_text == current_text and last_tag == element_tag and not element_id and not element_name)
+            )
+            
+            if is_same_element:
+                logger.info(f"🔄 Filtering duplicate click: key={element_key}, text='{element_text}', href='{current_href}', time_diff={time_diff}ms (matched with recent click)")
+                
+                # Log action filtered
+                if self.recorder_logger and self.recorder_logger.is_debug:
+                    self.recorder_logger.log_screen_event(
+                        event_type='action_filtered',
+                        page_state=None,
+                        details={'reason': 'duplicate_click', 'element_key': element_key, 'element_text': element_text, 'time_diff_ms': time_diff}
+                    )
+                
                 return None  # Ignore duplicate click
             
             # CRITICAL: Filter clicks on INPUT that happen right after a click on LABEL
@@ -88,15 +122,32 @@ class ActionConverter:
                    (element_name and last_text in element_name.lower()) or \
                    (element_id and last_text in element_id.lower()):
                     logger.debug(f"Filtering input click after label click: label='{last_text}', input='{element_name or element_id}' within {time_diff}ms")
+                    
+                    # Log action filtered
+                    if self.recorder_logger and self.recorder_logger.is_debug:
+                        self.recorder_logger.log_screen_event(
+                            event_type='action_filtered',
+                            page_state=None,
+                            details={'reason': 'input_after_label_click', 'label_text': last_text, 'input_name': element_name or element_id, 'time_diff_ms': time_diff}
+                        )
+                    
                     return None  # Ignore input click caused by label click
         
         # Store this click (include tag and text for label->input detection)
-        self._last_click = {
+        # Also store href for links to better identify duplicates
+        click_data = {
             'key': element_key,
             'tag': element_tag,
-            'text': element_info.get('text', '') or element_info.get('label', ''),
+            'text': element_info.get('text', '') or element_info.get('label', '') or element_info.get('value', ''),
+            'href': element_info.get('href', ''),
             'timestamp': timestamp
         }
+        self._last_click = click_data
+        
+        # Add to recent clicks list (keep last 5)
+        self._recent_clicks.append(click_data)
+        if len(self._recent_clicks) > 5:
+            self._recent_clicks.pop(0)
         
         # Check if this is a submit button
         element_type = element_info.get('type', '').lower()
@@ -253,10 +304,17 @@ class ActionConverter:
             'description': identification['description']
         }
         
-        # Only add selector if we don't have a label or placeholder (for fallback)
+        # Add field_text if we have label or placeholder (for CursorController to find field)
         # If we have label/placeholder, CursorController can find the field by text
         label = ElementIdentifier._get_label(element_info)
         placeholder = ElementIdentifier._get_placeholder(element_info)
+        
+        if label:
+            # Use label as field_text so CursorController can find it
+            action['field_text'] = label
+        elif placeholder:
+            # Use placeholder as field_text so CursorController can find it
+            action['field_text'] = placeholder
         
         if not label and not placeholder:
             # No label or placeholder, add selector as fallback
@@ -400,20 +458,46 @@ class ActionConverter:
             YAML action dictionary or None
         """
         try:
+            action = None
             if event_type == 'click':
-                return self.convert_click(event_data)
+                action = self.convert_click(event_data)
             elif event_type == 'input':
-                return self.convert_input(event_data)
+                action = self.convert_input(event_data)
             elif event_type == 'navigation':
-                return self.convert_navigation(event_data)
+                action = self.convert_navigation(event_data)
             elif event_type == 'scroll':
-                return self.convert_scroll(event_data)
+                action = self.convert_scroll(event_data)
             elif event_type == 'keydown':
-                return self.convert_keydown(event_data)
+                action = self.convert_keydown(event_data)
             else:
                 logger.warning(f"Unknown event type: {event_type}")
+                # Log unknown event type
+                if self.recorder_logger:
+                    self.recorder_logger.warning(
+                        message=f"Unknown event type: {event_type}",
+                        details={'event_data': event_data}
+                    )
                 return None
+            
+            # Log event converted (only in debug mode to avoid spam)
+            if self.recorder_logger and self.recorder_logger.is_debug and action:
+                element_info = event_data.get('element', {})
+                self.recorder_logger.log_screen_event(
+                    event_type='event_converted',
+                    page_state=None,
+                    details={'event_type': event_type, 'action_type': action.get('action'), 'element_text': element_info.get('text', '')[:50] if element_info else ''}
+                )
+            
+            return action
         except Exception as e:
             logger.error(f"Error converting event {event_type}: {e}")
+            # Log conversion failure
+            if self.recorder_logger:
+                self.recorder_logger.log_critical_failure(
+                    action='convert_event',
+                    error=str(e),
+                    page_state=None,
+                    details={'event_type': event_type, 'event_data': event_data}
+                )
             return None
 

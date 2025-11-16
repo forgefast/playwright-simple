@@ -100,17 +100,23 @@ class OdooTestBase(
             helpers: Optional TestBaseHelpers instance (passed to SimpleTestBase)
         """
         # Call SimpleTestBase.__init__ with Dependency Injection
+        # NOTE: SimpleTestBase does NOT accept cursor_manager, so we don't pass it
+        # We'll set it directly after initialization
         SimpleTestBase.__init__(
             self,
             page,
             config,
             test_name,
-            cursor_manager=cursor_manager,
             screenshot_manager=screenshot_manager,
             selector_manager=selector_manager,
             session_manager=session_manager,
             helpers=helpers
         )
+        
+        # Set cursor_manager directly (SimpleTestBase doesn't accept it in __init__)
+        # This is an architectural issue that should be fixed in the future
+        if cursor_manager is not None:
+            self.cursor_manager = cursor_manager
         
         # Initialize helpers
         self._version = None
@@ -124,9 +130,9 @@ class OdooTestBase(
         # Ensure _helpers is set (should be set by SimpleTestBase, but double-check)
         if not hasattr(self, '_helpers') or self._helpers is None:
             from ..core.helpers import TestBaseHelpers
+            # TestBaseHelpers no longer needs cursor_manager (it was removed)
             self._helpers = TestBaseHelpers(
                 page,
-                self.cursor_manager,
                 self.config,
                 self.selector_manager
             )
