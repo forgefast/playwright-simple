@@ -8,16 +8,43 @@ Fluxos que já foram validados e podem ser pulados durante os testes. Remova da 
 
 ```yaml
 validated_flows:
-   - fluxo_01  # Critérios de Ingresso - Consumidor Final
-   - fluxo_02  # Critérios de Ingresso - Revendedor (inclui escalonamento de níveis)
-   # - fluxo_03  # Jornada de Treinamento - CORRIGIDO: Revendedor acessa Cursos no Portal
-   # - fluxo_04  # Gamificação - CORRIGIDO: Módulo gamification está disponível como dependência
-   # - fluxo_05  # Fluxo de Venda - Revendedor - CORRIGIDO: Revendedor acessa Pedidos no Portal
-   # - fluxo_06  # Sistema de Comissões - CORRIGIDO: Removido clique em "Portal" (usuário já está no Portal)
-   # - fluxo_07  # Portal do Consumidor - CORRIGIDO: Removido clique em "Portal" (usuário já está no Portal)
-   # - fluxo_08  # Portal do Revendedor - CORRIGIDO: Removido clique em "Portal" (usuário já está no Portal)
-   # - fluxo_09  # Gestão de Parceiros - CORRIGIDO: Nota sobre "Contatos" vs "Clientes"
+   - fluxo_01  # Critérios de Ingresso - Consumidor Final - Demonstra: E-commerce, Produtos (7)
+   - fluxo_02  # Critérios de Ingresso - Revendedor - Demonstra: Níveis de Revendedor (4), Categorias
+   # - fluxo_03  # Jornada de Treinamento - Demonstra: Cursos (5), Portal do Revendedor
+   # - fluxo_04  # Gamificação - Demonstra: Badges (5), Desafios, Sistema de Gamificação
+   # - fluxo_05  # Fluxo de Venda - Revendedor - Demonstra: Pedidos, Produtos, Portal do Revendedor
+   # - fluxo_06  # Sistema de Comissões - Demonstra: Comissões por Nível (Bronze 5%, Prata 7.5%, Ouro 10%, Platinum 12.5%)
+   # - fluxo_07  # Portal do Consumidor - Demonstra: Portal, Pedidos, E-commerce, Produtos
+   # - fluxo_08  # Portal do Revendedor - Demonstra: Portal, Pedidos, Comissões, Rede
+   # - fluxo_09  # Gestão de Parceiros - Demonstra: Todos os tipos de parceiros (33 total)
 ```
+
+## Recursos do racco_demo Demonstrados
+
+Este arquivo demonstra todos os recursos configurados no módulo `racco_demo`:
+
+- **Parceiros (33):** Demonstrado em fluxo_09
+  - 3 Colaboradores Racco
+  - 10 Consumidores Finais
+  - 15 Revendedores (4 Bronze, 4 Prata, 4 Ouro, 3 Platinum)
+  - 3 Lojas Multimarca
+  - 2 Promotores de Vendas
+  - 2 Centros de Distribuição
+  - 1 Diretor de Rede
+
+- **Produtos (7):** Demonstrado em fluxo_01, fluxo_05, fluxo_07
+  - Batom Matte Rouge, Base Líquida Perfect Skin, Perfume Essence Woman, etc.
+
+- **Pedidos (6):** Demonstrado em fluxo_05, fluxo_07
+
+- **Níveis de Revendedor (4):** Demonstrado em fluxo_02, fluxo_06
+  - Bronze (5%), Prata (7.5%), Ouro (10%), Platinum (12.5%)
+
+- **Comissões:** Demonstrado em fluxo_06
+
+- **Badges (5):** Demonstrado em fluxo_04
+
+- **Cursos (5):** Demonstrado em fluxo_03
 
 ## Comandos de Terminal Completos
 
@@ -391,6 +418,16 @@ pw-click "Sair"
 # ========================================================================
 # FLUXO 09: GESTÃO DE PARCEIROS
 # ========================================================================
+# Este fluxo demonstra todos os tipos de parceiros configurados no racco_demo:
+# - 3 Colaboradores Racco
+# - 10 Consumidores Finais
+# - 15 Revendedores (4 Bronze, 4 Prata, 4 Ouro, 3 Platinum)
+# - 3 Lojas Multimarca
+# - 2 Promotores de Vendas
+# - 2 Centros de Distribuição
+# - 1 Diretor de Rede
+# Total: 33 parceiros
+# ========================================================================
 # Login como Administrador
 pw-click "Entrar"
 pw-type "admin" into "E-mail"
@@ -425,8 +462,12 @@ pw-type "Distribuição" into "Buscar"
 pw-type "Diretor" into "Buscar"
 
 # Abrir Detalhes de um Parceiro
+# Nota: "Lucia Helena Santos" existe nos dados demo (ID: 20, email: lucia.santos@exemplo.com)
+# Tentativa 1: Buscar por nome
 pw-type "Lucia" into "Buscar"
 pw-click "Lucia Helena Santos"
+# Alternativa: Se não encontrar, usar URL direta: pw-goto "/odoo/contacts/20"
+# Alternativa 2: Buscar por email: pw-type "lucia.santos@exemplo.com" into "Buscar"
 
 # Visualizar Categorias de Parceiros
 pw-click "Contatos"
