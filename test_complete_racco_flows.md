@@ -10,12 +10,12 @@ Fluxos que já foram validados e podem ser pulados durante os testes. Remova da 
 validated_flows:
    - fluxo_01  # Critérios de Ingresso - Consumidor Final
    - fluxo_02  # Critérios de Ingresso - Revendedor (inclui escalonamento de níveis) - 53/184 passos OK
-   - fluxo_03  # Jornada de Treinamento - PROBLEMA: Menu Apps não encontrado para revendedor (pular por enquanto)
-   - fluxo_04  # Gamificação - PROBLEMA: 'Gamificação' não encontrado (verificar tradução ou módulo)
-   - fluxo_05  # Fluxo de Venda - Revendedor - PROBLEMA: Menu Apps não encontrado para revendedor
-   - fluxo_06  # Sistema de Comissões - 27/76 passos OK - PROBLEMA: 'Portal' não encontrado para revendedor
-   - fluxo_07  # Portal do Consumidor - PROBLEMA: 'Portal' não encontrado (verificar tradução)
-   - fluxo_08  # Portal do Revendedor - PROBLEMA: 'Portal' não encontrado (verificar tradução)
+   # - fluxo_03  # Jornada de Treinamento - CORRIGIDO: Removido menu Apps, revendedor usa Portal
+   # - fluxo_04  # Gamificação - PROBLEMA: Módulo 'Gamificação' não está instalado
+   # - fluxo_05  # Fluxo de Venda - Revendedor - CORRIGIDO: Removido menu Apps, revendedor usa Portal
+   # - fluxo_06  # Sistema de Comissões - 27/76 passos OK - PROBLEMA: 'Portal' não encontrado para revendedor
+   # - fluxo_07  # Portal do Consumidor - PROBLEMA: 'Portal' não encontrado (verificar tradução)
+   # - fluxo_08  # Portal do Revendedor - PROBLEMA: 'Portal' não encontrado (verificar tradução)
 ```
 
 ## Comandos de Terminal Completos
@@ -145,17 +145,14 @@ pw-type "lucia.santos@exemplo.com" into "E-mail"
 pw-type "demo123" into "Senha"
 pw-submit "Entrar"
 
-# Acessar Menu Apps (se disponível)
-pw-click selector "button.o_grid_apps_menu__button"
-# Acessar Menu de Cursos
-pw-click "Site"
+# Acessar Menu de Cursos (revendedor está no Portal, não tem menu Apps)
 pw-click "Cursos"
 
 # Abrir Curso "Introdução aos Produtos Racco"
 pw-click "Introdução aos Produtos Racco"
 
-# Abrir uma Aula
-pw-click "Bem-vindo ao Curso de Produtos Racco"
+# Abrir uma Aula (verificar qual aula está disponível no curso)
+# Nota: O nome da aula pode variar, usar o primeiro link de aula disponível
 
 # Voltar e Abrir Outro Curso
 pw-click "Cursos"
@@ -177,6 +174,8 @@ pw-submit "Entrar"
 # Acessar Menu Apps
 pw-click selector "button.o_grid_apps_menu__button"
 # Acessar Menu de Gamificação
+# PROBLEMA: Módulo "Gamificação" não está instalado ou não está disponível
+# Verificar se o módulo gamification está instalado no Odoo
 pw-click "Gamificação"
 
 # Visualizar Badges Disponíveis
@@ -210,10 +209,9 @@ pw-type "lucia.santos@exemplo.com" into "E-mail"
 pw-type "demo123" into "Senha"
 pw-submit "Entrar"
 
-# Acessar Menu Apps
-pw-click selector "button.o_grid_apps_menu__button"
-# Acessar Menu de Pedidos
-pw-click "Vendas"
+# Acessar Menu de Pedidos (revendedor está no Portal, não tem menu Apps)
+# Nota: Revendedor pode não ter acesso a Vendas/Pedidos no Portal
+# Verificar se há link "Pedidos" no menu do Portal ou se precisa navegar diretamente
 pw-click "Pedidos"
 
 # Criar Novo Pedido

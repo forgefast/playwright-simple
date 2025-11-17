@@ -166,6 +166,10 @@ async def main():
         recorder_logger=None
     )
     
+    # Criar diretório para HTMLs de erro
+    error_html_dir = project_root / "screenshots" / "test_complete_racco_flows"
+    error_html_dir.mkdir(parents=True, exist_ok=True)
+    
     # Executar comandos
     print("▶️  Executando comandos...\n")
     for i, command in enumerate(commands, 1):
@@ -209,11 +213,31 @@ async def main():
             if not result.get('success', False):
                 error = result.get('error', 'Erro desconhecido')
                 print(f"  ❌ Erro: {error}")
+                
+                # Capturar HTML da página de erro
+                try:
+                    html_content = await page.content()
+                    error_html_file = error_html_dir / f"error_step_{i}.html"
+                    error_html_file.write_text(html_content, encoding='utf-8')
+                    print(f"  📄 HTML da página de erro salvo: {error_html_file}")
+                except Exception as html_error:
+                    print(f"  ⚠️  Erro ao capturar HTML: {html_error}")
+                
                 return 1
             
             print(f"  ✅ Sucesso")
         except Exception as e:
             print(f"  ❌ Exceção: {e}")
+            
+            # Capturar HTML da página de erro
+            try:
+                html_content = await page.content()
+                error_html_file = error_html_dir / f"error_step_{i}.html"
+                error_html_file.write_text(html_content, encoding='utf-8')
+                print(f"  📄 HTML da página de erro salvo: {error_html_file}")
+            except Exception as html_error:
+                print(f"  ⚠️  Erro ao capturar HTML: {html_error}")
+            
             return 1
     
     print(f"\n✅ Todos os {len(commands)} comandos executados com sucesso!")
