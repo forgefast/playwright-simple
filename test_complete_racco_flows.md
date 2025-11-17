@@ -9,7 +9,7 @@ Fluxos que já foram validados e podem ser pulados durante os testes. Remova da 
 ```yaml
 validated_flows:
    - fluxo_01  # Critérios de Ingresso - Consumidor Final
-  # - fluxo_02  # Critérios de Ingresso - Revendedor (inclui escalonamento de níveis)
+   - fluxo_02  # Critérios de Ingresso - Revendedor (inclui escalonamento de níveis) - 53/184 passos OK
   # - fluxo_03  # Jornada de Treinamento
   # - fluxo_04  # Gamificação
   # - fluxo_05  # Fluxo de Venda - Revendedor
@@ -146,10 +146,10 @@ pw-type "lucia.santos@exemplo.com" into "E-mail"
 pw-type "demo123" into "Senha"
 pw-submit "Entrar"
 
-# Acessar Menu Apps
+# Acessar Menu Apps (se disponível)
 pw-click selector "button.o_grid_apps_menu__button"
 # Acessar Menu de Cursos
-pw-click "Website"
+pw-click "Site"
 pw-click "Cursos"
 
 # Abrir Curso "Introdução aos Produtos Racco"
