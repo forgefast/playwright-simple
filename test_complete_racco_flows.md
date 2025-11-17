@@ -99,7 +99,7 @@ pw-click selector "button.o_grid_apps_menu__button"
 # Acessar Categorias de Níveis
 pw-click "Contatos"
 pw-click "Configuração"
-pw-click "Contact Tags"
+pw-click "Marcadores de contato"
 
 # Visualizar Nível Bronze
 pw-click selector ".o_searchview_dropdown_toggler"
