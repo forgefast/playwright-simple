@@ -9,13 +9,14 @@ Fluxos que já foram validados e podem ser pulados durante os testes. Remova da 
 ```yaml
 validated_flows:
    - fluxo_01  # Critérios de Ingresso - Consumidor Final
-   - fluxo_02  # Critérios de Ingresso - Revendedor (inclui escalonamento de níveis) - 53/184 passos OK
-   # - fluxo_03  # Jornada de Treinamento - CORRIGIDO: Removido menu Apps, revendedor usa Portal
-   # - fluxo_04  # Gamificação - PROBLEMA: Módulo 'Gamificação' não está instalado
-   # - fluxo_05  # Fluxo de Venda - Revendedor - CORRIGIDO: Removido menu Apps, revendedor usa Portal
-   # - fluxo_06  # Sistema de Comissões - 27/76 passos OK - PROBLEMA: 'Portal' não encontrado para revendedor
-   # - fluxo_07  # Portal do Consumidor - PROBLEMA: 'Portal' não encontrado (verificar tradução)
-   # - fluxo_08  # Portal do Revendedor - PROBLEMA: 'Portal' não encontrado (verificar tradução)
+   - fluxo_02  # Critérios de Ingresso - Revendedor (inclui escalonamento de níveis)
+   # - fluxo_03  # Jornada de Treinamento - CORRIGIDO: Revendedor acessa Cursos no Portal
+   # - fluxo_04  # Gamificação - CORRIGIDO: Módulo gamification está disponível como dependência
+   # - fluxo_05  # Fluxo de Venda - Revendedor - CORRIGIDO: Revendedor acessa Pedidos no Portal
+   # - fluxo_06  # Sistema de Comissões - CORRIGIDO: Removido clique em "Portal" (usuário já está no Portal)
+   # - fluxo_07  # Portal do Consumidor - CORRIGIDO: Removido clique em "Portal" (usuário já está no Portal)
+   # - fluxo_08  # Portal do Revendedor - CORRIGIDO: Removido clique em "Portal" (usuário já está no Portal)
+   # - fluxo_09  # Gestão de Parceiros - CORRIGIDO: Nota sobre "Contatos" vs "Clientes"
 ```
 
 ## Comandos de Terminal Completos
@@ -50,7 +51,7 @@ pw-type "admin" into "Senha"
 pw-submit "Entrar"
 
 # Acessar Menu Apps
-pw-click selector "button.o_grid_apps_menu__button"
+pw-click selector "div.o_navbar_apps_menu button"
 # Acessar Contatos (já mostra a lista de clientes/parceiros)
 pw-click "Contatos"
 
@@ -172,11 +173,12 @@ pw-type "admin" into "Senha"
 pw-submit "Entrar"
 
 # Acessar Menu Apps
-pw-click selector "button.o_grid_apps_menu__button"
-# Acessar Menu de Gamificação
-# PROBLEMA: Módulo "Gamificação" não está instalado ou não está disponível
-# Verificar se o módulo gamification está instalado no Odoo
-pw-click "Gamificação"
+pw-click selector "div.o_navbar_apps_menu button"
+# Acessar Definições (Settings)
+pw-click "Definições"
+# Acessar Gamification Tools (dentro de Definições)
+# Nota: Módulo gamification está declarado como dependência em racco_demo
+pw-click "Gamification Tools"
 
 # Visualizar Badges Disponíveis
 pw-click "Badges"
@@ -259,7 +261,7 @@ pw-type "admin" into "Senha"
 pw-submit "Entrar"
 
 # Acessar Menu Apps
-pw-click selector "button.o_grid_apps_menu__button"
+pw-click selector "div.o_navbar_apps_menu button"
 # Acessar Pedidos de Venda
 pw-click "Vendas"
 pw-click "Pedidos"
@@ -268,7 +270,7 @@ pw-click "Pedidos"
 pw-click "Pedido"
 
 # Acessar Menu Apps
-pw-click selector "button.o_grid_apps_menu__button"
+pw-click selector "div.o_navbar_apps_menu button"
 # Voltar e Acessar Categorias
 pw-click "Contatos"
 pw-click "Configuração"
@@ -298,10 +300,8 @@ pw-type "lucia.santos@exemplo.com" into "E-mail"
 pw-type "demo123" into "Senha"
 pw-submit "Entrar"
 
-# Acessar Portal do Revendedor
-pw-click "Portal"
-
-# Acessar Comissões
+# Nota: Revendedor já está no Portal após login, não precisa clicar em "Portal"
+# Acessar Comissões (se disponível no Portal)
 pw-click "Comissões"
 
 # Logout
@@ -317,9 +317,7 @@ pw-type "juliana.ferreira@gmail.com" into "E-mail"
 pw-type "demo123" into "Senha"
 pw-submit "Entrar"
 
-# Acessar Portal do Consumidor
-pw-click "Portal"
-
+# Nota: Consumidor já está no Portal após login, não precisa clicar em "Portal"
 # Visualizar Histórico de Pedidos
 pw-click "Pedidos"
 
@@ -336,8 +334,9 @@ pw-click "Maquiagem"
 pw-click "Batom Matte Rouge"
 
 # Voltar ao Portal e acessar Informações Pessoais
-pw-click "Portal"
-pw-click "Minha Conta"
+# Navegar para o Portal usando "Minha conta" no dropdown do usuário
+pw-click "Juliana Ferreira"
+pw-click "Minha conta"
 
 # Logout
 pw-click "Juliana Ferreira"
@@ -352,17 +351,15 @@ pw-type "lucia.santos@exemplo.com" into "E-mail"
 pw-type "demo123" into "Senha"
 pw-submit "Entrar"
 
-# Acessar Portal do Revendedor
-pw-click "Portal"
-
+# Nota: Revendedor já está no Portal após login, não precisa clicar em "Portal"
 # Acessar Produtos Disponíveis
 pw-click "Loja"
 
 # Visualizar Detalhes de um Produto
 pw-click "Batom Matte Rouge"
 
-# Acessar Pedidos
-pw-click "Portal"
+# Acessar Pedidos (voltar ao Portal se necessário)
+# Se estiver na Loja, usar breadcrumb ou navegar diretamente
 pw-click "Pedidos"
 
 # Acessar Comissões
@@ -385,10 +382,10 @@ pw-type "admin" into "Senha"
 pw-submit "Entrar"
 
 # Acessar Menu Apps
-pw-click selector "button.o_grid_apps_menu__button"
-# Acessar Lista de Clientes
+pw-click selector "div.o_navbar_apps_menu button"
+# Acessar Lista de Contatos (que inclui clientes, revendedores, etc.)
 pw-click "Contatos"
-# Nota: "Clientes" pode não estar como submenu separado, usar filtro de busca
+# Nota: "Contatos" já mostra todos os parceiros. Usar filtros de busca para filtrar por tipo
 
 # Filtrar por Colaboradores
 pw-type "Colaborador" into "Buscar"

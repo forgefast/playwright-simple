@@ -1,0 +1,459 @@
+{
+  "timestamp": "2025-11-17T10:19:47.379400",
+  "url": "http://localhost:18069/odoo/contacts",
+  "title": "Contatos",
+  "elements_info": {
+    "url": "http://localhost:18069/odoo/contacts",
+    "title": "Contatos",
+    "all_clickable_texts": [
+      {
+        "text": "Contatos",
+        "tag": "A",
+        "role": "menuitem",
+        "href": "http://localhost:18069/odoo/contacts",
+        "visible": true
+      },
+      {
+        "text": "Contatos",
+        "tag": "A",
+        "role": "menuitem",
+        "href": "http://localhost:18069/odoo/contacts",
+        "visible": true
+      },
+      {
+        "text": "Configuração",
+        "tag": "BUTTON",
+        "role": "",
+        "href": "",
+        "visible": true
+      },
+      {
+        "text": "2",
+        "tag": "BUTTON",
+        "role": "",
+        "href": "",
+        "visible": true
+      },
+      {
+        "text": "My Company",
+        "tag": "BUTTON",
+        "role": "",
+        "href": "",
+        "visible": true
+      },
+      {
+        "text": "Administratordevel",
+        "tag": "BUTTON",
+        "role": "",
+        "href": "",
+        "visible": true
+      },
+      {
+        "text": "Novo",
+        "tag": "BUTTON",
+        "role": "",
+        "href": "",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "1",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "1",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "1",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "1",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "1",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "1",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "1",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "1",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "1",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "1",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "1",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "1",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "2",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "1",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "1",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "1",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "1",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "1",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "1",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      },
+      {
+        "text": "0",
+        "tag": "A",
+        "role": "button",
+        "href": "http://localhost:18069/odoo/contacts#",
+        "visible": true
+      }
+    ],
+    "menu_items": [
+      {
+        "text": "Contatos",
+        "tag": "A",
+        "role": "menuitem",
+        "href": "http://localhost:18069/odoo/contacts",
+        "visible": true,
+        "hasChildren": false
+      },
+      {
+        "text": "Contatos",
+        "tag": "A",
+        "role": "menuitem",
+        "href": "http://localhost:18069/odoo/contacts",
+        "visible": true,
+        "hasChildren": false
+      }
+    ],
+    "links_with_categorias": [],
+    "buttons_with_categorias": []
+  },
+  "html_length": 111731
+}
