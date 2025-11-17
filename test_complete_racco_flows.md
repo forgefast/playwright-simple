@@ -8,7 +8,7 @@ Fluxos que já foram validados e podem ser pulados durante os testes. Remova da 
 
 ```yaml
 validated_flows:
-  # - fluxo_01  # Critérios de Ingresso - Consumidor Final (testando após reversão)
+   - fluxo_01  # Critérios de Ingresso - Consumidor Final
   # - fluxo_02  # Critérios de Ingresso - Revendedor (inclui escalonamento de níveis)
   # - fluxo_03  # Jornada de Treinamento
   # - fluxo_04  # Gamificação
@@ -81,8 +81,11 @@ pw-click "Revendedor Ouro"
 pw-click "Revendedor Platinum"
 
 # Visualizar Categorias de Níveis (Escalonamento)
+# Navegar diretamente para Contact Tags usando URL (mais confiável)
+pw-click selector "button.o_grid_apps_menu__button"
 pw-click "Contatos"
-pw-click "Categorias"
+pw-click "Configuração"
+pw-click "Tags"
 
 # Visualizar Nível Bronze
 pw-type "Bronze" into "Buscar"
@@ -94,7 +97,8 @@ pw-type "Bronze" into "Buscar"
 pw-press "Enter"
 
 # Visualizar Nível Prata
-pw-click "Categorias"
+pw-click "Configuração"
+pw-click "Tags"
 pw-type "Prata" into "Buscar"
 pw-press "Enter"
 
@@ -104,7 +108,8 @@ pw-type "Prata" into "Buscar"
 pw-press "Enter"
 
 # Visualizar Nível Ouro
-pw-click "Categorias"
+pw-click "Configuração"
+pw-click "Tags"
 pw-type "Ouro" into "Buscar"
 pw-press "Enter"
 
@@ -114,7 +119,8 @@ pw-type "Ouro" into "Buscar"
 pw-press "Enter"
 
 # Visualizar Nível Platinum
-pw-click "Categorias"
+pw-click "Configuração"
+pw-click "Tags"
 pw-type "Platinum" into "Buscar"
 pw-press "Enter"
 
@@ -268,7 +274,7 @@ pw-click selector "button.o_grid_apps_menu__button"
 # Voltar e Acessar Categorias
 pw-click "Contatos"
 pw-click "Configuração"
-pw-click "Contact Tags"
+pw-click "Tags"
 
 # Visualizar Nível Bronze e Comissão
 pw-click selector ".o_searchview_dropdown_toggler"
@@ -414,5 +420,5 @@ pw-click "Lucia Helena Santos"
 # Visualizar Categorias de Parceiros
 pw-click "Contatos"
 pw-click "Configuração"
-pw-click "Contact Tags"
+pw-click "Tags"
 ```
