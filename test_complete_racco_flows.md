@@ -51,7 +51,7 @@ pw-type "admin" into "Senha"
 pw-submit "Entrar"
 
 # Acessar Menu Apps
-pw-click selector "div.o_navbar_apps_menu button"
+pw-click selector "button.o_grid_apps_menu__button"
 # Acessar Contatos (já mostra a lista de clientes/parceiros)
 pw-click "Contatos"
 
@@ -173,14 +173,19 @@ pw-type "admin" into "Senha"
 pw-submit "Entrar"
 
 # Acessar Menu Apps
-pw-click selector "div.o_navbar_apps_menu button"
+pw-click selector "button.o_grid_apps_menu__button"
 # Aguardar dropdown do menu Apps abrir
 # Acessar Definições (Settings) - pode estar no dropdown do menu Apps
 # Alternativa: usar URL direta se menu não abrir: pw-goto "/odoo?action=base.action_res_config_settings"
 pw-click "Definições"
+# Aguardar página de Definições carregar
 # Acessar Gamification Tools (dentro de Definições)
 # Nota: Módulo gamification está declarado como dependência em racco_demo
+# Nota: Após clicar em "Definições", a página navega e o menu Apps fecha
+# Nota: "Gamification Tools" está em base.menu_administration (Definições) e requer base.group_no_one
 # Alternativa: Se menu não estiver visível, usar URL direta: pw-goto "/odoo/gamification"
+# Alternativa 2: Usar menu Apps novamente após navegar para Definições
+pw-click selector "button.o_grid_apps_menu__button"
 pw-click "Gamification Tools"
 
 # Visualizar Badges Disponíveis
@@ -265,7 +270,7 @@ pw-type "admin" into "Senha"
 pw-submit "Entrar"
 
 # Acessar Menu Apps
-pw-click selector "div.o_navbar_apps_menu button"
+pw-click selector "button.o_grid_apps_menu__button"
 # Acessar Pedidos de Venda
 pw-click "Vendas"
 pw-click "Pedidos"
@@ -274,7 +279,7 @@ pw-click "Pedidos"
 pw-click "Pedido"
 
 # Acessar Menu Apps
-pw-click selector "div.o_navbar_apps_menu button"
+pw-click selector "button.o_grid_apps_menu__button"
 # Voltar e Acessar Categorias
 pw-click "Contatos"
 pw-click "Configuração"
@@ -393,7 +398,7 @@ pw-type "admin" into "Senha"
 pw-submit "Entrar"
 
 # Acessar Menu Apps
-pw-click selector "div.o_navbar_apps_menu button"
+pw-click selector "button.o_grid_apps_menu__button"
 # Acessar Lista de Contatos (que inclui clientes, revendedores, etc.)
 pw-click "Contatos"
 # Nota: "Contatos" já mostra todos os parceiros. Usar filtros de busca para filtrar por tipo

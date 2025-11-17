@@ -177,6 +177,9 @@ class CursorInteraction:
             # First, check for elements in closed dropdowns and open them if needed
             await self._open_dropdowns_if_needed(text)
             
+            # Check if web_responsive Apps Menu is open and wait for it if needed
+            await self._wait_for_web_responsive_menu_if_needed(text)
+            
             # Wait a bit for dynamic content to appear
             await asyncio.sleep(_get_delay(self.controller, 0.3))
             
@@ -247,9 +250,20 @@ class CursorInteraction:
                         }}
                     }}
                     
+                    // Check if web_responsive Apps Menu is open
+                    const menuContainer = document.querySelector('div.app-menu-container');
+                    const isMenuOpen = menuContainer && menuContainer.offsetParent !== null;
+                    
                     // Collect all potential matches with priority scores
                     // Include menu items and other interactive elements
-                    const allClickable = Array.from(document.querySelectorAll('button, a, input[type="button"], input[type="submit"], [role="button"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [onclick], span[role="menuitemcheckbox"], span[role="menuitem"]'));
+                    // If menu is open, prioritize elements inside the menu
+                    let searchScope = document;
+                    if (isMenuOpen && menuContainer) {{
+                        // First search inside menu container (higher priority)
+                        searchScope = menuContainer;
+                    }}
+                    
+                    const allClickable = Array.from(searchScope.querySelectorAll('button, a, input[type="button"], input[type="submit"], [role="button"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [onclick], span[role="menuitemcheckbox"], span[role="menuitem"], .o-app-menu-list a, .o-app-menu-list button'));
                     
                     for (const el of allClickable) {{
                         // Skip hidden elements
@@ -304,12 +318,45 @@ class CursorInteraction:
                                 priority -= 2; // Reduce priority for links when searching for field names
                             }}
                             
+                            // Bonus priority for elements inside web_responsive menu when menu is open
+                            if (isMenuOpen && menuContainer && menuContainer.contains(el)) {{
+                                priority += 5; // High bonus for menu items
+                            }}
+                            
                             candidates.push({{
                                 element: el,
                                 priority: priority,
                                 text: elText,
                                 tagName: el.tagName
                             }});
+                        }}
+                    }}
+                    
+                    // If menu is open and no candidates found in menu, search in full document
+                    if (isMenuOpen && candidates.length === 0) {{
+                        const allClickableFull = Array.from(document.querySelectorAll('button, a, input[type="button"], input[type="submit"], [role="button"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [onclick], span[role="menuitemcheckbox"], span[role="menuitem"]'));
+                        
+                        for (const el of allClickableFull) {{
+                            if (el.offsetParent === null || el.style.display === 'none' || el.style.visibility === 'hidden') {{
+                                continue;
+                            }}
+                            
+                            const elText = (el.textContent || el.value || el.getAttribute('aria-label') || '').trim();
+                            const elTextLower = elText.toLowerCase();
+                            
+                            if (elTextLower.includes(lowerText) || elTextLower === lowerText) {{
+                                let priority = elTextLower === lowerText ? 10 : 4;
+                                if (el.tagName === 'BUTTON' || el.type === 'button' || el.type === 'submit') {{
+                                    priority += 1;
+                                }}
+                                
+                                candidates.push({{
+                                    element: el,
+                                    priority: priority,
+                                    text: elText,
+                                    tagName: el.tagName
+                                }});
+                            }}
                         }}
                     }}
                     
@@ -791,6 +838,57 @@ class CursorInteraction:
         except Exception as e:
             logger.debug(f"Error checking dropdowns: {e}")
     
+    async def _wait_for_web_responsive_menu_if_needed(self, search_text: str) -> None:
+        """
+        Check if web_responsive Apps Menu needs to be opened and wait for it.
+        The web_responsive module uses a fullscreen overlay menu instead of a dropdown.
+        """
+        try:
+            # Check if Apps Menu button was recently clicked
+            menu_info = await self.page.evaluate("""
+                () => {
+                    // Check if web_responsive Apps Menu exists
+                    const appsMenuButton = document.querySelector('button.o_grid_apps_menu__button');
+                    if (!appsMenuButton) {
+                        return { hasButton: false };
+                    }
+                    
+                    // Check if menu container is visible (menu is open)
+                    const menuContainer = document.querySelector('div.app-menu-container');
+                    const isOpen = menuContainer && menuContainer.offsetParent !== null;
+                    
+                    return {
+                        hasButton: true,
+                        isOpen: isOpen,
+                        hasContainer: !!menuContainer
+                    };
+                }
+            """)
+            
+            # If menu button exists but menu is not open, we might need to wait
+            # This happens when we just clicked the button and menu is opening
+            if menu_info.get('hasButton') and not menu_info.get('isOpen'):
+                # Wait a bit for menu to open (it's an overlay that appears)
+                await asyncio.sleep(_get_delay(self.controller, 0.5))
+                
+                # Check again if menu opened
+                menu_info = await self.page.evaluate("""
+                    () => {
+                        const menuContainer = document.querySelector('div.app-menu-container');
+                        return {
+                            isOpen: menuContainer && menuContainer.offsetParent !== null
+                        };
+                    }
+                """)
+                
+                if menu_info.get('isOpen'):
+                    logger.debug("web_responsive Apps Menu opened")
+                else:
+                    logger.debug("web_responsive Apps Menu button exists but menu not open")
+                    
+        except Exception as e:
+            logger.debug(f"Error checking web_responsive menu: {e}")
+    
     async def _wait_for_dynamic_element(self, search_text: str, max_attempts: int = 3) -> bool:
         """
         Wait for dynamic elements to appear after interaction.
@@ -936,6 +1034,7 @@ class CursorInteraction:
     async def click_by_selector(self, selector: str) -> bool:
         """
         Click on element by CSS selector.
+        Supports both standard Odoo and web_responsive selectors.
         
         Args:
             selector: CSS selector for the element
@@ -949,10 +1048,42 @@ class CursorInteraction:
                 await self.controller.start()
             await self.controller.show()
             
-            # Find element by selector
-            element = await self.page.query_selector(selector)
+            # Wait for page to be ready
+            try:
+                await self.page.wait_for_load_state('domcontentloaded', timeout=5000)
+                await asyncio.sleep(_get_delay(self.controller, 0.3))
+            except:
+                pass  # Continue even if timeout
+            
+            # Special handling for Apps Menu button - try both selectors
+            if 'apps_menu' in selector.lower() or 'o_grid_apps' in selector or 'o_navbar_apps' in selector:
+                # Try web_responsive selector first
+                element = await self.page.query_selector('button.o_grid_apps_menu__button')
+                if not element:
+                    # Fallback to standard Odoo selector
+                    element = await self.page.query_selector('div.o_navbar_apps_menu button')
+                if not element:
+                    # Try with data-hotkey="h" (common for Apps Menu)
+                    element = await self.page.query_selector('button[data-hotkey="h"]')
+            else:
+                # For other selectors, try the provided selector
+                element = await self.page.query_selector(selector)
+            
+            if not element:
+                # Wait a bit more and try again (for dynamic content)
+                await asyncio.sleep(_get_delay(self.controller, 0.5))
+                if 'apps_menu' in selector.lower() or 'o_grid_apps' in selector or 'o_navbar_apps' in selector:
+                    element = await self.page.query_selector('button.o_grid_apps_menu__button')
+                    if not element:
+                        element = await self.page.query_selector('div.o_navbar_apps_menu button')
+                    if not element:
+                        element = await self.page.query_selector('button[data-hotkey="h"]')
+                else:
+                    element = await self.page.query_selector(selector)
+            
             if not element:
                 logger.warning(f"Element with selector '{selector}' not found")
+                print(f"   ⚠️  Elemento com seletor '{selector}' não encontrado")
                 return False
             
             # Get element coordinates
