@@ -148,8 +148,6 @@ class CursorInteraction:
             # Wait for page to be ready (especially after navigation)
             try:
                 await self.page.wait_for_load_state('domcontentloaded', timeout=5000)
-                # Wait a bit more for dynamic content
-                await asyncio.sleep(_get_delay(self.controller, 0.5))
             except:
                 pass  # Continue even if timeout
             
@@ -846,10 +844,51 @@ class CursorInteraction:
             True if field was found and text was typed, False otherwise
         """
         try:
+            # Wait for page to be ready before looking for field
+            try:
+                await self.page.wait_for_load_state('domcontentloaded', timeout=5000)
+            except:
+                pass
+            
             # Escape text for JavaScript
             escaped_text = text.replace("'", "\\'").replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
             
             if field_selector:
+                # Wait for field to appear before trying to find it
+                try:
+                    escaped_selector = field_selector.replace("'", "\\'").replace('"', '\\"')
+                    await self.page.wait_for_function(f"""
+                        (selector) => {{
+                            const selectorLower = selector.toLowerCase();
+                            // Try by label text
+                            const labels = Array.from(document.querySelectorAll('label'));
+                            const label = labels.find(l => l.textContent.trim().toLowerCase().includes(selectorLower));
+                            if (label && label.htmlFor) {{
+                                const field = document.getElementById(label.htmlFor);
+                                if (field && (field.tagName === 'INPUT' || field.tagName === 'TEXTAREA')) {{
+                                    const rect = field.getBoundingClientRect();
+                                    if (rect.width > 0 && rect.height > 0) return true;
+                                }}
+                            }}
+                            // Try by placeholder
+                            const fieldByPlaceholder = Array.from(document.querySelectorAll('input, textarea')).find(el => {{
+                                return (el.placeholder || '').toLowerCase().includes(selectorLower) &&
+                                       el.offsetParent !== null && el.style.display !== 'none';
+                            }});
+                            if (fieldByPlaceholder) return true;
+                            // Try by name
+                            const fieldByName = document.querySelector(`input[name*="${{selector}}"], textarea[name*="${{selector}}"]`);
+                            if (fieldByName && fieldByName.offsetParent !== null && fieldByName.style.display !== 'none') return true;
+                            // Try by id
+                            const fieldById = document.getElementById(selector);
+                            if (fieldById && (fieldById.tagName === 'INPUT' || fieldById.tagName === 'TEXTAREA') &&
+                                fieldById.offsetParent !== null && fieldById.style.display !== 'none') return true;
+                            return false;
+                        }}
+                    """, field_selector, timeout=5000)
+                except:
+                    pass  # Continue even if timeout - will try to find field anyway
+                
                 # Find field by selector (label, placeholder, name, id)
                 escaped_selector = field_selector.replace("'", "\\'").replace('"', '\\"')
                 
