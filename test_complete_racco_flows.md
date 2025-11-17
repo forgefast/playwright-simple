@@ -101,50 +101,46 @@ pw-click "Contatos"
 pw-click "Configuração"
 pw-click "Marcadores de contato"
 
-# Visualizar Nível Bronze
-pw-click selector ".o_searchview_dropdown_toggler"
+# Visualizar Nível Bronze - Nível inicial
 pw-type "Bronze" into "Buscar"
+pw-press "Enter"
+pw-click "Revendedor Bronze"
 
 # Visualizar Revendedores Bronze
 pw-click "Clientes"
-pw-click selector ".o_searchview_dropdown_toggler"
-pw-type "Bronze" into "Buscar"
 
-# Visualizar Nível Prata
+# Visualizar Nível Prata - Nível intermediário
 pw-click "Contatos"
 pw-click "Configuração"
-pw-click "Contact Tags"
-pw-click selector ".o_searchview_dropdown_toggler"
+pw-click "Marcadores de contato"
 pw-type "Prata" into "Buscar"
+pw-press "Enter"
+pw-click "Revendedor Prata"
 
 # Visualizar Revendedores Prata
 pw-click "Clientes"
-pw-click selector ".o_searchview_dropdown_toggler"
-pw-type "Prata" into "Buscar"
 
-# Visualizar Nível Ouro
+# Visualizar Nível Ouro - Nível avançado
 pw-click "Contatos"
 pw-click "Configuração"
-pw-click "Contact Tags"
-pw-click selector ".o_searchview_dropdown_toggler"
+pw-click "Marcadores de contato"
 pw-type "Ouro" into "Buscar"
+pw-press "Enter"
+pw-click "Revendedor Ouro"
 
 # Visualizar Revendedores Ouro
 pw-click "Clientes"
-pw-click selector ".o_searchview_dropdown_toggler"
-pw-type "Ouro" into "Buscar"
 
-# Visualizar Nível Platinum
+# Visualizar Nível Platinum - Nível elite
 pw-click "Contatos"
 pw-click "Configuração"
-pw-click "Contact Tags"
-pw-click selector ".o_searchview_dropdown_toggler"
+pw-click "Marcadores de contato"
 pw-type "Platinum" into "Buscar"
+pw-press "Enter"
+pw-click "Revendedor Platinum"
 
 # Visualizar Revendedores Platinum
 pw-click "Clientes"
-pw-click selector ".o_searchview_dropdown_toggler"
-pw-type "Platinum" into "Buscar"
 
 # Abrir Detalhes de um Revendedor
 pw-click "Lucia Helena Santos"

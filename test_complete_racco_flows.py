@@ -276,31 +276,25 @@ async def fazer_logout(page: Page):
         user_menu = page.locator('.dropdown-toggle, [data-bs-toggle="dropdown"], .o_user_menu')
         if await user_menu.count() > 0:
             await user_menu.first.click()
-            await asyncio.sleep(0.1)
             # Clicar em "Sair"
             logout_link = page.locator('#o_logout, a:has-text("Sair"), a[href*="/web/session/logout"]')
             if await logout_link.count() > 0:
                 await logout_link.first.click()
-                await asyncio.sleep(0.2)
             else:
                 logger.warning("Link 'Sair' não encontrado, tentando navegar diretamente")
                 await page.goto(f"{BASE_URL}/web/session/logout")
-                await asyncio.sleep(0.2)
         else:
             logger.warning("Menu do usuário não encontrado, tentando navegar diretamente")
             await page.goto(f"{BASE_URL}/web/session/logout")
-            await asyncio.sleep(0.2)
     except Exception as e:
         logger.warning(f"Erro ao fazer logout clicando: {e}, tentando navegar diretamente")
         await page.goto(f"{BASE_URL}/web/session/logout")
-        await asyncio.sleep(1.0)
     
     # Garantir que estamos na página de login (logout pode redirecionar para /)
     try:
         await page.wait_for_load_state('networkidle', timeout=5000)
     except:
         pass
-    await asyncio.sleep(0.5)
     current_url = page.url
     logger.info(f"URL após logout: {current_url}")
     if '/web/login' not in current_url:
@@ -310,7 +304,6 @@ async def fazer_logout(page: Page):
             await page.wait_for_load_state('networkidle', timeout=5000)
         except:
             pass
-        await asyncio.sleep(1.0)
 
 
 async def abrir_menu_apps(page: Page) -> bool:
@@ -352,7 +345,6 @@ async def abrir_menu_apps(page: Page) -> bool:
                 logger.debug(f"Seletor {selector}: count={count}, visible={is_visible}")
                 if is_visible:
                     await btn.click()
-                    await asyncio.sleep(0.5)
                     # Verificar se abriu
                     body_class = await page.evaluate("() => document.body.className")
                     if 'o_apps_menu_opened' in body_class:
@@ -523,7 +515,6 @@ async def executar_comando_com_debug(
                 
                 # Mostrar erro na tela
                 await show_error_on_screen(page, error_msg, comando)
-                await asyncio.sleep(0.5)
                 
                 # PARAR COMPLETAMENTE: fechar browser e retornar False
                 try:
@@ -539,7 +530,6 @@ async def executar_comando_com_debug(
             # Verificar se realmente houve mudança após o clique
             try:
                 url_antes = page.url
-                await asyncio.sleep(0.05)  # Pequeno delay para verificar mudança
                 url_depois = page.url
                 if url_antes != url_depois:
                     print(f"  ✓ URL mudou após clique: {url_antes} → {url_depois}")
@@ -576,8 +566,6 @@ async def executar_comando_com_debug(
                 print(f"  📄 Novo título: {new_title}")
             except:
                 pass
-            
-            await asyncio.sleep(0.1)
                 
         elif cmd == "pw-type":
             print(f"  ⌨️  Digitando: {args}...")
@@ -590,7 +578,6 @@ async def executar_comando_com_debug(
                 
                 # Mostrar erro na tela
                 await show_error_on_screen(page, error_msg, comando)
-                await asyncio.sleep(0.5)
                 
                 # PARAR COMPLETAMENTE: fechar browser e retornar False
                 try:
@@ -616,7 +603,6 @@ async def executar_comando_com_debug(
                 
                 # Mostrar erro na tela
                 await show_error_on_screen(page, error_msg, comando)
-                await asyncio.sleep(0.5)
                 
                 # PARAR COMPLETAMENTE: fechar browser e retornar False
                 try:
@@ -646,8 +632,6 @@ async def executar_comando_com_debug(
                 print(f"  📄 Novo título: {new_title}")
             except Exception as e:
                 print(f"  ⚠️  Timeout aguardando networkidle: {e}")
-            
-            await asyncio.sleep(1.0)
         
         elif cmd == "wait":
             # Comando wait para aguardar tempo específico
@@ -659,8 +643,7 @@ async def executar_comando_com_debug(
                 await asyncio.sleep(seconds)
                 print(f"  ✅ Wait concluído")
             else:
-                print(f"  ⚠️  Não foi possível extrair tempo do wait, aguardando 1s")
-                await asyncio.sleep(1.0)
+                print(f"  ⚠️  Não foi possível extrair tempo do wait")
         
         elif cmd == "pw-wait":
             print(f"  ⏳ Aguardando elemento: {args}...")
@@ -682,7 +665,6 @@ async def executar_comando_com_debug(
                 if "Revendedor" in text:
                     try:
                         await page.wait_for_selector('.o_popover', state='visible', timeout=2000)
-                        await asyncio.sleep(0.05)  # Pequeno delay para renderização
                     except:
                         pass  # Continuar mesmo se popover não aparecer
                 
@@ -711,11 +693,47 @@ async def executar_comando_com_debug(
                     }}
                 """, text, timeout=timeout)
                 print(f"  ✅ Elemento '{text}' apareceu")
-                # Aguardar um pouco mais para garantir que está totalmente renderizado
-                await asyncio.sleep(0.05)
             except Exception as e:
                 print(f"  ⚠️  Timeout aguardando elemento '{text}': {e}")
                 # Não falhar o teste, apenas avisar
+        
+        elif cmd == "pw-press":
+            print(f"  ⌨️  Pressionando tecla: {args}...")
+            try:
+                key = args.strip().strip('"\'')
+                # Normalizar nome da tecla
+                key_map = {
+                    'enter': 'Enter',
+                    'Enter': 'Enter',
+                    'tab': 'Tab',
+                    'Tab': 'Tab',
+                    'escape': 'Escape',
+                    'Escape': 'Escape',
+                    'space': 'Space',
+                    'Space': 'Space',
+                }
+                actual_key = key_map.get(key, key)
+                
+                await page.keyboard.press(actual_key)
+                print(f"  ✅ Tecla '{actual_key}' pressionada")
+            except Exception as e:
+                error_msg = f"Erro ao pressionar tecla: {e}"
+                print(f"  ❌ ERRO: {error_msg}")
+                logger.error(f"❌ Falha em pw-press {args}: {error_msg}")
+                
+                # Mostrar erro na tela
+                await show_error_on_screen(page, error_msg, comando)
+                
+                # PARAR COMPLETAMENTE: fechar browser e retornar False
+                try:
+                    await recorder.stop(save=False)
+                except:
+                    pass
+                try:
+                    await browser.close()
+                except:
+                    pass
+                return False
                 
         else:
             print(f"  ⚠️  Comando desconhecido: {cmd}")
@@ -730,7 +748,6 @@ async def executar_comando_com_debug(
         # Mostrar erro na tela
         try:
             await show_error_on_screen(page, str(e), comando)
-            await asyncio.sleep(2)
         except:
             pass
         
@@ -813,7 +830,6 @@ async def run_test():
                         pass
             except:
                 pass
-            await asyncio.sleep(0.1)
         
         if not page or not event_capture_ready:
             logger.warning("⚠️  EventCapture pode não estar totalmente pronto, continuando...")
@@ -940,8 +956,7 @@ async def run_test():
         for i, cmd in enumerate(comandos, 1):
             print(f"  {i:2d}. {cmd}")
         
-        print("\n▶️  Iniciando execução em 2 segundos...")
-        await asyncio.sleep(2)
+        print("\n▶️  Iniciando execução...")
         
         # Aguardar CursorController estar pronto
         logger.info("Aguardando CursorController estar pronto...")
@@ -958,7 +973,6 @@ async def run_test():
                             break
             except:
                 pass
-            await asyncio.sleep(0.2)
         
         if not cursor_ready:
             logger.warning("⚠️  CursorController pode não estar totalmente pronto, continuando...")
@@ -1036,9 +1050,6 @@ async def run_test():
         logger.info("  ✅ Backend Odoo - Vendas/Pedidos")
         logger.info("=" * 80)
         
-        # Aguardar um pouco antes de fechar
-        await asyncio.sleep(2)
-        
         # Parar recorder
         await recorder.stop(save=False)
         
@@ -1055,7 +1066,6 @@ async def run_test():
         try:
             if 'page' in locals() and page:
                 await show_error_on_screen(page, str(e), "Erro geral")
-                await asyncio.sleep(2)
         except:
             pass
         
