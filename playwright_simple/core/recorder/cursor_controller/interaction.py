@@ -242,7 +242,8 @@ class CursorInteraction:
                     }}
                     
                     // Collect all potential matches with priority scores
-                    const allClickable = Array.from(document.querySelectorAll('button, a, input[type="button"], input[type="submit"], [role="button"], [onclick]'));
+                    // Include menu items and other interactive elements
+                    const allClickable = Array.from(document.querySelectorAll('button, a, input[type="button"], input[type="submit"], [role="button"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [onclick], span[role="menuitemcheckbox"], span[role="menuitem"]'));
                     
                     for (const el of allClickable) {{
                         // Skip hidden elements
