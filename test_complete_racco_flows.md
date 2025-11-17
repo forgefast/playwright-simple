@@ -9,7 +9,7 @@ Fluxos que já foram validados e podem ser pulados durante os testes. Remova da 
 ```yaml
 validated_flows:
    - fluxo_01  # Critérios de Ingresso - Consumidor Final
-  # - fluxo_02  # Critérios de Ingresso - Revendedor
+   - fluxo_02  # Critérios de Ingresso - Revendedor
   # - fluxo_03  # Escalonamento de Níveis
   # - fluxo_04  # Jornada de Treinamento
   # - fluxo_05  # Gamificação
