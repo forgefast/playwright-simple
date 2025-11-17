@@ -276,20 +276,20 @@ async def fazer_logout(page: Page):
         user_menu = page.locator('.dropdown-toggle, [data-bs-toggle="dropdown"], .o_user_menu')
         if await user_menu.count() > 0:
             await user_menu.first.click()
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.1)
             # Clicar em "Sair"
             logout_link = page.locator('#o_logout, a:has-text("Sair"), a[href*="/web/session/logout"]')
             if await logout_link.count() > 0:
                 await logout_link.first.click()
-                await asyncio.sleep(1.0)
+                await asyncio.sleep(0.2)
             else:
                 logger.warning("Link 'Sair' não encontrado, tentando navegar diretamente")
                 await page.goto(f"{BASE_URL}/web/session/logout")
-                await asyncio.sleep(1.0)
+                await asyncio.sleep(0.2)
         else:
             logger.warning("Menu do usuário não encontrado, tentando navegar diretamente")
             await page.goto(f"{BASE_URL}/web/session/logout")
-            await asyncio.sleep(1.0)
+            await asyncio.sleep(0.2)
     except Exception as e:
         logger.warning(f"Erro ao fazer logout clicando: {e}, tentando navegar diretamente")
         await page.goto(f"{BASE_URL}/web/session/logout")
@@ -523,7 +523,7 @@ async def executar_comando_com_debug(
                 
                 # Mostrar erro na tela
                 await show_error_on_screen(page, error_msg, comando)
-                await asyncio.sleep(2)
+                await asyncio.sleep(0.5)
                 
                 # PARAR COMPLETAMENTE: fechar browser e retornar False
                 try:
@@ -539,7 +539,7 @@ async def executar_comando_com_debug(
             # Verificar se realmente houve mudança após o clique
             try:
                 url_antes = page.url
-                await asyncio.sleep(0.3)  # Pequeno delay para verificar mudança
+                await asyncio.sleep(0.05)  # Pequeno delay para verificar mudança
                 url_depois = page.url
                 if url_antes != url_depois:
                     print(f"  ✓ URL mudou após clique: {url_antes} → {url_depois}")
@@ -577,7 +577,7 @@ async def executar_comando_com_debug(
             except:
                 pass
             
-            await asyncio.sleep(1.0)
+            await asyncio.sleep(0.1)
                 
         elif cmd == "pw-type":
             print(f"  ⌨️  Digitando: {args}...")
@@ -590,7 +590,7 @@ async def executar_comando_com_debug(
                 
                 # Mostrar erro na tela
                 await show_error_on_screen(page, error_msg, comando)
-                await asyncio.sleep(2)
+                await asyncio.sleep(0.5)
                 
                 # PARAR COMPLETAMENTE: fechar browser e retornar False
                 try:
@@ -616,7 +616,7 @@ async def executar_comando_com_debug(
                 
                 # Mostrar erro na tela
                 await show_error_on_screen(page, error_msg, comando)
-                await asyncio.sleep(2)
+                await asyncio.sleep(0.5)
                 
                 # PARAR COMPLETAMENTE: fechar browser e retornar False
                 try:
@@ -682,7 +682,7 @@ async def executar_comando_com_debug(
                 if "Revendedor" in text:
                     try:
                         await page.wait_for_selector('.o_popover', state='visible', timeout=2000)
-                        await asyncio.sleep(0.3)  # Pequeno delay para renderização
+                        await asyncio.sleep(0.05)  # Pequeno delay para renderização
                     except:
                         pass  # Continuar mesmo se popover não aparecer
                 
@@ -712,7 +712,7 @@ async def executar_comando_com_debug(
                 """, text, timeout=timeout)
                 print(f"  ✅ Elemento '{text}' apareceu")
                 # Aguardar um pouco mais para garantir que está totalmente renderizado
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.05)
             except Exception as e:
                 print(f"  ⚠️  Timeout aguardando elemento '{text}': {e}")
                 # Não falhar o teste, apenas avisar
