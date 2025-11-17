@@ -365,6 +365,18 @@ class PlaywrightHandlers:
             
             await page.keyboard.press(actual_key)
             
+            # Wait for page to stabilize after pressing key (may trigger navigation or dynamic updates)
+            # Use BaseHandler's wait method
+            from .base_handler import BaseHandler
+            base_handler = BaseHandler(
+                self.yaml_writer,
+                self._get_page,
+                None,
+                self._recorder,
+                self.recorder_logger
+            )
+            await base_handler._wait_for_page_stable(timeout=10.0)
+            
             if self.recorder_logger:
                 self.recorder_logger.log_action(
                     action='press',

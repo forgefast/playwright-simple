@@ -234,6 +234,9 @@ class TypeHandler(BaseHandler):
         
         result['success'] = result['element_found'] and result['action_worked']
         
+        # Wait for page to stabilize after typing (may trigger dynamic updates)
+        await self._wait_for_page_stable(timeout=10.0)
+        
         duration_ms = self.recorder_logger.end_action_timer(action_id) if self.recorder_logger else None
         
         field = parsed.get('into') or parsed.get('selector') or 'field'
