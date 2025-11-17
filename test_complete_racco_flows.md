@@ -60,27 +60,43 @@ pw-click "Contatos"
 pw-click selector ".o_searchview_dropdown_toggler"
 pw-wait "Revendedor Bronze" 5
 pw-click "Revendedor Bronze"
+wait 1
 
 # Filtrar por Revendedor Prata usando o filtro criado
+# Desselecionar filtro anterior e selecionar novo
+pw-click selector ".o_searchview_dropdown_toggler"
+wait 0.5
+pw-click selector ".o_searchview_dropdown_toggler"
+pw-wait "Revendedor Bronze" 5
+pw-click "Revendedor Bronze"
+wait 0.5
+pw-wait "Revendedor Prata" 5
+pw-click "Revendedor Prata"
+wait 1
+
+# Filtrar por Revendedor Ouro usando o filtro criado
+# Desselecionar filtro anterior e selecionar novo
+pw-click selector ".o_searchview_dropdown_toggler"
+wait 0.5
 pw-click selector ".o_searchview_dropdown_toggler"
 pw-wait "Revendedor Prata" 5
 pw-click "Revendedor Prata"
+wait 0.5
+pw-wait "Revendedor Ouro" 5
+pw-click "Revendedor Ouro"
+wait 1
 
-# Filtrar por Revendedor Ouro usando o filtro criado
+# Filtrar por Revendedor Platinum usando o filtro criado
+# Desselecionar filtro anterior e selecionar novo
+pw-click selector ".o_searchview_dropdown_toggler"
+wait 0.5
 pw-click selector ".o_searchview_dropdown_toggler"
 pw-wait "Revendedor Ouro" 5
 pw-click "Revendedor Ouro"
-
-# Filtrar por Revendedor Platinum usando o filtro criado
-pw-click selector ".o_searchview_dropdown_toggler"
+wait 0.5
 pw-wait "Revendedor Platinum" 5
 pw-click "Revendedor Platinum"
-
-# Acessar Lista de Clientes
-pw-click "Clientes"
-
-# Filtrar Revendedores na Lista
-pw-type "Revendedor" into "Buscar"
+wait 1
 
 # Logout
 pw-click "Administrator"
