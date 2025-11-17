@@ -134,6 +134,7 @@ class ConsoleInterface:
         print("   pw-click selector \"#id\" - Click by selector")
         print("   pw-click role button [0] - Click by role (with index)")
         print("   pw-type \"text\" into \"field\" - Type text into field")
+        print("   pw-press \"Enter\" - Press a key (Enter, Tab, Escape, Space, etc.)")
         print("   pw-wait \"text\" [timeout] - Wait for element to appear")
         print("   pw-info - Show page information (URL, title, etc.)")
         print("   pw-html [selector] [--pretty] [--max-length N] - Get HTML of page or element")

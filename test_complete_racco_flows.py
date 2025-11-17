@@ -699,27 +699,12 @@ async def executar_comando_com_debug(
         
         elif cmd == "pw-press":
             print(f"  ⌨️  Pressionando tecla: {args}...")
-            try:
-                key = args.strip().strip('"\'')
-                # Normalizar nome da tecla
-                key_map = {
-                    'enter': 'Enter',
-                    'Enter': 'Enter',
-                    'tab': 'Tab',
-                    'Tab': 'Tab',
-                    'escape': 'Escape',
-                    'Escape': 'Escape',
-                    'space': 'Space',
-                    'Space': 'Space',
-                }
-                actual_key = key_map.get(key, key)
-                
-                await page.keyboard.press(actual_key)
-                print(f"  ✅ Tecla '{actual_key}' pressionada")
-            except Exception as e:
-                error_msg = f"Erro ao pressionar tecla: {e}"
-                print(f"  ❌ ERRO: {error_msg}")
-                logger.error(f"❌ Falha em pw-press {args}: {error_msg}")
+            result = await handlers.handle_pw_press(args)
+            
+            if not result.get('success', False):
+                error_msg = result.get('error', 'Erro desconhecido')
+                print(f"  ❌ ERRO ao pressionar tecla: {error_msg}")
+                logger.error(f"❌ Falha em {comando}: {error_msg}")
                 
                 # Mostrar erro na tela
                 await show_error_on_screen(page, error_msg, comando)
@@ -734,6 +719,8 @@ async def executar_comando_com_debug(
                 except:
                     pass
                 return False
+            
+            print(f"  ✅ Tecla pressionada")
                 
         else:
             print(f"  ⚠️  Comando desconhecido: {cmd}")
@@ -830,6 +817,8 @@ async def run_test():
                         pass
             except:
                 pass
+            # Pequeno delay para não sobrecarregar o CPU, mas muito menor que antes
+            await asyncio.sleep(0.05)
         
         if not page or not event_capture_ready:
             logger.warning("⚠️  EventCapture pode não estar totalmente pronto, continuando...")
@@ -973,6 +962,8 @@ async def run_test():
                             break
             except:
                 pass
+            # Pequeno delay para não sobrecarregar o CPU
+            await asyncio.sleep(0.05)
         
         if not cursor_ready:
             logger.warning("⚠️  CursorController pode não estar totalmente pronto, continuando...")

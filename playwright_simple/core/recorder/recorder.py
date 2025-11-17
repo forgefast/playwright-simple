@@ -259,6 +259,7 @@ class Recorder:
         self.console.register_command('pw-wait', self.command_handlers.handle_pw_wait)
         self.console.register_command('pw-info', self.command_handlers.handle_pw_info)
         self.console.register_command('pw-html', self.command_handlers.handle_pw_html)
+        self.console.register_command('pw-press', self.command_handlers.handle_pw_press)
         
         if CURSOR_AVAILABLE:
             self.console.register_command('cursor', self.command_handlers.handle_cursor)

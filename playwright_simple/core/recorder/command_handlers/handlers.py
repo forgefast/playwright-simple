@@ -179,6 +179,10 @@ class CommandHandlers:
         """Handle pw-html command."""
         await self._playwright.handle_pw_html(args)
     
+    async def handle_pw_press(self, args: str):
+        """Handle pw-press command."""
+        return await self._playwright.handle_pw_press(args)
+    
     @property
     def output_path(self):
         """Get output path from yaml_writer."""

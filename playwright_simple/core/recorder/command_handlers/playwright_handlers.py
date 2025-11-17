@@ -341,4 +341,47 @@ class PlaywrightHandlers:
             print("❌ Failed to get HTML")
             if selector:
                 print(f"   Element with selector '{selector}' not found")
+    
+    async def handle_pw_press(self, args: str) -> Dict[str, Any]:
+        """Handle pw-press command - press a key."""
+        page = self._get_page()
+        if not page:
+            return {'success': False, 'error': 'Page not available'}
+        
+        try:
+            key = args.strip().strip('"\'')
+            # Normalizar nome da tecla
+            key_map = {
+                'enter': 'Enter',
+                'Enter': 'Enter',
+                'tab': 'Tab',
+                'Tab': 'Tab',
+                'escape': 'Escape',
+                'Escape': 'Escape',
+                'space': 'Space',
+                'Space': 'Space',
+            }
+            actual_key = key_map.get(key, key)
+            
+            await page.keyboard.press(actual_key)
+            
+            if self.recorder_logger:
+                self.recorder_logger.log_action(
+                    action='press',
+                    element=actual_key,
+                    success=True,
+                    details={'key': actual_key}
+                )
+            
+            return {'success': True, 'key': actual_key}
+        except Exception as e:
+            error_msg = f"Erro ao pressionar tecla: {e}"
+            if self.recorder_logger:
+                self.recorder_logger.log_action(
+                    action='press',
+                    element=args,
+                    success=False,
+                    error=error_msg
+                )
+            return {'success': False, 'error': error_msg}
 
