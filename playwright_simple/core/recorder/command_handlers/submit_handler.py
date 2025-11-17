@@ -10,6 +10,7 @@ from typing import Dict, Any
 from .base_handler import BaseHandler
 from ..action_converter import ActionConverter
 from ..action_state_capture import ActionStateCapture
+from ..page_stability import wait_for_navigation_after_click
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,9 @@ class SubmitHandler(BaseHandler):
         
         if not cursor_controller.is_active:
             await cursor_controller.start()
+        
+        # Garantir que cursor esteja visível antes de executar ação
+        await cursor_controller.show()
         
         button_text = args.strip().strip('"\'') if args.strip() else None
         
@@ -169,13 +173,24 @@ class SubmitHandler(BaseHandler):
             result['error'] = "Submit button not found"
             return result
         
+        # Capture URL before submit to detect navigation
+        url_before_submit = page.url
+        
         submit_success = await cursor_controller.submit_form(button_text)
         
         if not submit_success:
             result['error'] = "Failed to submit form"
             return result
         
-        await self._wait_for_page_stable(timeout=10.0)
+        # Wait for navigation if submit caused one (form submission often navigates)
+        logger.info(f"[SUBMIT_HANDLER] Before wait_for_navigation_after_click - URL: {url_before_submit}")
+        navigation_occurred = await wait_for_navigation_after_click(page, url_before_submit, timeout=5.0)
+        logger.info(f"[SUBMIT_HANDLER] After wait_for_navigation_after_click - Navigation occurred: {navigation_occurred}, Current URL: {page.url}")
+        
+        # Wait for page to stabilize
+        logger.info(f"[SUBMIT_HANDLER] Calling _wait_for_page_stable...")
+        await self._wait_for_page_stable(timeout=5.0)
+        logger.info(f"[SUBMIT_HANDLER] _wait_for_page_stable completed")
         
         state_after = await ActionStateCapture.capture_state(page)
         result['state_after'] = state_after

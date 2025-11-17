@@ -8,6 +8,7 @@ Provides common functionality for all handlers.
 
 import asyncio
 import logging
+import time
 from typing import Optional, Callable, Dict, Any
 
 logger = logging.getLogger(__name__)
@@ -54,23 +55,51 @@ class BaseHandler:
         
         return normal_delay
     
-    async def _wait_for_page_stable(self, timeout: float = 10.0):
-        """Wait for page to stabilize."""
+    async def _wait_for_page_stable(self, timeout: float = 2.0):  # Reduced from 5.0 for faster execution
+        """Wait for page to stabilize using dynamic waits."""
+        start_time = time.perf_counter()
+        logger.info(f"[TIMING] [BASE_HANDLER] _wait_for_page_stable START - timeout={timeout}s")
+        
         page = self._get_page()
         if not page:
+            logger.info(f"[TIMING] [BASE_HANDLER] _wait_for_page_stable SKIPPED (no page)")
             return
         
         try:
             if self._recorder and hasattr(self._recorder, '_wait_for_page_stable'):
                 await self._recorder._wait_for_page_stable(timeout=timeout)
             else:
-                await page.wait_for_load_state('domcontentloaded', timeout=5000)
-                delay = self._get_delay_from_speed_level(0.5, 0.01)
-                await asyncio.sleep(delay)
+                # Fallback: check DOM state before waiting
                 try:
-                    await page.wait_for_load_state('networkidle', timeout=3000)
-                except:
-                    pass
+                    dom_state = await page.evaluate("document.readyState")
+                    logger.info(f"[TIMING] [BASE_HANDLER] DOM state before wait: {dom_state}")
+                    
+                    # If DOM is already ready, skip waiting
+                    if dom_state in ('interactive', 'complete'):
+                        elapsed = time.perf_counter() - start_time
+                        logger.info(f"[TIMING] [BASE_HANDLER] _wait_for_page_stable SKIPPED (DOM already {dom_state}) - elapsed={elapsed*1000:.1f}ms")
+                        return
+                except Exception as e:
+                    logger.debug(f"[TIMING] [BASE_HANDLER] Could not check DOM state: {e}")
+                
+                # Fallback: use wait_for_load_state with safety timeout only
+                # Don't use networkidle as it can be problematic in apps with continuous polling
+                wait_start = time.perf_counter()
+                try:
+                    # Wait for DOM to be ready - this is fast and reliable
+                    await page.wait_for_load_state('domcontentloaded', timeout=int(timeout * 1000))
+                    wait_elapsed = time.perf_counter() - wait_start
+                    logger.info(f"[TIMING] [BASE_HANDLER] wait_for_load_state('domcontentloaded') completed - elapsed={wait_elapsed*1000:.1f}ms")
+                except Exception as e:
+                    wait_elapsed = time.perf_counter() - wait_start
+                    logger.debug(f"[TIMING] [BASE_HANDLER] wait_for_load_state exception after {wait_elapsed*1000:.1f}ms: {e}")
+                    pass  # Continue even if timeout
+                
+                # Note: We don't wait for networkidle in fallback as it can cause issues
+                # in apps with continuous polling. The domcontentloaded check is sufficient.
         except Exception as e:
-            logger.debug(f"Error waiting for page stable: {e}")
+            logger.debug(f"[TIMING] [BASE_HANDLER] Error waiting for page stable: {e}")
+        
+        total_elapsed = time.perf_counter() - start_time
+        logger.info(f"[TIMING] [BASE_HANDLER] _wait_for_page_stable END - total_elapsed={total_elapsed*1000:.1f}ms")
 

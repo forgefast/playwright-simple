@@ -64,6 +64,8 @@ class CursorController:
         """
         Start cursor controller and inject cursor overlay.
         
+        Automatically shows the cursor and sets up navigation listener.
+        
         Args:
             force: Force reinjection even if already active
             initial_x: Initial X position (None = center or last position)
@@ -100,6 +102,14 @@ class CursorController:
             self.current_y = initial_y
             self._movement.current_x = initial_x
             self._movement.current_y = initial_y
+        
+        # Automatically show cursor after initialization
+        await self.show()
+        
+        # Automatically set up navigation listener (only if not already set up)
+        if not hasattr(self, '_navigation_listener_setup'):
+            self.setup_navigation_listener()
+            self._navigation_listener_setup = True
     
     async def show(self):
         """Show cursor overlay."""
@@ -211,7 +221,14 @@ class CursorController:
         the cursor position after page navigations. Used by both recording and playback.
         
         The logic is identical to what the recorder uses, encapsulated here for reuse.
+        
+        Note: This method is idempotent - calling it multiple times will only register
+        one listener. However, it's recommended to check _navigation_listener_setup
+        before calling to avoid unnecessary work.
         """
+        # Prevent multiple registrations
+        if hasattr(self, '_navigation_listener_setup') and self._navigation_listener_setup:
+            return
         async def on_navigation(frame):
             """Restore cursor position after navigation."""
             try:
@@ -283,21 +300,29 @@ class CursorController:
                     self.current_y = y
                     self._movement.current_x = x
                     self._movement.current_y = y
+                    # Garantir que cursor esteja visível após restauração
+                    await self.show()
                     logger.info(f"Cursor restored after navigation: ({x}, {y})")
                 else:
                     # No saved position, start at center
                     await self.start(force=True)
+                    # Garantir que cursor esteja visível após restauração
+                    await self.show()
                     logger.info("Cursor restored after navigation (center)")
             except Exception as e:
                 logger.warning(f"Error restoring cursor after navigation: {e}")
                 # Try to restore anyway, even if there was an error
                 try:
                     await self.start(force=True)
+                    await self.show()
                 except:
                     pass
         
         # Register navigation listener
         self.page.on('framenavigated', on_navigation)
+        
+        # Mark as set up to prevent multiple registrations
+        self._navigation_listener_setup = True
     
     async def type_text(self, text: str, field_selector: Optional[str] = None) -> bool:
         """Type text into a field."""

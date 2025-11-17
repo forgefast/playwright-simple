@@ -67,6 +67,9 @@ class TypeHandler(BaseHandler):
         if not cursor_controller.is_active:
             await cursor_controller.start()
         
+        # Garantir que cursor esteja visível antes de executar ação
+        await cursor_controller.show()
+        
         parsed = parse_type_args(args)
         
         if not parsed['text']:
@@ -74,6 +77,7 @@ class TypeHandler(BaseHandler):
             return result
         
         # Wait for page to be ready before looking for field
+        # Use safety timeout (5s) - should return immediately when ready
         try:
             await page.wait_for_load_state('domcontentloaded', timeout=5000)
         except:
@@ -240,8 +244,9 @@ class TypeHandler(BaseHandler):
             result['error'] = "Failed to type text"
             return result
         
-        delay = self._get_delay_from_speed_level(0.3, 0.01)
-        await asyncio.sleep(delay)
+        # Wait for page to stabilize after typing (may trigger dynamic updates)
+        # This must happen BEFORE checking the field value to ensure the page is stable
+        await self._wait_for_page_stable(timeout=5.0)
         
         if field_selector_for_value:
             try:
@@ -261,10 +266,20 @@ class TypeHandler(BaseHandler):
         value_after = result.get('field_value_after', '')
         expected_text = parsed['text']
         
-        result['action_worked'] = (
-            value_after != value_before and
-            expected_text.lower() in value_after.lower()
-        )
+        # If we successfully typed (type_success is True), consider action worked
+        # even if we can't verify the value (field might not have a selector for value check)
+        if type_success:
+            # If we have value verification, use it; otherwise trust that typing worked
+            if field_selector_for_value and value_after is not None:
+                result['action_worked'] = (
+                    value_after != value_before and
+                    expected_text.lower() in value_after.lower()
+                )
+            else:
+                # No value verification available, but typing succeeded - trust it worked
+                result['action_worked'] = True
+        else:
+            result['action_worked'] = False
         
         state_after = await ActionStateCapture.capture_state(page)
         result['state_after'] = state_after
@@ -273,9 +288,6 @@ class TypeHandler(BaseHandler):
         result['changes'] = changes
         
         result['success'] = result['element_found'] and result['action_worked']
-        
-        # Wait for page to stabilize after typing (may trigger dynamic updates)
-        await self._wait_for_page_stable(timeout=10.0)
         
         duration_ms = self.recorder_logger.end_action_timer(action_id) if self.recorder_logger else None
         

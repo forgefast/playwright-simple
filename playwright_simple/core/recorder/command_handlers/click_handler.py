@@ -10,6 +10,7 @@ from typing import Dict, Any
 from .base_handler import BaseHandler
 from ...playwright_commands.unified import parse_click_args
 from ..action_state_capture import ActionStateCapture
+from ..page_stability import wait_for_navigation_after_click, wait_for_odoo_action_complete
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,9 @@ class ClickHandler(BaseHandler):
         if not cursor_controller.is_active:
             await cursor_controller.start()
         
+        # Garantir que cursor esteja visível antes de executar ação
+        await cursor_controller.show()
+        
         parsed = parse_click_args(args)
         
         element_found = False
@@ -97,7 +101,34 @@ class ClickHandler(BaseHandler):
                 )
             return result
         
-        await self._wait_for_page_stable(timeout=10.0)
+        # Wait for navigation if click caused one (links, buttons that navigate, etc.)
+        # This ensures we wait for the new page to load before checking stability
+        import time
+        click_wait_start = time.perf_counter()
+        
+        url_before_click = state_before.get('url', '')
+        logger.info(f"[TIMING] [CLICK_HANDLER] Before wait_for_navigation_after_click - URL: {url_before_click}")
+        navigation_occurred = await wait_for_navigation_after_click(page, url_before_click, timeout=2.0)  # Reduced from 5.0
+        nav_elapsed = time.perf_counter() - click_wait_start
+        logger.info(f"[TIMING] [CLICK_HANDLER] After wait_for_navigation_after_click - Navigation occurred: {navigation_occurred}, Current URL: {page.url}, elapsed={nav_elapsed*1000:.1f}ms")
+        
+        # Only wait for page stable if navigation occurred (to avoid redundant wait)
+        if not navigation_occurred:
+            # For non-navigation clicks (filters, menus, etc.), check if Odoo action is complete
+            odoo_wait_start = time.perf_counter()
+            logger.info(f"[TIMING] [CLICK_HANDLER] No navigation, checking Odoo action completion...")
+            await wait_for_odoo_action_complete(page, timeout=1.0)
+            odoo_elapsed = time.perf_counter() - odoo_wait_start
+            logger.info(f"[TIMING] [CLICK_HANDLER] Odoo action check completed - elapsed={odoo_elapsed*1000:.1f}ms")
+        else:
+            stable_wait_start = time.perf_counter()
+            logger.info(f"[TIMING] [CLICK_HANDLER] Calling _wait_for_page_stable...")
+            await self._wait_for_page_stable(timeout=2.0)  # Reduced from 5.0
+            stable_elapsed = time.perf_counter() - stable_wait_start
+            logger.info(f"[TIMING] [CLICK_HANDLER] _wait_for_page_stable completed - elapsed={stable_elapsed*1000:.1f}ms")
+        
+        total_wait_elapsed = time.perf_counter() - click_wait_start
+        logger.info(f"[TIMING] [CLICK_HANDLER] Total wait time after click: {total_wait_elapsed*1000:.1f}ms")
         
         state_after = await ActionStateCapture.capture_state(page)
         result['state_after'] = state_after

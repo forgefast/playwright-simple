@@ -375,7 +375,7 @@ class PlaywrightHandlers:
                 self._recorder,
                 self.recorder_logger
             )
-            await base_handler._wait_for_page_stable(timeout=10.0)
+            await base_handler._wait_for_page_stable(timeout=5.0)
             
             if self.recorder_logger:
                 self.recorder_logger.log_action(

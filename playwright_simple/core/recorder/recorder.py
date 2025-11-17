@@ -454,22 +454,18 @@ class Recorder:
                         details={'target_url': self.initial_url}
                     )
                 
-                # Wait for page to be fully loaded (important for dynamic content like Odoo)
+                # Wait for page to be ready - use domcontentloaded for speed
+                # Don't wait for networkidle as it can be very slow in apps with continuous polling (like Odoo)
                 try:
-                    await page.wait_for_load_state('networkidle', timeout=10000)
-                    logger.info("Page network idle - ready for interactions")
+                    await page.wait_for_load_state('domcontentloaded', timeout=30000)
+                    logger.info("Page DOM ready - ready for interactions")
                 except Exception as e:
-                    logger.warning(f"Network idle timeout, continuing anyway: {e}")
+                    logger.warning(f"DOM ready timeout, continuing anyway: {e}")
                     if self.recorder_logger:
                         self.recorder_logger.warning(
-                            message=f"Network idle timeout: {e}",
-                            details={'operation': 'wait_for_networkidle', 'timeout': 10000}
+                            message=f"DOM ready timeout: {e}",
+                            details={'operation': 'wait_for_domcontentloaded', 'timeout': 30000}
                         )
-                    # Fallback: wait for load state
-                    try:
-                        await page.wait_for_load_state('load', timeout=5000)
-                    except:
-                        pass  # Continue even if timeout
                 
                 # Add initial navigation as first step (only in write mode)
                 if self.mode == 'write':

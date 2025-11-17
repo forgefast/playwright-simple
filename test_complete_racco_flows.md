@@ -9,15 +9,14 @@ Fluxos que já foram validados e podem ser pulados durante os testes. Remova da 
 ```yaml
 validated_flows:
    - fluxo_01  # Critérios de Ingresso - Consumidor Final
-   - fluxo_02  # Critérios de Ingresso - Revendedor
-  # - fluxo_03  # Escalonamento de Níveis
-  # - fluxo_04  # Jornada de Treinamento
-  # - fluxo_05  # Gamificação
-  # - fluxo_06  # Fluxo de Venda - Revendedor
-  # - fluxo_07  # Sistema de Comissões
-  # - fluxo_08  # Portal do Consumidor
-  # - fluxo_09  # Portal do Revendedor
-  # - fluxo_10  # Gestão de Parceiros
+  # - fluxo_02  # Critérios de Ingresso - Revendedor (inclui escalonamento de níveis)
+  # - fluxo_03  # Jornada de Treinamento
+  # - fluxo_04  # Gamificação
+  # - fluxo_05  # Fluxo de Venda - Revendedor
+  # - fluxo_06  # Sistema de Comissões
+  # - fluxo_07  # Portal do Consumidor
+  # - fluxo_08  # Portal do Revendedor
+  # - fluxo_09  # Gestão de Parceiros
 ```
 
 ## Comandos de Terminal Completos
@@ -81,66 +80,48 @@ pw-click selector ".o_searchview_dropdown_toggler"
 pw-click "Revendedor Ouro"
 pw-click "Revendedor Platinum"
 
-# Logout
-pw-click "Administrator"
-pw-click "Sair"
-
-# ========================================================================
-# FLUXO 03: ESCALONAMENTO DE NÍVEIS
-# ========================================================================
-# Login como Administrador
-pw-click "Entrar"
-pw-type "admin" into "E-mail"
-pw-type "admin" into "Senha"
-pw-submit "Entrar"
-
-# Acessar Menu Apps
-pw-click selector "button.o_grid_apps_menu__button"
-# Acessar Categorias de Níveis
+# Visualizar Categorias de Níveis (Escalonamento)
 pw-click "Contatos"
-pw-click "Configuração"
-pw-click "Marcadores de contato"
+pw-click "Categorias"
 
-# Visualizar Nível Bronze - Nível inicial
+# Visualizar Nível Bronze
 pw-type "Bronze" into "Buscar"
 pw-press "Enter"
-pw-click "Revendedor Bronze"
 
 # Visualizar Revendedores Bronze
 pw-click "Clientes"
+pw-type "Bronze" into "Buscar"
+pw-press "Enter"
 
-# Visualizar Nível Prata - Nível intermediário
-pw-click "Contatos"
-pw-click "Configuração"
-pw-click "Marcadores de contato"
+# Visualizar Nível Prata
+pw-click "Categorias"
 pw-type "Prata" into "Buscar"
 pw-press "Enter"
-pw-click "Revendedor Prata"
 
 # Visualizar Revendedores Prata
 pw-click "Clientes"
+pw-type "Prata" into "Buscar"
+pw-press "Enter"
 
-# Visualizar Nível Ouro - Nível avançado
-pw-click "Contatos"
-pw-click "Configuração"
-pw-click "Marcadores de contato"
+# Visualizar Nível Ouro
+pw-click "Categorias"
 pw-type "Ouro" into "Buscar"
 pw-press "Enter"
-pw-click "Revendedor Ouro"
 
 # Visualizar Revendedores Ouro
 pw-click "Clientes"
+pw-type "Ouro" into "Buscar"
+pw-press "Enter"
 
-# Visualizar Nível Platinum - Nível elite
-pw-click "Contatos"
-pw-click "Configuração"
-pw-click "Marcadores de contato"
+# Visualizar Nível Platinum
+pw-click "Categorias"
 pw-type "Platinum" into "Buscar"
 pw-press "Enter"
-pw-click "Revendedor Platinum"
 
 # Visualizar Revendedores Platinum
 pw-click "Clientes"
+pw-type "Platinum" into "Buscar"
+pw-press "Enter"
 
 # Abrir Detalhes de um Revendedor
 pw-click "Lucia Helena Santos"
@@ -150,7 +131,7 @@ pw-click "Administrator"
 pw-click "Sair"
 
 # ========================================================================
-# FLUXO 04: JORNADA DE TREINAMENTO
+# FLUXO 03: JORNADA DE TREINAMENTO
 # ========================================================================
 # Login como Revendedor
 pw-click "Entrar"
@@ -179,7 +160,7 @@ pw-click "Lucia Helena Santos"
 pw-click "Sair"
 
 # ========================================================================
-# FLUXO 05: GAMIFICAÇÃO
+# FLUXO 04: GAMIFICAÇÃO
 # ========================================================================
 # Login como Administrador
 pw-click "Entrar"
@@ -215,7 +196,7 @@ pw-click "Administrator"
 pw-click "Sair"
 
 # ========================================================================
-# FLUXO 06: FLUXO DE VENDA - REVENDEDOR
+# FLUXO 05: FLUXO DE VENDA - REVENDEDOR
 # ========================================================================
 # Login como Revendedor
 pw-click "Entrar"
@@ -265,7 +246,7 @@ pw-click "Lucia Helena Santos"
 pw-click "Sair"
 
 # ========================================================================
-# FLUXO 07: SISTEMA DE COMISSÕES
+# FLUXO 06: SISTEMA DE COMISSÕES
 # ========================================================================
 # Login como Administrador
 pw-click "Entrar"
@@ -324,7 +305,7 @@ pw-click "Lucia Helena Santos"
 pw-click "Sair"
 
 # ========================================================================
-# FLUXO 08: PORTAL DO CONSUMIDOR
+# FLUXO 07: PORTAL DO CONSUMIDOR
 # ========================================================================
 # Login como Consumidor Final
 pw-click "Entrar"
@@ -359,7 +340,7 @@ pw-click "Juliana Ferreira"
 pw-click "Sair"
 
 # ========================================================================
-# FLUXO 09: PORTAL DO REVENDEDOR
+# FLUXO 08: PORTAL DO REVENDEDOR
 # ========================================================================
 # Login como Revendedor
 pw-click "Entrar"
@@ -391,7 +372,7 @@ pw-click "Lucia Helena Santos"
 pw-click "Sair"
 
 # ========================================================================
-# FLUXO 10: GESTÃO DE PARCEIROS
+# FLUXO 09: GESTÃO DE PARCEIROS
 # ========================================================================
 # Login como Administrador
 pw-click "Entrar"
