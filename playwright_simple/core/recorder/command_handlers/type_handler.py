@@ -73,12 +73,52 @@ class TypeHandler(BaseHandler):
             result['error'] = "No text specified"
             return result
         
+        # Wait for page to be ready before looking for field
+        try:
+            await page.wait_for_load_state('domcontentloaded', timeout=5000)
+        except:
+            pass
+        
         # Get field element info and value before
         field_element_info = None
         field_selector_for_value = None
         
+        # Wait for field to appear if we're looking for it by label/name
+        if parsed['into']:
+            try:
+                # Wait for input fields with matching label to be available
+                await page.wait_for_function("""
+                    (fieldText) => {
+                        const textLower = fieldText.toLowerCase();
+                        const inputs = Array.from(document.querySelectorAll('input, textarea'));
+                        for (const input of inputs) {
+                            if (input.offsetParent === null || input.style.display === 'none') continue;
+                            if (input.type === 'hidden') continue;
+                            const labels = input.labels || [];
+                            for (const label of labels) {
+                                const labelText = (label.textContent || '').trim().toLowerCase();
+                                if (labelText === textLower || labelText.includes(textLower)) {
+                                    return true;
+                                }
+                            }
+                            if (input.placeholder && input.placeholder.toLowerCase().includes(textLower)) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    }
+                """, parsed['into'], timeout=5000)
+            except:
+                pass  # Continue even if timeout - will try to find field anyway
+        
         try:
             if parsed['selector']:
+                # Wait for selector to be available
+                try:
+                    await page.wait_for_selector(parsed['selector'], state='visible', timeout=5000)
+                except:
+                    pass  # Continue even if timeout
+                    
                 field_element_info = await page.evaluate("""
                     (selector) => {
                         const el = document.querySelector(selector);
