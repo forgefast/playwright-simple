@@ -81,51 +81,52 @@ pw-click "Revendedor Ouro"
 pw-click "Revendedor Platinum"
 
 # Visualizar Categorias de Níveis (Escalonamento)
-# Navegar diretamente para Contact Tags usando URL (mais confiável)
-pw-click selector "button.o_grid_apps_menu__button"
 pw-click "Contatos"
 pw-click "Configuração"
-pw-click "Tags"
+pw-click "Marcadores de contato"
 
 # Visualizar Nível Bronze
 pw-type "Bronze" into "Buscar"
 pw-press "Enter"
 
 # Visualizar Revendedores Bronze
-pw-click "Clientes"
+pw-click "Contatos"
 pw-type "Bronze" into "Buscar"
 pw-press "Enter"
 
 # Visualizar Nível Prata
+pw-click "Contatos"
 pw-click "Configuração"
-pw-click "Tags"
+pw-click "Marcadores de contato"
 pw-type "Prata" into "Buscar"
 pw-press "Enter"
 
 # Visualizar Revendedores Prata
-pw-click "Clientes"
+pw-click "Contatos"
 pw-type "Prata" into "Buscar"
 pw-press "Enter"
 
 # Visualizar Nível Ouro
+pw-click "Contatos"
 pw-click "Configuração"
-pw-click "Tags"
+pw-click "Marcadores de contato"
 pw-type "Ouro" into "Buscar"
 pw-press "Enter"
 
 # Visualizar Revendedores Ouro
-pw-click "Clientes"
+pw-click "Contatos"
 pw-type "Ouro" into "Buscar"
 pw-press "Enter"
 
 # Visualizar Nível Platinum
+pw-click "Contatos"
 pw-click "Configuração"
-pw-click "Tags"
+pw-click "Marcadores de contato"
 pw-type "Platinum" into "Buscar"
 pw-press "Enter"
 
 # Visualizar Revendedores Platinum
-pw-click "Clientes"
+pw-click "Contatos"
 pw-type "Platinum" into "Buscar"
 pw-press "Enter"
 
@@ -274,7 +275,7 @@ pw-click selector "button.o_grid_apps_menu__button"
 # Voltar e Acessar Categorias
 pw-click "Contatos"
 pw-click "Configuração"
-pw-click "Tags"
+pw-click "Marcadores de contato"
 
 # Visualizar Nível Bronze e Comissão
 pw-click selector ".o_searchview_dropdown_toggler"
@@ -420,5 +421,5 @@ pw-click "Lucia Helena Santos"
 # Visualizar Categorias de Parceiros
 pw-click "Contatos"
 pw-click "Configuração"
-pw-click "Tags"
+pw-click "Marcadores de contato"
 ```
