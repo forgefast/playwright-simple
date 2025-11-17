@@ -146,9 +146,10 @@ class CursorInteraction:
             logger.info(f"Attempting to click by text: '{text}'")
             
             # Wait for page to be ready (especially after navigation)
-            # Use safety timeout (5s) - should return immediately when ready
             try:
                 await self.page.wait_for_load_state('domcontentloaded', timeout=5000)
+                # Wait a bit more for dynamic content
+                await asyncio.sleep(_get_delay(self.controller, 0.5))
             except:
                 pass  # Continue even if timeout
             
@@ -171,56 +172,6 @@ class CursorInteraction:
             # Regular text search (buttons, links, etc.)
             # Escape text for JavaScript
             escaped_text = text.replace("'", "\\'").replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
-            
-            # Wait for element to appear dynamically before trying to find it
-            # This ensures elements rendered via AJAX or dynamic content are available
-            try:
-                await self.page.wait_for_function(f"""
-                    (searchText) => {{
-                        const lowerText = searchText.toLowerCase();
-                        
-                        // Check for input fields with matching label/placeholder
-                        const fieldKeywords = ['senha', 'password', 'email', 'e-mail', 'usuário', 'user', 'username', 'nome', 'name', 'telefone', 'phone', 'cpf', 'cnpj', 'endereço', 'address'];
-                        const isFieldName = fieldKeywords.some(keyword => lowerText === keyword || lowerText.includes(keyword));
-                        
-                        if (isFieldName) {{
-                            const inputs = Array.from(document.querySelectorAll('input, textarea'));
-                            for (const input of inputs) {{
-                                if (input.offsetParent === null || input.style.display === 'none' || input.style.visibility === 'hidden') continue;
-                                
-                                const labels = input.labels || [];
-                                for (const label of labels) {{
-                                    const labelText = (label.textContent || '').trim().toLowerCase();
-                                    if (labelText === lowerText || labelText.includes(lowerText)) {{
-                                        return true;
-                                    }}
-                                }}
-                                
-                                const placeholder = (input.placeholder || '').toLowerCase();
-                                if (placeholder === lowerText || placeholder.includes(lowerText)) {{
-                                    return true;
-                                }}
-                            }}
-                        }}
-                        
-                        // Check for clickable elements (buttons, links, etc.)
-                        const allClickable = Array.from(document.querySelectorAll('button, a, input[type="button"], input[type="submit"], [role="button"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [onclick], span[role="menuitemcheckbox"], span[role="menuitem"], td, span.o_tag, .o_tag, [data-value]'));
-                        for (const el of allClickable) {{
-                            if (el.offsetParent === null || el.style.display === 'none' || el.style.visibility === 'hidden') {{
-                                continue;
-                            }}
-                            
-                            const elText = (el.textContent || el.value || el.getAttribute('aria-label') || el.getAttribute('title') || '').trim().toLowerCase();
-                            if (elText === lowerText || elText.includes(lowerText)) {{
-                                return true;
-                            }}
-                        }}
-                        
-                        return false;
-                    }}
-                """, text, timeout=5000)
-            except:
-                pass  # Continue even if timeout - will try to find element anyway
             
             # Find element by text
             element_info = await self.page.evaluate(f"""
@@ -291,8 +242,8 @@ class CursorInteraction:
                     }}
                     
                     // Collect all potential matches with priority scores
-                    // Include menu items, tags/chips (Odoo), table cells, and other interactive elements
-                    const allClickable = Array.from(document.querySelectorAll('button, a, input[type="button"], input[type="submit"], [role="button"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [onclick], span[role="menuitemcheckbox"], span[role="menuitem"], td, .o_tag, span.o_tag, [data-value], .badge, .label'));
+                    // Include menu items and other interactive elements
+                    const allClickable = Array.from(document.querySelectorAll('button, a, input[type="button"], input[type="submit"], [role="button"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [onclick], span[role="menuitemcheckbox"], span[role="menuitem"]'));
                     
                     for (const el of allClickable) {{
                         // Skip hidden elements
@@ -300,7 +251,7 @@ class CursorInteraction:
                             continue;
                         }}
                         
-                        const elText = (el.textContent || el.value || el.getAttribute('aria-label') || el.getAttribute('title') || el.getAttribute('data-value') || '').trim();
+                        const elText = (el.textContent || el.value || el.getAttribute('aria-label') || '').trim();
                         const elTextLower = elText.toLowerCase();
                         
                         // Calculate priority score
@@ -371,7 +322,6 @@ class CursorInteraction:
                             text: (best.textContent || best.value || '').trim(),
                             id: best.id || '',
                             name: best.name || '',
-                            className: best.className || '',
                             priority: candidates[0].priority
                         }};
                     }}
@@ -389,24 +339,11 @@ class CursorInteraction:
             click_y = element_info['y']
             found_text = element_info.get('text', '')
             priority = element_info.get('priority', 0)
-            tag_name = element_info.get('tagName', '')
-            class_name = element_info.get('className', '')
             
             logger.info(f"Found element '{text}' at ({click_x}, {click_y}), actual text: '{found_text}', priority: {priority}")
             print(f"   ✓ Elemento '{text}' encontrado em ({click_x}, {click_y})")
             if found_text.lower() != text.lower():
                 print(f"   ℹ️  Texto real do elemento: '{found_text}' (prioridade: {priority})")
-            
-            # Check if this is a tag/chip before clicking (to avoid context destruction after navigation)
-            # Check by tag name, classes, and text content patterns
-            class_lower = class_name.lower()
-            is_tag = (tag_name == 'TD' or 
-                     'o_tag' in class_lower or 
-                     'badge' in class_lower or 
-                     'label' in class_lower or
-                     'tag' in text.lower() or 
-                     'badge' in text.lower() or 
-                     'label' in text.lower())
             
             # Move cursor to element position and wait for animation to complete
             # The move() method now waits for the animation to complete
@@ -448,12 +385,6 @@ class CursorInteraction:
             # Perform actual click
             await self.page.mouse.click(click_x, click_y)
             logger.info(f"Clicked on element with text '{text}' at ({click_x}, {click_y})")
-            
-            # If clicking on a tag/chip (common in Odoo), wait a bit for filter to apply
-            if is_tag:
-                # Wait a bit for filter to apply (Odoo filters can take a moment)
-                await asyncio.sleep(_get_delay(self.controller, 0.3, min_delay=0.1))
-            
             return True
         except Exception as e:
             logger.error(f"Error clicking by text: {e}")
@@ -915,52 +846,10 @@ class CursorInteraction:
             True if field was found and text was typed, False otherwise
         """
         try:
-            # Wait for page to be ready before looking for field
-            # Use safety timeout (30s) - should return immediately when ready
-            try:
-                await self.page.wait_for_load_state('domcontentloaded', timeout=30000)
-            except:
-                pass
-            
             # Escape text for JavaScript
             escaped_text = text.replace("'", "\\'").replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
             
             if field_selector:
-                # Wait for field to appear before trying to find it
-                try:
-                    escaped_selector = field_selector.replace("'", "\\'").replace('"', '\\"')
-                    await self.page.wait_for_function(f"""
-                        (selector) => {{
-                            const selectorLower = selector.toLowerCase();
-                            // Try by label text
-                            const labels = Array.from(document.querySelectorAll('label'));
-                            const label = labels.find(l => l.textContent.trim().toLowerCase().includes(selectorLower));
-                            if (label && label.htmlFor) {{
-                                const field = document.getElementById(label.htmlFor);
-                                if (field && (field.tagName === 'INPUT' || field.tagName === 'TEXTAREA')) {{
-                                    const rect = field.getBoundingClientRect();
-                                    if (rect.width > 0 && rect.height > 0) return true;
-                                }}
-                            }}
-                            // Try by placeholder
-                            const fieldByPlaceholder = Array.from(document.querySelectorAll('input, textarea')).find(el => {{
-                                return (el.placeholder || '').toLowerCase().includes(selectorLower) &&
-                                       el.offsetParent !== null && el.style.display !== 'none';
-                            }});
-                            if (fieldByPlaceholder) return true;
-                            // Try by name
-                            const fieldByName = document.querySelector(`input[name*="${{selector}}"], textarea[name*="${{selector}}"]`);
-                            if (fieldByName && fieldByName.offsetParent !== null && fieldByName.style.display !== 'none') return true;
-                            // Try by id
-                            const fieldById = document.getElementById(selector);
-                            if (fieldById && (fieldById.tagName === 'INPUT' || fieldById.tagName === 'TEXTAREA') &&
-                                fieldById.offsetParent !== null && fieldById.style.display !== 'none') return true;
-                            return false;
-                        }}
-                    """, field_selector, timeout=5000)
-                except:
-                    pass  # Continue even if timeout - will try to find field anyway
-                
                 # Find field by selector (label, placeholder, name, id)
                 escaped_selector = field_selector.replace("'", "\\'").replace('"', '\\"')
                 
