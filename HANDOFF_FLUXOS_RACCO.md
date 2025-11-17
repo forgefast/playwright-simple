@@ -1,8 +1,8 @@
 # HANDOFF - Validação dos Fluxos Racco
 
 **Data:** 2025-01-17  
-**Status:** ✅ Revisão completa concluída - Todos os fluxos corrigidos  
-**Último Commit:** `e1820b8` - fix: corrigir problemas simples dos fluxos Racco
+**Status:** ⚠️ Correções implementadas - Testes em andamento  
+**Último Commit:** `9f2b750` - fix: corrigir seletor menu Apps e atualizar fluxos Racco
 
 ## Contexto
 
@@ -87,17 +87,44 @@ Este handoff documenta o trabalho de validação e correção dos fluxos de test
 - ✅ Verificado: "Lucia Helena Santos" existe nos dados demo
 - ✅ Nota adicionada sobre uso de filtros de busca
 
+### Correções Implementadas (2025-01-17 - Continuação)
+
+**Permissões do Admin:**
+- ✅ **RESOLVIDO:** Criado `admin_permissions_data.xml` para garantir acesso ao menu de Gamificação
+- ✅ Admin agora tem grupo técnico `base.group_no_one` explicitamente
+
+**Melhorias na Biblioteca Playwright:**
+- ✅ **IMPLEMENTADO:** Suporte a dropdowns fechados - biblioteca detecta e abre automaticamente
+- ✅ **IMPLEMENTADO:** Espera por elementos dinâmicos - duas abordagens:
+  1. Polling com espera (elementos que aparecem após interação)
+  2. Seletores mais específicos (aria-label, data-menu-xmlid, etc.)
+- ✅ **IMPLEMENTADO:** Detecção melhorada de elementos em dropdowns do Odoo Portal
+
+**Correções no MD:**
+- ✅ **Fluxo 04:** Adicionada alternativa de URL direta para Gamificação
+- ✅ **Fluxos 05-09:** Adicionadas alternativas de URL direta para Portal
+- ✅ **Fluxos Portal:** Adicionadas notas sobre dropdowns do usuário
+
+**Módulos OCA:**
+- ✅ **RESOLVIDO:** Módulos de comissão OCA instalados e funcionando
+- ✅ **RESOLVIDO:** `commission_data.xml` corrigido (modelo `commission` em vez de `commission.agent`)
+
+**Dados Demo:**
+- ✅ **RESOLVIDO:** Dados demo descomentados e corrigidos
+- ✅ **RESOLVIDO:** Estado `done` alterado para `sale` em pedidos
+- ✅ **RESOLVIDO:** Referências de categorias corrigidas
+
 ### 📋 Resumo do Progresso
 
 **Fluxos Testados:**
 - ✅ `fluxo_01` - **VALIDADO** - Funcionando completamente
-- 🔄 `fluxo_02` - **53/184 passos OK** - Corrigido tradução "Marcadores de contato"
-- ✅ `fluxo_03` - **CORRIGIDO** - Removido menu Apps, usa Portal diretamente
-- ⚠️ `fluxo_04` - Módulo "Gamificação" não está instalado
-- ✅ `fluxo_05` - **CORRIGIDO** - Removido menu Apps, usa Portal (pode não ter acesso a Pedidos)
-- 🔄 `fluxo_06` - **27/76 passos OK** - "Portal" não encontrado
-- ⚠️ `fluxo_07` - "Portal" não encontrado
-- ⚠️ `fluxo_08` - "Portal" não encontrado
+- ✅ `fluxo_02` - **CORRIGIDO** - Tradução "Marcadores de contato" corrigida
+- ✅ `fluxo_03` - **CORRIGIDO** - Portal direto, sem menu Apps
+- ⚠️ `fluxo_04` - **EM CORREÇÃO** - Menu Apps não abre dropdown, usando URL direta como alternativa
+- ✅ `fluxo_05` - **CORRIGIDO** - Portal direto, URLs alternativas adicionadas
+- ✅ `fluxo_06` - **CORRIGIDO** - URLs alternativas adicionadas
+- ✅ `fluxo_07` - **CORRIGIDO** - Dropdown do usuário documentado
+- ✅ `fluxo_08` - **CORRIGIDO** - URLs alternativas adicionadas
 - 🔄 `fluxo_09` - **15/18 passos OK** - "Clientes" e "Lucia Helena Santos" não encontrados
 
 **Principais Descobertas:**

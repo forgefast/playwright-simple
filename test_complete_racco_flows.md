@@ -174,10 +174,13 @@ pw-submit "Entrar"
 
 # Acessar Menu Apps
 pw-click selector "div.o_navbar_apps_menu button"
-# Acessar Definições (Settings)
+# Aguardar dropdown do menu Apps abrir
+# Acessar Definições (Settings) - pode estar no dropdown do menu Apps
+# Alternativa: usar URL direta se menu não abrir: pw-goto "/odoo?action=base.action_res_config_settings"
 pw-click "Definições"
 # Acessar Gamification Tools (dentro de Definições)
 # Nota: Módulo gamification está declarado como dependência em racco_demo
+# Alternativa: Se menu não estiver visível, usar URL direta: pw-goto "/odoo/gamification"
 pw-click "Gamification Tools"
 
 # Visualizar Badges Disponíveis
@@ -214,6 +217,7 @@ pw-submit "Entrar"
 # Acessar Menu de Pedidos (revendedor está no Portal, não tem menu Apps)
 # Nota: Revendedor pode não ter acesso a Vendas/Pedidos no Portal
 # Verificar se há link "Pedidos" no menu do Portal ou se precisa navegar diretamente
+# Se não encontrar, pode usar URL direta: pw-goto "/my/orders"
 pw-click "Pedidos"
 
 # Criar Novo Pedido
@@ -302,6 +306,7 @@ pw-submit "Entrar"
 
 # Nota: Revendedor já está no Portal após login, não precisa clicar em "Portal"
 # Acessar Comissões (se disponível no Portal)
+# Se não encontrar, pode usar URL direta: pw-goto "/my/commissions"
 pw-click "Comissões"
 
 # Logout
@@ -319,6 +324,7 @@ pw-submit "Entrar"
 
 # Nota: Consumidor já está no Portal após login, não precisa clicar em "Portal"
 # Visualizar Histórico de Pedidos
+# Se não encontrar, pode usar URL direta: pw-goto "/my/orders"
 pw-click "Pedidos"
 
 # Abrir um Pedido
@@ -335,7 +341,9 @@ pw-click "Batom Matte Rouge"
 
 # Voltar ao Portal e acessar Informações Pessoais
 # Navegar para o Portal usando "Minha conta" no dropdown do usuário
+# Nota: Dropdown do usuário precisa ser aberto primeiro
 pw-click "Juliana Ferreira"
+# Aguardar dropdown abrir antes de clicar em "Minha conta"
 pw-click "Minha conta"
 
 # Logout
@@ -360,12 +368,15 @@ pw-click "Batom Matte Rouge"
 
 # Acessar Pedidos (voltar ao Portal se necessário)
 # Se estiver na Loja, usar breadcrumb ou navegar diretamente
+# Se não encontrar, pode usar URL direta: pw-goto "/my/orders"
 pw-click "Pedidos"
 
 # Acessar Comissões
+# Se não encontrar, pode usar URL direta: pw-goto "/my/commissions"
 pw-click "Comissões"
 
 # Visualizar Informações da Rede (se disponível)
+# Se não encontrar, pode usar URL direta: pw-goto "/my/network"
 pw-click "Rede"
 
 # Logout

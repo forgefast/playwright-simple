@@ -174,6 +174,12 @@ class CursorInteraction:
             escaped_text = text.replace("'", "\\'").replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
             
             # Find element by text
+            # First, check for elements in closed dropdowns and open them if needed
+            await self._open_dropdowns_if_needed(text)
+            
+            # Wait a bit for dynamic content to appear
+            await asyncio.sleep(_get_delay(self.controller, 0.3))
+            
             element_info = await self.page.evaluate(f"""
                 () => {{
                     // Try multiple strategies with priority
@@ -331,9 +337,122 @@ class CursorInteraction:
             """)
             
             if not element_info or not element_info.get('found'):
-                logger.warning(f"Element with text '{text}' not found")
-                print(f"   ⚠️  Elemento '{text}' não encontrado")
-                return False
+                # Try opening dropdowns again (in case they closed or weren't detected)
+                await self._open_dropdowns_if_needed(text)
+                await asyncio.sleep(_get_delay(self.controller, 0.2))
+                
+                # Retry search after opening dropdowns
+                element_info = await self.page.evaluate(f"""
+                    () => {{
+                        const text = '{escaped_text}';
+                        const lowerText = text.toLowerCase();
+                        const allClickable = Array.from(document.querySelectorAll(
+                            'button, a, [role="button"], [role="menuitem"], [role="link"], [role="menuitemcheckbox"], [role="menuitemradio"]'
+                        ));
+                        
+                        for (const el of allClickable) {{
+                            if (el.offsetParent === null || el.style.display === 'none' || el.style.visibility === 'hidden') {{
+                                continue;
+                            }}
+                            const elText = (el.textContent || el.innerText || el.getAttribute('aria-label') || '').trim().toLowerCase();
+                            if (elText.includes(lowerText) || elText === lowerText) {{
+                                const rect = el.getBoundingClientRect();
+                                return {{
+                                    found: true,
+                                    x: Math.floor(rect.left + rect.width / 2),
+                                    y: Math.floor(rect.top + rect.height / 2),
+                                    text: elText,
+                                    priority: 10
+                                }};
+                            }}
+                        }}
+                        return {{ found: false }};
+                    }}
+                """)
+                
+            if not element_info or not element_info.get('found'):
+                # Try waiting for dynamic element to appear (Approach 1: Wait)
+                logger.debug(f"Element '{text}' not found immediately, waiting for dynamic content...")
+                element_appeared = await self._wait_for_dynamic_element(text)
+                
+                if element_appeared:
+                    # Retry finding the element
+                    element_info = await self.page.evaluate(f"""
+                        () => {{
+                            const text = '{escaped_text}';
+                            const lowerText = text.toLowerCase();
+                            const candidates = [];
+                            
+                            // Same search logic as before but with more specific selectors (Approach 2: Specific selectors)
+                            const specificSelectors = [
+                                'button[aria-label*="' + lowerText + '"]',
+                                'a[aria-label*="' + lowerText + '"]',
+                                '[role="menuitem"][aria-label*="' + lowerText + '"]',
+                                '[data-menu-xmlid*="' + lowerText + '"]',
+                                '.o-dropdown-item:has-text("' + text + '")',
+                                '[role="menuitem"]:has-text("' + text + '")'
+                            ];
+                            
+                            for (const selector of specificSelectors) {{
+                                try {{
+                                    const elements = Array.from(document.querySelectorAll(selector));
+                                    for (const el of elements) {{
+                                        if (el.offsetParent === null || el.style.display === 'none') {{
+                                            continue;
+                                        }}
+                                        const rect = el.getBoundingClientRect();
+                                        candidates.push({{
+                                            element: el,
+                                            x: Math.floor(rect.left + rect.width / 2),
+                                            y: Math.floor(rect.top + rect.height / 2),
+                                            priority: 12
+                                        }});
+                                    }}
+                                }} catch (e) {{
+                                    // Selector might not be supported, continue
+                                }}
+                            }}
+                            
+                            // Also try general search
+                            const allClickable = Array.from(document.querySelectorAll(
+                                'button, a, [role="button"], [role="menuitem"], [role="link"]'
+                            ));
+                            
+                            for (const el of allClickable) {{
+                                if (el.offsetParent === null || el.style.display === 'none') {{
+                                    continue;
+                                }}
+                                const elText = (el.textContent || el.innerText || el.getAttribute('aria-label') || '').trim().toLowerCase();
+                                if (elText.includes(lowerText) || elText === lowerText) {{
+                                    const rect = el.getBoundingClientRect();
+                                    candidates.push({{
+                                        element: el,
+                                        x: Math.floor(rect.left + rect.width / 2),
+                                        y: Math.floor(rect.top + rect.height / 2),
+                                        priority: 5
+                                    }});
+                                }}
+                            }}
+                            
+                            if (candidates.length > 0) {{
+                                const best = candidates[0];
+                                return {{
+                                    found: true,
+                                    x: best.x,
+                                    y: best.y,
+                                    text: (best.element.textContent || '').trim(),
+                                    priority: best.priority
+                                }};
+                            }}
+                            
+                            return {{ found: false }};
+                        }}
+                    """)
+                
+                if not element_info or not element_info.get('found'):
+                    logger.warning(f"Element with text '{text}' not found")
+                    print(f"   ⚠️  Elemento '{text}' não encontrado")
+                    return False
             
             click_x = element_info['x']
             click_y = element_info['y']
@@ -559,6 +678,162 @@ class CursorInteraction:
             return True
         except Exception as e:
             logger.error(f"Error clicking by input: {e}")
+            return False
+    
+    async def _open_dropdowns_if_needed(self, search_text: str) -> None:
+        """
+        Check if element is in a closed dropdown and open it if needed.
+        Uses two approaches:
+        1. Wait for elements to appear (if they're dynamically loaded)
+        2. Open dropdowns that contain the search text
+        """
+        try:
+            escaped_text = search_text.replace("'", "\\'").replace('"', '\\"')
+            
+            # Check for closed dropdowns that might contain the element
+            dropdown_info = await self.page.evaluate(f"""
+                () => {{
+                    const searchText = '{escaped_text}'.toLowerCase();
+                    const dropdowns = [];
+                    
+                    // Find all dropdown toggles (both open and closed)
+                    const dropdownToggles = Array.from(document.querySelectorAll(
+                        'button[aria-expanded], ' +
+                        'a[aria-expanded], ' +
+                        '[data-bs-toggle="dropdown"], ' +
+                        '.dropdown-toggle, ' +
+                        '.o-dropdown.dropdown-toggle, ' +
+                        '[role="button"][aria-haspopup="true"]'
+                    ));
+                    
+                    for (const toggle of dropdownToggles) {{
+                        const isExpanded = toggle.getAttribute('aria-expanded') === 'true';
+                        if (isExpanded) {{
+                            continue; // Skip already open dropdowns
+                        }}
+                        
+                        // Check if dropdown menu exists and might contain the text
+                        const toggleId = toggle.getAttribute('id');
+                        const dropdownId = toggle.getAttribute('data-bs-target') || 
+                                         toggle.getAttribute('aria-controls') ||
+                                         (toggleId ? toggleId.replace('toggle', 'menu') : null);
+                        
+                        let menu = null;
+                        if (dropdownId) {{
+                            // Remove # if present
+                            const id = dropdownId.replace('#', '');
+                            menu = document.getElementById(id) || 
+                                   document.querySelector(`[id="${{id}}"]`);
+                        }}
+                        
+                        // Also check for sibling dropdown-menu or parent dropdown
+                        if (!menu) {{
+                            const parent = toggle.closest('.dropdown, [role="menu"], .o-dropdown');
+                            if (parent) {{
+                                menu = parent.querySelector('.dropdown-menu, [role="menu"], .o-dropdown--menu');
+                            }}
+                        }}
+                        
+                        // Also check for any visible dropdown menu in the document
+                        if (!menu) {{
+                            const allMenus = Array.from(document.querySelectorAll(
+                                '.dropdown-menu, [role="menu"], .o-dropdown--menu, .o_popover'
+                            ));
+                            // Find menu that might be associated with this toggle
+                            for (const m of allMenus) {{
+                                const menuText = (m.textContent || '').toLowerCase();
+                                if (menuText.includes(searchText)) {{
+                                    // Check if this menu is near the toggle
+                                    const toggleRect = toggle.getBoundingClientRect();
+                                    const menuRect = m.getBoundingClientRect();
+                                    const distance = Math.abs(toggleRect.top - menuRect.top) + 
+                                                   Math.abs(toggleRect.left - menuRect.left);
+                                    if (distance < 500) {{ // Within reasonable distance
+                                        menu = m;
+                                        break;
+                                    }}
+                                }}
+                            }}
+                        }}
+                        
+                        if (menu) {{
+                            // Check if menu contains text matching search
+                            const menuText = (menu.textContent || '').toLowerCase();
+                            if (menuText.includes(searchText)) {{
+                                const rect = toggle.getBoundingClientRect();
+                                dropdowns.push({{
+                                    toggle: toggle,
+                                    x: Math.floor(rect.left + rect.width / 2),
+                                    y: Math.floor(rect.top + rect.height / 2),
+                                    menuText: menuText.substring(0, 50)
+                                }});
+                            }}
+                        }}
+                    }}
+                    
+                    return dropdowns;
+                }}
+            """)
+            
+            # Open dropdowns that might contain the element
+            if dropdown_info and len(dropdown_info) > 0:
+                for dropdown in dropdown_info[:1]:  # Open first matching dropdown
+                    try:
+                        click_x = dropdown['x']
+                        click_y = dropdown['y']
+                        await self.page.mouse.click(click_x, click_y)
+                        logger.debug(f"Opened dropdown at ({click_x}, {click_y}) for search '{search_text}'")
+                        # Wait for dropdown to open and content to load
+                        await asyncio.sleep(_get_delay(self.controller, 0.4))
+                    except Exception as e:
+                        logger.debug(f"Error opening dropdown: {e}")
+                        
+        except Exception as e:
+            logger.debug(f"Error checking dropdowns: {e}")
+    
+    async def _wait_for_dynamic_element(self, search_text: str, max_attempts: int = 3) -> bool:
+        """
+        Wait for dynamic elements to appear after interaction.
+        Uses two approaches:
+        1. Wait with polling for element to appear
+        2. Use more specific selectors if element doesn't appear
+        """
+        try:
+            escaped_text = search_text.replace("'", "\\'").replace('"', '\\"')
+            
+            for attempt in range(max_attempts):
+                # Check if element exists now
+                element_exists = await self.page.evaluate(f"""
+                    () => {{
+                        const searchText = '{escaped_text}'.toLowerCase();
+                        const allElements = Array.from(document.querySelectorAll(
+                            'button, a, [role="button"], [role="menuitem"], [role="link"]'
+                        ));
+                        
+                        for (const el of allElements) {{
+                            if (el.offsetParent === null || el.style.display === 'none') {{
+                                continue;
+                            }}
+                            
+                            const elText = (el.textContent || el.innerText || el.getAttribute('aria-label') || '').trim().toLowerCase();
+                            if (elText.includes(searchText) || elText === searchText) {{
+                                return true;
+                            }}
+                        }}
+                        return false;
+                    }}
+                """)
+                
+                if element_exists:
+                    return True
+                
+                # Wait a bit before next attempt
+                if attempt < max_attempts - 1:
+                    await asyncio.sleep(_get_delay(self.controller, 0.3))
+            
+            return False
+        except Exception as e:
+            logger.debug(f"Error waiting for dynamic element: {e}")
             return False
     
     async def _click_by_submit(self, text_filter: str = '') -> bool:
