@@ -18,6 +18,7 @@
 - **[USER_MANUAL.md](USER_MANUAL.md)** - Manual completo do usuário 📖
 - **[VALIDATION_GUIDE.md](VALIDATION_GUIDE.md)** - Guia de validação e testes 🧪
 - **[docs/HYBRID_WORKFLOW.md](docs/HYBRID_WORKFLOW.md)** - Fluxo híbrido: gravar → editar → executar 🔄
+- **[docs/MCP_BROWSER_TOOLS.md](docs/MCP_BROWSER_TOOLS.md)** - Ferramentas MCP de navegação web 🌐
 
 ### Exemplos
 - **[examples/](examples/)** - Exemplos práticos
@@ -120,7 +121,8 @@ playwright-simple/
 ├── IMPLEMENTATION_STATUS.md      # Status das fases
 │
 ├── docs/                        # Documentação técnica
-│   └── HYBRID_WORKFLOW.md       # Fluxo híbrido
+│   ├── HYBRID_WORKFLOW.md       # Fluxo híbrido
+│   └── MCP_BROWSER_TOOLS.md     # Ferramentas MCP de navegação web
 │
 └── examples/                     # Exemplos
     ├── basic_yaml.yaml          # Exemplo básico
